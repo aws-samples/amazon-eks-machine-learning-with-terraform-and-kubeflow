@@ -4,52 +4,15 @@ DEEPLEARNING_WORKERS_COUNT=2
 DEEPLEARNING_WORKER_GPU_COUNT=8
 NUM_PARALLEL=$( expr "$DEEPLEARNING_WORKERS_COUNT" '*' "$DEEPLEARNING_WORKER_GPU_COUNT")
 
-# Customize S3 bucket
-S3_BUCKET=
-
-# Customize S3 bucket prefix for coco 2014 data tar
-# Data tar must contain annotations, train data, validation data, and pretrained models
-DATA_TAR_PREFIX=coco2014-data.tar
-
-DATA_DIR=""
-FILE_SYS=""
-if [ -d "/ebs/" ]
-then
-	if [ ! -d "/ebs/data" ]
-	then
-		echo "Copying data tar from $S3_BUCKET to /ebs"
-		mpirun -np $DEEPLEARNING_WORKERS_COUNT  --hostfile /kubeflow/openmpi/assets/hostfile \
-		-bind-to none --map-by ppr:1:node --allow-run-as-root \
-		aws s3 cp s3://$S3_BUCKET/$DATA_TAR_PREFIX /ebs/
-		wait $!
-
-		echo "Extracting data tar to /ebs"
-		mpirun -np $DEEPLEARNING_WORKERS_COUNT --hostfile /kubeflow/openmpi/assets/hostfile \
-		-bind-to none --map-by ppr:1:node --allow-run-as-root \
-		tar -xf /ebs/$DATA_TAR_PREFIX -C /ebs 
-		wait $!
-	fi
-	DATA_DIR="/ebs/data"
-	FILE_SYS="ebs"
-elif [ -d "/efs" ]
-then
-	if [ ! -d "/efs/coco/data" ]
-	then
-		echo "Copying data tar from $S3_BUCKET to /efs"
-		aws s3 cp s3://$S3_BUCKET/$DATA_TAR_PREFIX /efs/coco
-
-		echo "Extracting data tar to /efs"
-		tar -xf /efs/coco/$DATA_TAR_PREFIX -C /efs/coco
-	fi
-	DATA_DIR="/efs/coco/data"
-	FILE_SYS="efs"
-fi
+DATA_DIR="/efs/data"
+FILE_SYS="efs"
 
 SRC_DIR=/tensorpack
 DATE=`date '+%Y-%m-%d-%H-%M-%S'`
 RUN_ID=mask-rcnn-coco-$NUM_PARALLEL-$FILE_SYS-$DATE
 
 echo "Training started:" `date '+%Y-%m-%d-%H-%M-%S'`
+EVAL_PERIOD=$( expr "8" '/' "$DEEPLEARNING_WORKERS_COUNT")
 
 mpirun -np $NUM_PARALLEL \
 --hostfile /kubeflow/openmpi/assets/hostfile \
@@ -69,12 +32,12 @@ python3 $SRC_DIR/examples/FasterRCNN/train.py \
 --config MODE_MASK=True \
 MODE_FPN=True \
 DATA.BASEDIR=$DATA_DIR \
-DATA.TRAIN='["train2014"]' \
-DATA.VAL=val2014 \
-TRAIN.EVAL_PERIOD=25 \
-TRAIN.STEPS_PER_EPOCH=500 \
+DATA.TRAIN='["train2017"]' \
+DATA.VAL=val2017 \
+TRAIN.EVAL_PERIOD=$EVAL_PERIOD \
+TRAIN.STEPS_PER_EPOCH=1875 \
 TRAIN.LR_SCHEDULE='[120000, 160000, 180000]' \
-BACKBONE.WEIGHTS=$DATA_DIR/pretrained-models/ImageNet-R50-AlignPadding.npz \
+BACKBONE.WEIGHTS=$DATA_DIR/pretrained-models/COCO-R50FPN-MaskRCNN-Standard.npz \
 BACKBONE.NORM=$BATCH_NORM \
 TRAINER=horovod"
 
