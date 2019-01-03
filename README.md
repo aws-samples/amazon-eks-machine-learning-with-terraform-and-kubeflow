@@ -41,7 +41,7 @@ To that end, we need to execute following steps:
 
 4. In the main project directory, customize and execute ```scp run.sh user@<i3 instance>:~/``` to copy ```run.sh``` file to the i3 instance. Also, customize and execute: ```scp eks-cluster/prepare-efs.sh user@<i3 instance>:~/``` to copy ```eks-cluster/prepare-efs.sh``` to the i3 instance.
 
-5. SSH to i3 instance: ```ssh user@<i3 instane>```
+5. SSH to i3 instance: ```ssh user@<i3 instance>```
 
 6. On the i3 instance, in the home directory, execute: ```nohup ./prepare-efs.sh &``` This step may take a while. You dont have to wait for this script to complete to proceed to next step.
 
