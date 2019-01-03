@@ -6,6 +6,7 @@ NUM_PARALLEL=$( expr "$DEEPLEARNING_WORKERS_COUNT" '*' "$DEEPLEARNING_WORKER_GPU
 
 DATA_DIR="/efs/data"
 FILE_SYS="efs"
+LOG_DIR=/efs
 
 SRC_DIR=/tensorpack
 DATE=`date '+%Y-%m-%d-%H-%M-%S'`
