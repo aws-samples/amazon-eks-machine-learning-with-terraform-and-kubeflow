@@ -3,7 +3,7 @@
 ## Pre-requisites
 1. [Create and activate an AWS Account](https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/)
 
-2. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) so your EC2 service limit allows you to launch required number of GPU enabled EC2 instanes, such as p3.16xlarge. You would need a minimum limit of 2 GPU enabled instances. For the prupose of this setup, an EC2 service limit of 8 p3.16xlarge instance types is recommended.
+2. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) so your EC2 service limit allows you to launch required number of GPU enabled EC2 instances, such as p3.16xlarge. You would need a minimum limit of 2 GPU enabled instances. For the purpose of this setup, an EC2 service limit of 8 p3.16xlarge instance types is recommended.
 
 3. [Install and configure AWS Command Line Interface](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html)
 
@@ -11,7 +11,7 @@
 
 ## Overview
 
-In this project, we are focused on distirbuted training using [TensorFlow](https://github.com/tensorflow/tensorflow), [TensorPack](https://github.com/tensorpack/tensorpack) and [Horovod](https://eng.uber.com/horovod/) on [Amazon EKS](https://aws.amazon.com/eks/).
+In this project, we are focused on distributed training using [TensorFlow](https://github.com/tensorflow/tensorflow), [TensorPack](https://github.com/tensorpack/tensorpack) and [Horovod](https://eng.uber.com/horovod/) on [Amazon EKS](https://aws.amazon.com/eks/).
 
 While all the concepts described here are quite general and are applicable to running any combination of TensorFlow, TensorPack and Horovod based algorithms on Amazon EKS, we will make these concepts concrete by focusing on distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example. 
 
@@ -41,9 +41,9 @@ To that end, we need to execute following steps:
 
 4. In the main project directory, customize and execute ```scp run.sh user@<i3 instance>:~/``` to copy ```run.sh``` file to the i3 instance. Also, customize and execute: ```scp eks-cluster/prepare-efs.sh user@<i3 instance>:~/``` to copy ```eks-cluster/prepare-efs.sh``` to the i3 instance.
 
-5. SSH to i3 instance: ```sss user@<i3 instane>```
+5. SSH to i3 instance: ```ssh user@<i3 instane>```
 
-6. On the i3 instance, in the home directory, execute: ```nohup ./prepare-efs.sh &``` This step may take a whilee. You dont have to wait for this script to complete to proceed to next step.
+6. On the i3 instance, in the home directory, execute: ```nohup ./prepare-efs.sh &``` This step may take a while. You dont have to wait for this script to complete to proceed to next step.
 
 ## Create Amazon EKS Cluster
 
