@@ -11,9 +11,9 @@
 
 ## Overview
 
-In this project, we are focused on distirbuted training using [TensorFlow](https://github.com/tensorflow/tensorflow), [TensorPack](https://github.com/tensorpack/tensorpack) and [Horovod](https://eng.uber.com/horovod/). 
+In this project, we are focused on distirbuted training using [TensorFlow](https://github.com/tensorflow/tensorflow), [TensorPack](https://github.com/tensorpack/tensorpack) and [Horovod](https://eng.uber.com/horovod/) on [Amazon EKS](https://aws.amazon.com/eks/).
 
-While all the concepts described here are quite general and are applicable to any combination of TensorFlow, TensorPack and Horovod, or a subset thereof, we will make these concpets concrete by focusing on distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example 
+While all the concepts described here are quite general and are applicable to running any combination of TensorFlow, TensorPack and Horovod based algorithms on Amazon EKS, we will make these concepts concrete by focusing on distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example on Amazon EKS. 
 
 ## Create Amazon EKS Cluster VPC
 
@@ -67,3 +67,36 @@ We will use [Ksonnet](https://github.com/ksonnet/ksonnet) to manage the Kubernet
 
 To install Ksonnet, [download and install a pre-built ksonnet binary](https://github.com/ksonnet/ksonnet/releases) as an executable named ```ks``` under ```/usr/local/bin``` or some other directory in your PATH. If the pre-built binary option does not work for you, please see other [ksonnet install](https://github.com/ksonnet/ksonnet) options.
 
+## Build and Upload Docker Image to ECR
+
+We need to pakcage TensorFlow, TensorPack and Horovod in a Docker image and upload the image to Amazon ECR. To that end, in container/build_tools directory in this project, customize for AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your default AWS region.
+
+## Create EKS Persistent Volume for EFS
+
+1. In eks-cluster directory, customize ```pv-kubeflow-efs-gp-bursting.yaml``` for EFS file-system id and AWS region and execute: ``` kubectl apply -n kubeflow -f pv-kubeflow-efs-gp-bursting.yaml```
+
+2. Check to see the persistent-volume was successfully created by executing: ```kubectl get pv -n kubeflow```
+
+3. Execute: ```kubectl apply -n kubeflow -f pvc-kubeflow-efs-gp-bursting.yaml``` to create an EKS persistent-volume-claim
+
+4. Check to see the persistent-volume was successfully bound to peristent-volume-claim by executing: ```kubectl get pv -n kubeflow```
+
+## Build Ksonnet Application for Training
+
+1. In the project folder, customize ```tensorpack.sh``` shell script to specify your IMAGE URL in ECR. You may optionally add an authentication GITHUB_TOKEN. You may customize WORKERS variable to specify number of available WORKER nodes you will like to use for training.
+
+2. Execute: ```./tensorpack.sh``` The output of the script execution is a directory named ```tensorpack``` that contains the tensorpack Ksonnet application. 
+
+3. In tensorpack directory created under your project, execute ```ks show default > /tmp/tensorpack.yaml``` to examine the Kubernetest manifest file corresponding to the Ksonnet appliction.
+
+4. At this point, you need to verify that the ```prepare-efs.sh``` script has completed successfully and the data is staged on the EFS file ssytem.
+
+5. In tensorpack directory created under your project, execute ```ks apply default``` to launch distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example.
+
+6. Execute: ```kubectl get pods -n kubeflow``` to see the status of the pods
+
+7. Execute: ```kubectl describe pods tensorpack-master -n kubeflow``` if the pods are in pending state
+
+8. Execute: ```kubectl logs -f tensorpack-master -n kubeflow``` to see live log of training
+
+9. Model checkpoints and logs will be placed on shared EFS file system
