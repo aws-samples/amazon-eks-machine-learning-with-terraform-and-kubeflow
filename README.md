@@ -69,7 +69,7 @@ To install Ksonnet, [download and install a pre-built ksonnet binary](https://gi
 
 ## Build and Upload Docker Image to ECR
 
-We need to pakcage TensorFlow, TensorPack and Horovod in a Docker image and upload the image to Amazon ECR. To that end, in ```container/build_tools``` directory in this project, customize for AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your default AWS region.
+We need to package TensorFlow, TensorPack and Horovod in a Docker image and upload the image to Amazon ECR. To that end, in ```container/build_tools``` directory in this project, customize for AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your default AWS region.
 
 ## Create EKS Persistent Volume for EFS
 
