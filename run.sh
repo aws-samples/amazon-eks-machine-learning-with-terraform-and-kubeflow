@@ -23,7 +23,7 @@ mpirun -np $NUM_PARALLEL \
 --mca plm_rsh_no_tree_spawn 1 -mca pml ob1 -mca btl ^openib -mca btl_tcp_if_exclude lo,docker0 \
 --mca hwloc_base_binding_policy none --mca rmaps_base_mapping_policy slot \
 --mca orte_keep_fqdn_hostnames t \
---output-filename /efs/${RUN_ID}-logs \
+--output-filename /efs/${RUN_ID} \
 --allow-run-as-root --display-map --tag-output --timestamp-output \
 bash -c "HOROVOD_CYCLE_TIME=0.5 \
 HOROVOD_FUSION_THRESHOLD=67108864 \
