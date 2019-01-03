@@ -11,8 +11,10 @@ SRC_DIR=/tensorpack
 DATE=`date '+%Y-%m-%d-%H-%M-%S'`
 RUN_ID=mask-rcnn-coco-$NUM_PARALLEL-$FILE_SYS-$DATE
 
-echo "Training started:" `date '+%Y-%m-%d-%H-%M-%S'`
 EVAL_PERIOD=$( expr "8" '/' "$DEEPLEARNING_WORKERS_COUNT")
+BATCH_NORM=FreezeBN
+
+echo "Training started:" `date '+%Y-%m-%d-%H-%M-%S'`
 
 mpirun -np $NUM_PARALLEL \
 --hostfile /kubeflow/openmpi/assets/hostfile \
@@ -32,7 +34,7 @@ python3 $SRC_DIR/examples/FasterRCNN/train.py \
 --config MODE_MASK=True \
 MODE_FPN=True \
 DATA.BASEDIR=$DATA_DIR \
-DATA.TRAIN='["train2017"]' \
+DATA.TRAIN='[\"train2017\"]' \
 DATA.VAL=val2017 \
 TRAIN.EVAL_PERIOD=$EVAL_PERIOD \
 TRAIN.STEPS_PER_EPOCH=1875 \
