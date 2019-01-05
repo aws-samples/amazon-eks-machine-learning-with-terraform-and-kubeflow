@@ -15,15 +15,28 @@ In this project, we are focused on distributed training using [TensorFlow](https
 
 While all the concepts described here are quite general and are applicable to running any combination of TensorFlow, TensorPack and Horovod based algorithms on Amazon EKS, we will make these concepts concrete by focusing on distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example. 
 
+At a conceptual level, our objective is to:
+
+  1. Create an EKS Cluster
+  2. Stage data and code on an EFS file-system in the same VPC as the EKS cluster
+  3. Create EKS Persistent Volume and Peristent Volume Claim based on the EFS file-system
+  4. Use [Ksonnet](https://github.com/ksonnet/ksonnet) to create an application that executes our training job
+
+We have two options to accomplish our objective:
+
+   **Option 1:** We can follow the directions in the sections below, which are derived from Amazon EKS documentation
+  
+   **Option 2:** Use [eksctl](https://github.com/weaveworks/eksctl) to create an EKS cluster VPC and a complete EKS cluster. Then follow directions in **Prepare Amazon EFS File System** and continue with the **Install Ksonnet** and the sections that follow it.
+
 ## Create Amazon EKS Cluster VPC
 
-1. As a first step, we need to create a [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html) that supports an EKS cluster. To create such a VPC, we need to execute following steps:
+As a first step, we need to create a [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html) that supports an EKS cluster. To create such a VPC, we need to execute following steps:
 
-   i) Customize EKS_CLUSTER and AWS_REGION variables in ```eks-cluster/set-cluster.sh``` shell script in this project. The value of EKS_CLUSTER must be a unique cluster name in the selected AWS region in your account. 
+   1. Customize EKS_CLUSTER and AWS_REGION variables in ```eks-cluster/set-cluster.sh``` shell script in this project. The value of EKS_CLUSTER must be a unique cluster name in the selected AWS region in your account. 
    
-   ii) In ```eks-cluster``` directory, execute ```./eks-cluster-vpc-stack.sh``` This script create an [AWS CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-whatis-concepts.html#w2ab1b5c15b9) stack that creates the EKS cluster VPC. The output of the script is a CloudFormation Stack ID.
+   2. In ```eks-cluster``` directory, execute ```./eks-cluster-vpc-stack.sh``` This script create an [AWS CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-whatis-concepts.html#w2ab1b5c15b9) stack that creates the EKS cluster VPC. The output of the script is a CloudFormation Stack ID.
    
-   iii) Check the status of the CloudFormation Stack for creating VPC in AWS Management Console. When the status is CREATE_COMPLETE, note the Outputs of the CloudFormation Stack in AWS Management Console: You will need them later when you get ready to create an EKS cluster below.
+   3. Check the status of the CloudFormation Stack for creating VPC in AWS Management Console. When the status is CREATE_COMPLETE, note the Outputs of the CloudFormation Stack in AWS Management Console: You will need them later when you get ready to create an EKS cluster below.
 
 ## Prepare Amazon EFS File System
 
