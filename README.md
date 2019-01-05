@@ -26,7 +26,7 @@ We have two options to accomplish our objective:
 
    **Option 1:** We can follow the directions in the sections below, which are derived from Amazon EKS documentation
   
-   **Option 2:** Use [eksctl](https://github.com/weaveworks/eksctl) to create an EKS cluster VPC and a complete EKS cluster. Then follow directions in **Prepare Amazon EFS File System** and continue with the **Install Ksonnet** and the sections that follow it.
+   **Option 2:** Use [eksctl](https://github.com/weaveworks/eksctl) to create an EKS cluster VPC and a complete EKS cluster. Then follow directions in **Prepare Amazon EFS File System** section below and continue with the **Install Ksonnet** and the sections that follow it.
 
 ## Create Amazon EKS Cluster VPC
 
