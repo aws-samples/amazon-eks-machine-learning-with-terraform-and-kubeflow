@@ -22,12 +22,6 @@ At a conceptual level, our objective is to:
   3. Create EKS Persistent Volume and Peristent Volume Claim based on the EFS file-system
   4. Use [Ksonnet](https://github.com/ksonnet/ksonnet) to create an application that executes our training job using data from the EKS Persistent Volume mounted on the EKS Pods
 
-We have two options to accomplish our objective:
-
-   **Option 1:** We can follow the directions in the sections below, which are derived from Amazon EKS documentation
-  
-   **Option 2:** Use [eksctl](https://github.com/weaveworks/eksctl) to create an EKS cluster VPC and a complete EKS cluster. Then follow directions in **Prepare Amazon EFS File System** section below and continue with the **Install Ksonnet** and the sections that follow it.
-
 ## Create Amazon EKS Cluster VPC
 
 As a first step, we need to create a [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html) that supports an EKS cluster. To create such a VPC, we need to execute following steps:
@@ -73,6 +67,8 @@ To that end, we need to execute following steps:
 6. In ```eks-cluster``` directory, execute: ```./apply-aws-auth-cm.sh``` to allow worker nodes to join EKS cluster
 
 7. In ```eks-cluster``` directory, execute: ```./apply-nvidia-plugin.sh``` to create NVIDIA-plugin daemon set
+
+8. In ```eks-cluster``` directory, execute: ```./apply-cni-patch.sh``` to apply CNI version 1.3 patch
 
 ## Install ksonnet
 
