@@ -32,6 +32,7 @@ SUBNETS=`aws eks --region $AWS_REGION  describe-cluster --name $EKS_CLUSTER | gr
 echo "Using Subnets: $SUBNETS"
 
 
+# Use only single cluster control plane security group
 CONTROL_SG=`aws eks --region $AWS_REGION  describe-cluster --name $EKS_CLUSTER | grep sg- | sed 's/ //g'`
 echo "Using Cluster control security group: $CONTROL_SG"
 
