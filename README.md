@@ -62,7 +62,7 @@ To that end, we need to execute following steps:
 
 4. In ```eks-cluster``` directory, execute: ```./apply-cni-patch.sh``` to apply CNI version 1.3 patch
 
-5. To create Amazon EKS worker nodes, customize NUM_WORKERS variable in ```eks-cluster/eks-workers-stack.sh``` shell script and in ```eks-cluster``` directory execute: ```./eks-workers-stack.sh``` This script outputs a CloudFormation Stack ID for a stack that creates p3.16xlarge (or whatever instance type you specified in the script) GPU enabled EKS worker nodes we will use for distributed training.
+5. To create Amazon EKS worker nodes, customize NUM_WORKERS and KEY_NAME variables in ```eks-cluster/eks-workers-stack.sh``` shell script and in ```eks-cluster``` directory execute: ```./eks-workers-stack.sh``` This script outputs a CloudFormation Stack ID for a stack that creates p3.16xlarge (or whatever instance type you specified in the script) GPU enabled EKS worker nodes we will use for distributed training.
 
 6. Check the status of the CloudFormation Stack in AWS Management Console. When the status is CREATE_COMPLETE, proceed to next step. 
 
