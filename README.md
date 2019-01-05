@@ -43,7 +43,7 @@ To that end, we need to execute following steps:
 
 5. SSH to i3 instance: ```ssh user@<i3 instance>```
 
-6. On the i3 instance, in the home directory, execute: ```nohup ./prepare-efs.sh &``` This step may take a while. You dont have to wait for this script to complete to proceed to next step.
+6. On the i3 instance, in the home directory, execute: ```nohup ./prepare-efs.sh &``` This step may take a while. You dont have to wait for this script to complete to proceed to next step. **You can use the [screen](https://linuxize.com/post/how-to-use-linux-screen/) command as an alternative to using ```nohup``` and ```screen``` appears to work more reliably than ```nohup``` command.**
 
 ## Create Amazon EKS Cluster
 
