@@ -56,19 +56,20 @@ To that end, we need to execute following steps:
 
 1. In AWS Management Console, using the information obtained from CloudFormation Stack Outputs when you created the EKS cluster VPC, [Create an Amazon EKS cluster](https://docs.aws.amazon.com/eks/latest/userguide/create-cluster.html). This creates an EKS cluster sans Amazon EKS worker nodes.
 
-2. To create Amazon EKS worker nodes, customize NUM_WORKERS variable in ```eks-cluster/eks-workers-stack.sh``` shell script and in ```eks-cluster``` directory execute: ```./eks-workers-stack.sh``` This script outputs a CloudFormation Stack ID for a stack that creates p3.16xlarge (or whatever instance type you specified in the script) GPU enabled EKS worker nodes we will use for distributed training.
+2. Next we install EKS kubectl client. For Linux client, in ```eks-cluster``` directory, execute: ```./install-kubectl-linux.sh``` For other operating systems, [install and configure kubectl for EKS](https://docs.aws.amazon.com/eks/latest/userguide/configure-kubectl.html).
 
-3. Check the status of the CloudFormation Stack in AWS Management Console. When the status is CREATE_COMPLETE, proceed to next step. 
+3. In ```eks-cluster``` directory, execute: ```./update-kubeconfig.sh``` to update kube configuration 
 
-4. Next we install EKS kubectl client. For Linux client, in ```eks-cluster``` directory, execute: ```./install-kubectl-linux.sh``` For other operating systems, [install and configure kubectl for EKS](https://docs.aws.amazon.com/eks/latest/userguide/configure-kubectl.html).
+4. In ```eks-cluster``` directory, execute: ```./apply-cni-patch.sh``` to apply CNI version 1.3 patch
 
-5. In ```eks-cluster``` directory, execute: ```./update-kubeconfig.sh``` to update kube configuration 
+5. To create Amazon EKS worker nodes, customize NUM_WORKERS and KEY_NAME variables in ```eks-cluster/eks-workers-stack.sh``` shell script and in ```eks-cluster``` directory execute: ```./eks-workers-stack.sh``` This script outputs a CloudFormation Stack ID for a stack that creates p3.16xlarge (or whatever instance type you specified in the script) GPU enabled EKS worker nodes we will use for distributed training.
 
-6. In ```eks-cluster``` directory, execute: ```./apply-aws-auth-cm.sh``` to allow worker nodes to join EKS cluster
+6. Check the status of the CloudFormation Stack in AWS Management Console. When the status is CREATE_COMPLETE, proceed to next step. 
 
-7. In ```eks-cluster``` directory, execute: ```./apply-nvidia-plugin.sh``` to create NVIDIA-plugin daemon set
+7. In ```eks-cluster``` directory, execute: ```./apply-aws-auth-cm.sh``` to allow worker nodes to join EKS cluster
 
-8. In ```eks-cluster``` directory, execute: ```./apply-cni-patch.sh``` to apply CNI version 1.3 patch
+8. In ```eks-cluster``` directory, execute: ```./apply-nvidia-plugin.sh``` to create NVIDIA-plugin daemon set
+
 
 ## Install ksonnet
 
