@@ -17,10 +17,10 @@ While all the concepts described here are quite general and are applicable to ru
 
 At a conceptual level, our objective is to:
 
-  1. Create an EKS Cluster
-  2. Stage data and code on an EFS file-system in the same VPC as the EKS cluster
+  1. Create an Amazon EKS Cluster
+  2. Stage data on an [Amazon Elastic File System (EFS)](https://aws.amazon.com/efs/)  in the same [Amazon VPC](https://aws.amazon.com/vpc/) as the EKS cluster
   3. Create EKS Persistent Volume and Peristent Volume Claim based on the EFS file-system
-  4. Use [Ksonnet](https://github.com/ksonnet/ksonnet) to create an application that executes our training job
+  4. Use [Ksonnet](https://github.com/ksonnet/ksonnet) to create an application that executes our training job using data from the EKS Persistent Volume mounted on the EKS Pods
 
 We have two options to accomplish our objective:
 
