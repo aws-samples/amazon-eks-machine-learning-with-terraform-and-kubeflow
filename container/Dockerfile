@@ -1,6 +1,6 @@
 FROM nvidia/cuda:9.0-devel-ubuntu16.04
 
-ENV TENSORFLOW_VERSION=1.10.0
+ENV TENSORFLOW_VERSION=1.12.0
 ENV HOROVOD_VERSION=0.15.2
 ENV CUDNN_VERSION=7.1.4.18-1+cuda9.0
 ENV NCCL_VERSION=2.2.13-1+cuda9.0
@@ -100,4 +100,6 @@ RUN pip3 install pycocotools
 RUN pip3 install matplotlib 
 
 RUN git clone https://github.com/tensorpack/tensorpack.git /tensorpack 
+RUN cd /tensorpack && git fetch origin  2ce43d70456afd618167c9206d868c12e80e3f5a
+RUN cd /tensorpack && git reset --hard 2ce43d70456afd618167c9206d868c12e80e3f5a
 RUN pip3 install --ignore-installed -e /tensorpack
