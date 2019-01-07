@@ -36,7 +36,7 @@ As a first step, we need to create a [VPC](https://docs.aws.amazon.com/vpc/lates
 
 Next we will stage the data and code on an Amazon EFS File System that will be later accessed as a shared persistent volume from all the Kubernetes Pods used in distributed training. 
 
-While the idea of using EFS to stage data is quite general, we will make the concept concrete by staging [Coco 2017](http://cocodataset.org/#download) dataset and [COCO-R50FPN-MaskRCNN-Standard](http://models.tensorpack.com/FasterRCNN/COCO-R50FPN-MaskRCNN-Standard.npz) pre-trained model, so we can do distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example 
+While the idea of using EFS to stage data is quite general, we will make the concept concrete by staging [Coco 2017](http://cocodataset.org/#download) dataset and [ImageNet-R50-AlignPadding](http://models.tensorpack.com/FasterRCNN/ImageNet-R50-AlignPadding.npz) pre-trained model, so we can do distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example 
 
 To that end, we need to execute following steps:
 

@@ -34,6 +34,6 @@ unzip $STAGE_DIR/data/annotations_trainval2017.zip -d $EFS_DIR/data
 rm $STAGE_DIR/data/annotations_trainval2017.zip
 
 mkdir $EFS_DIR/data/pretrained-models
-wget -O $EFS_DIR/data/pretrained-models/COCO-R50FPN-MaskRCNN-Standard.npz http://models.tensorpack.com/FasterRCNN/COCO-R50FPN-MaskRCNN-Standard.npz
+wget -O $EFS_DIR/data/pretrained-models/ImageNet-R50-AlignPadding.npz http://models.tensorpack.com/FasterRCNN/ImageNet-R50-AlignPadding.npz 
 
 cp run.sh $EFS_DIR/
