@@ -38,7 +38,6 @@ echo "Using Cluster control security group: $CONTROL_SG"
 
 VOLUME_SIZE=200
 
-
 aws cloudformation create-stack --region $AWS_REGION  --stack-name $STACK_NAME \
 --template-url $CFN_URL \
 --capabilities CAPABILITY_NAMED_IAM \
