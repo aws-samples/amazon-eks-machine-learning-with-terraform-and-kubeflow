@@ -28,7 +28,7 @@ VPC_ID=`aws eks --region $AWS_REGION describe-cluster --name $EKS_CLUSTER | grep
 echo "Using VpcId: $VPC_ID"
 
 # Customize Subnet ID
-SUBNETS=`aws eks --region $AWS_REGION  describe-cluster --name $EKS_CLUSTER | grep subnet- | sed 's/\"//g'| sed ':a;N;$!ba;s/\n//g' | sed 's/ //g' | sed 's/,/\\\\,/g'`
+SUBNETS=`aws eks --region $AWS_REGION  describe-cluster --name $EKS_CLUSTER | grep subnet- | sed 's/\"//g'| sed ':a;N;$!ba;s/\n//g' | sed 's/ //g' | head -1 | sed 's/,//g'`
 echo "Using Subnets: $SUBNETS"
 
 
