@@ -103,3 +103,4 @@ RUN git clone https://github.com/tensorpack/tensorpack.git /tensorpack
 RUN cd /tensorpack && git fetch origin  2ce43d70456afd618167c9206d868c12e80e3f5a
 RUN cd /tensorpack && git reset --hard 2ce43d70456afd618167c9206d868c12e80e3f5a
 RUN pip3 install --ignore-installed -e /tensorpack
+RUN pip3 install --ignore-installed numpy==1.14.5
