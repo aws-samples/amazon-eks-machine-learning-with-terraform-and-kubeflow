@@ -93,14 +93,15 @@ RUN apt-get install -y --no-install-recommends --allow-downgrades --allow-change
 
 RUN pip3 install awscli
 RUN pip3 install boto3
-RUN pip3 install ujson
-RUN pip3 install opencv-python
-RUN pip3 install Cython
-RUN pip3 install pycocotools
-RUN pip3 install matplotlib 
+RUN pip3 install ujson==1.35
+RUN pip3 install opencv-python==4.0.0.21
+RUN pip3 install Cython==0.28.4
+RUN pip3 install pycocotools==2.0.0
+RUN pip3 install matplotlib==3.0.2
 
 RUN git clone https://github.com/tensorpack/tensorpack.git /tensorpack 
-RUN cd /tensorpack && git fetch origin  2ce43d70456afd618167c9206d868c12e80e3f5a
-RUN cd /tensorpack && git reset --hard 2ce43d70456afd618167c9206d868c12e80e3f5a
+RUN cd /tensorpack && git fetch origin 56dd2390d7d96906abdbdd896f1b4f6df3c07f98 
+RUN cd /tensorpack && git reset --hard 56dd2390d7d96906abdbdd896f1b4f6df3c07f98 
 RUN pip3 install --ignore-installed -e /tensorpack
-RUN pip3 install --ignore-installed numpy==1.14.5
+RUN pip3 uninstall -y numpy
+RUN pip3 install numpy==1.16.0

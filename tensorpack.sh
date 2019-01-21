@@ -35,7 +35,7 @@ ks prototype describe openmpi
 COMPONENT=tensorpack
 
 # Customize docker image below
-IMAGE=<aws account id>.dkr.ecr.<aws region>.amazonaws.com/tf_tp_hvd_eks:tf1.10-hvd1.13-v1
+IMAGE=<aws-account-id>.dkr.ecr.<aws-region>.amazonaws.com/tf_tp_hvd_eks:tf1.12-hvd0.15.2-tp-56dd239-v1
 
 # Customize node selector for ec2 instance type
 NODE_SELECTOR='beta.kubernetes.io/instance-type=p3.16xlarge'
