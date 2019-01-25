@@ -28,7 +28,9 @@ VPC_ID=`aws eks --region $AWS_REGION describe-cluster --name $EKS_CLUSTER | grep
 echo "Using VpcId: $VPC_ID"
 
 # Customize Subnet ID
-SUBNETS=`aws eks --region $AWS_REGION  describe-cluster --name $EKS_CLUSTER | grep subnet- | sed 's/\"//g'| sed ':a;N;$!ba;s/\n//g' | sed 's/ //g' | head -1 | sed 's/,//g'`
+# This picks the first of multiple subnets in VPC. You may want to set a subnet explicitly. 
+# The objective is to have the workers in the same subnet to minimize latency 
+SUBNETS=`aws eks --region $AWS_REGION  describe-cluster --name $EKS_CLUSTER | grep subnet- | sed 's/\"//g'| sed ':a;N;$!ba;s/\n//g' | sed 's/ //g' | head -1 | sed 's/\s*,\s*/,/g' | cut -d ',' -f1`
 echo "Using Subnets: $SUBNETS"
 
 
