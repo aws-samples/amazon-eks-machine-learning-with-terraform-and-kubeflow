@@ -5,7 +5,6 @@ ENV HOROVOD_VERSION=0.15.2
 ENV CUDNN_VERSION=7.1.4.18-1+cuda9.0
 ENV NCCL_VERSION=2.2.13-1+cuda9.0
 
-
 RUN apt-get update && apt-get install -y --no-install-recommends --allow-downgrades --allow-change-held-packages \
       build-essential \
       cmake \
@@ -99,9 +98,9 @@ RUN pip3 install Cython==0.28.4
 RUN pip3 install pycocotools==2.0.0
 RUN pip3 install matplotlib==3.0.2
 
-RUN git clone https://github.com/tensorpack/tensorpack.git /tensorpack 
-RUN cd /tensorpack && git fetch origin 56dd2390d7d96906abdbdd896f1b4f6df3c07f98 
-RUN cd /tensorpack && git reset --hard 56dd2390d7d96906abdbdd896f1b4f6df3c07f98 
+RUN wget -O tensorpack.tar.gz https://github.com/tensorpack/tensorpack/archive/0.9.0.1.tar.gz
+RUN tar -xvf tensorpack.tar.gz
+RUN mv tensorpack-0.9.0.1 /tensorpack
 RUN pip3 install --ignore-installed -e /tensorpack
 RUN pip3 uninstall -y numpy
 RUN pip3 install numpy==1.16.0
