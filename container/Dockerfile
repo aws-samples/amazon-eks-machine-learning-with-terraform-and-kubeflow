@@ -98,9 +98,9 @@ RUN pip3 install Cython==0.28.4
 RUN pip3 install pycocotools==2.0.0
 RUN pip3 install matplotlib==3.0.2
 
-RUN wget -O tensorpack.tar.gz https://github.com/tensorpack/tensorpack/archive/0.9.0.1.tar.gz
-RUN tar -xvf tensorpack.tar.gz
-RUN mv tensorpack-0.9.0.1 /tensorpack
+RUN git clone https://github.com/tensorpack/tensorpack.git /tensorpack
+RUN cd /tensorpack && git fetch origin 860f7a382f8dc245e46c5f637866ef6384db1733 
+RUN cd /tensorpack && git reset --hard 860f7a382f8dc245e46c5f637866ef6384db1733 
 RUN pip3 install --ignore-installed -e /tensorpack
 RUN pip3 uninstall -y numpy
 RUN pip3 install numpy==1.16.0

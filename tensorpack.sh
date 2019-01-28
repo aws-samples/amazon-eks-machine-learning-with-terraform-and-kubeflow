@@ -16,7 +16,7 @@ kubectl create secret generic ${SECRET} -n ${NAMESPACE} --from-file=id_rsa=.tmp/
 # Which version of Kubeflow to use.
 # For a list of releases refer to:
 # https://github.com/kubeflow/kubeflow/releases
-VERSION=master
+VERSION=v0.4.1
 
 # Initialize a ksonnet app. Set the namespace for it's default environment.
 APP_NAME=tensorpack
@@ -35,7 +35,7 @@ ks prototype describe openmpi
 COMPONENT=tensorpack
 
 # Customize docker image below
-IMAGE=<aws-account-id>.dkr.ecr.<aws-region>.amazonaws.com/tf_tp_hvd_eks:tf1.12-hvd0.15.2-tp-0.9.0.1
+IMAGE=<aws-account-id>.dkr.ecr.<aws-region>.amazonaws.com/tf_tp_hvd_eks:tf1.12-hvd0.15.2-tp-860f7a3
 
 # Customize node selector for ec2 instance type
 NODE_SELECTOR='beta.kubernetes.io/instance-type=p3.16xlarge'
@@ -45,7 +45,7 @@ VOLUMES='[{ "name": "efs", "persistentVolumeClaim": { "claimName": "tensorpack-e
 VOLUME_MOUNTS='[{ "name": "efs", "mountPath": "/efs"}]'
 
 # Customize number of workers
-WORKERS=2
+WORKERS=1
 GPU=8
 
 EXEC="/efs/run.sh"
