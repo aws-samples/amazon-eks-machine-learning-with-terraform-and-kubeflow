@@ -50,7 +50,7 @@ GPU=8
 
 EXEC="/efs/run.sh"
 
-ks generate openmpi ${COMPONENT} --image ${IMAGE} --secret ${SECRET} --workers ${WORKERS} --gpu ${GPU} --exec "${EXEC}"  --nodeSelector "$NODE_SELECTOR" --volumes "$VOLUMES" --volumeMounts "$VOLUME_MOUNTS"
+ks generate openmpi ${COMPONENT} --image ${IMAGE} --imagePullPolicy "Always" --secret ${SECRET} --workers ${WORKERS} --gpu ${GPU} --exec "${EXEC}"  --nodeSelector "$NODE_SELECTOR" --volumes "$VOLUMES" --volumeMounts "$VOLUME_MOUNTS"
 
 # Deploy to your cluster. 
 #ks apply default
