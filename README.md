@@ -42,7 +42,7 @@ To that end, we need to execute following steps:
 
 1. In the same VPC as the EKS cluster you created above, [create a General Purpose, Bursting Amazon EFS file system](https://docs.aws.amazon.com/efs/latest/ug/gs-step-two-create-efs-resources.html). Create EFS mount points in each of the VPC subnets.
 
-2. Using AWS Management console, in the same VPC as the EKS cluster, launch an i3 EC2 instance with 200 GB storage using any linux AMI. The purpose of this instance is to mount the EFS file system created above and prepare the EFS file-system for machine-learning training.
+2. Using AWS Management console, in the same VPC as the EKS cluster, launch a general purpose computing EC2 instance with 200 GB storage using Ubuntu [Deep Learning AMI](https://aws.amazon.com/machine-learning/amis/). The purpose of this instance is to mount the EFS file system created above and prepare the EFS file-system for machine-learning training.
 
 3. Mount EFS file system on the instance created in Step 2 above at ```/efs```. 
 
