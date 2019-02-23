@@ -44,13 +44,13 @@ To that end, we need to execute following steps:
 
 2. Using AWS Management console, in the same VPC as the EKS cluster, launch a general purpose computing EC2 instance with 200 GB storage using Ubuntu [Deep Learning AMI](https://aws.amazon.com/machine-learning/amis/). The purpose of this instance is to mount the EFS file system created above and prepare the EFS file-system for machine-learning training.
 
-3. Mount EFS file system on the instance created in Step 2 above at ```/efs```. 
+3. Mount EFS file system on the general-purpose instance created in Step 2 above at ```/efs```. 
 
-4. In the main project directory, customize and execute ```scp run.sh user@<i3 instance>:~/``` to copy ```run.sh``` file to the i3 instance. Also, customize and execute: ```scp eks-cluster/prepare-efs.sh user@<i3 instance>:~/``` to copy ```eks-cluster/prepare-efs.sh``` to the i3 instance.
+4. In the main project directory, customize ```run.sh``` script and execute ```scp run.sh user@<gp-instance>:~/``` to copy ```run.sh``` file to home directory on the general-purpose instance. Also, customize and execute: ```scp eks-cluster/prepare-efs.sh user@<gp-instance>:~/``` to copy ```eks-cluster/prepare-efs.sh``` to the home directory on general-purpose instance.
 
-5. SSH to i3 instance: ```ssh user@<i3 instance>```
+5. SSH to the general purpose instance: ```ssh user@<gp-instance>```
 
-6. On the i3 instance, in the home directory, execute: ```nohup ./prepare-efs.sh &``` This step may take a while. You dont have to wait for this script to complete to proceed to next step. **You can use the [screen](https://linuxize.com/post/how-to-use-linux-screen/) command as an alternative to using ```nohup``` and ```screen``` appears to work more reliably than ```nohup``` command.**
+6. On the general purpose instance, in the home directory, execute: ```nohup ./prepare-efs.sh &``` This step may take a while. You dont have to wait for this script to complete to proceed to next step. **You can use the [screen](https://linuxize.com/post/how-to-use-linux-screen/) command as an alternative to using ```nohup``` and ```screen``` appears to work more reliably than ```nohup``` command.**
 
 ## Create Amazon EKS Cluster
 
