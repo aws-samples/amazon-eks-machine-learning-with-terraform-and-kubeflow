@@ -28,7 +28,7 @@ As a first step, we need to create a [VPC](https://docs.aws.amazon.com/vpc/lates
 
    1. Customize EKS_CLUSTER and AWS_REGION variables in ```eks-cluster/set-cluster.sh``` shell script in this project. The value of EKS_CLUSTER must be a unique cluster name in the selected AWS region in your account. 
    
-   2. In ```eks-cluster``` directory, execute ```./eks-cluster-vpc-stack.sh``` This script create an [AWS CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-whatis-concepts.html#w2ab1b5c15b9) stack that creates the EKS cluster VPC. The output of the script is a CloudFormation Stack ID.
+   2. In ```eks-cluster``` directory, execute ```./eks-cluster-vpc-stack.sh``` This script creates an [AWS CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-whatis-concepts.html#w2ab1b5c15b9) stack that creates the EKS cluster VPC. The output of the script is a CloudFormation Stack ID.
    
    3. Check the status of the CloudFormation Stack for creating VPC in AWS Management Console. When the status is CREATE_COMPLETE, note the Outputs of the CloudFormation Stack in AWS Management Console: You will need them later when you get ready to create an EKS cluster below.
 
@@ -64,7 +64,7 @@ To that end, we need to execute following steps:
 
 4. In ```eks-cluster``` directory, execute: ```./apply-cni-patch.sh``` to apply CNI version 1.3 patch
 
-5. To create Amazon EKS worker nodes, customize NUM_WORKERS and KEY_NAME variables in ```eks-cluster/eks-workers-stack.sh``` shell script and in ```eks-cluster``` directory execute: ```./eks-workers-stack.sh``` This script outputs a CloudFormation Stack ID for a stack that creates p3.16xlarge (or whatever instance type you specified in the script) GPU enabled EKS worker nodes we will use for distributed training. **This script uses an [EKS-optimized AMI with GPU support](https://aws.amazon.com/marketplace/pp/B07GRHFXGM). You would need to explicitly subscribe to this AMI in AWS Marketplace before you can execute ```eks-workers-stack.sh``` script.**
+5. To create Amazon EKS worker nodes, customize AMI_ID, CFN_URL, NUM_WORKERS, and KEY_NAME variables in ```eks-cluster/eks-workers-stack.sh``` shell script and in ```eks-cluster``` directory execute: ```./eks-workers-stack.sh``` This script outputs a CloudFormation Stack ID for a stack that creates p3.16xlarge (or whatever instance type you specified in the script) GPU enabled EKS worker nodes we will use for distributed training. **This script uses an [EKS-optimized AMI with GPU support](https://aws.amazon.com/marketplace/pp/B07GRHFXGM). You would need to explicitly subscribe to this AMI in AWS Marketplace before you can execute ```eks-workers-stack.sh``` script.**
 
 6. Check the status of the CloudFormation Stack in AWS Management Console. When the status is CREATE_COMPLETE, under the Outputs tab of the CloudFomration Stack in AWS Management Console, copy *NodeInstanceRole* and proceed to next step. 
 
