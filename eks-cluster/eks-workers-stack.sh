@@ -10,12 +10,14 @@ STACK_NAME=$EKS_CLUSTER-workers
 
 NODE_GROUP=ng1
 
-# cfn template name
-CFN_URL=https://amazon-eks.s3-us-west-2.amazonaws.com/cloudformation/2018-12-10/amazon-eks-nodegroup.yaml
-
 # EC2 AMI for EKS worker nodes with GPU support 
-# see https://docs.aws.amazon.com/eks/latest/userguide/gpu-ami.html
-AMI_ID=ami-08a0bb74d1c9a5e2f
+# see https://docs.aws.amazon.com/eks/latest/userguide/gpu-ami.html for AMI in selected AWS region
+AMI_ID=
+
+# cloud formationn template url
+# see https://docs.aws.amazon.com/eks/latest/userguide/gpu-ami.html 
+# for latest AWS CloudFormation worker node template.
+CFN_URL=
 
 # EC2 instance type
 INSTANCE_TYPE=p3.16xlarge
