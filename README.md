@@ -74,10 +74,18 @@ To that end, we need to execute following steps:
 
 
 ## Install ksonnet
+**Ksonnet project is ending, so as an alternative, we also discuss the use of Kubeflow MPIJob with Helm charts below.**
 
 We will use [Ksonnet](https://github.com/ksonnet/ksonnet) to manage the Kubernetes manifests needed for doing distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example in Amazon EKS. To that end, we need to install Ksonnet client on the machine you just installed EKS kubectl in the previous section.
 
 To install Ksonnet, [download and install a pre-built ksonnet binary](https://github.com/ksonnet/ksonnet/releases) as an executable named ```ks``` under ```/usr/local/bin``` or some other directory in your PATH. If the pre-built binary option does not work for you, please see other [ksonnet install](https://github.com/ksonnet/ksonnet) options.
+
+## Install Helm and Kubeflow
+**This is an alternative to using ksonnet.**
+
+[Helm](https://helm.sh/docs/using_helm/) is package manager for Kubernetes. It uses a package format named *charts*. A Helm chart is a collection of files that define Kubernetes resources. Install helm according to instructions [here](https://helm.sh/docs/using_helm/#installing-helm).
+
+[Kubeflow](https://www.kubeflow.org/docs/about/kubeflow/) project objective is to simplify the management of Machine Learning workflows on Kubernetes. Follow the [Kubeflow quick start guide](https://www.kubeflow.org/docs/started/getting-started/) to install Kubeflow.
 
 ## Build and Upload Docker Image to ECR
 
@@ -95,7 +103,8 @@ We need to package TensorFlow, TensorPack and Horovod in a Docker image and uplo
 
 5. Check to see the persistent-volume was successfully bound to peristent-volume-claim by executing: ```kubectl get pv -n kubeflow```
 
-## Build Ksonnet Application for Training
+## Build Ksonnet Application for EKS Training
+**Ksonnet project is ending, so as an alternative, we also discuss building Kubeflow MPIJob with Helm charts below.**
 
 1. In the project folder, customize ```tensorpack.sh``` shell script to specify your IMAGE URL in ECR. You may optionally add an authentication GITHUB_TOKEN. You may customize WORKERS variable to specify number of available WORKER nodes you will like to use for training.
 
@@ -112,5 +121,17 @@ We need to package TensorFlow, TensorPack and Horovod in a Docker image and uplo
 7. Execute: ```kubectl describe pods tensorpack-master -n kubeflow``` if the pods are in pending state
 
 8. Execute: ```kubectl logs -f tensorpack-master -n kubeflow``` to see live log of training
+
+9. Model checkpoints and logs will be placed on shared EFS file system
+
+## Build Kubeflow MPIJob with Helm charts for EKS Training
+
+1. In the ```charts``` folder in this project, execute ```helm install --name mpijob ./mpijob/``` to deploy Kubeflow **MPIJob** *CustomResouceDefintion* in EKS using *mpijob chart*. 
+
+2. In the ```charts/maskrcnn``` folder in this project, customize ```values.yaml``` as needed. In the ```charts``` folder in this project, execute ```helm install --name maskrcnn ./maskrcnn/``` to create the MPI Operator Deployment resource and also define an MPIJob resource for Mask-RCNN Training. 
+
+3. Execute: ```kubectl get pods -n kubeflow``` to see the status of the pods
+
+4. Execute: ```kubectl logs -f maskrcnn-launcher-xxxxx -n kubeflow``` to see live log of training from the launcher (change xxxxx to your specific pod name).
 
 9. Model checkpoints and logs will be placed on shared EFS file system
