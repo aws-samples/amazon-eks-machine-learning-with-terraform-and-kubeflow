@@ -1,0 +1,24 @@
+global:
+  namespace: kubeflow
+maskrcnn:
+  name: maskrcnn
+  gpus: 16
+  gpus_per_node: 8
+  image: 807253771232.dkr.ecr.us-west-2.amazonaws.com/tf_tp_hvd_eks:tf1.12-hvd0.15.2-tp-860f7a3
+  efs_pvc: tensorpack-efs-gp-bursting
+  data_dir: /efs/data
+  steps_per_epoch: 7500 
+  lr_schedule: "[120000,160000,180000]"
+  eval_period_in_epochs: 1
+  data_train: "[\"train2017\"]"
+  data_val: val2017
+  mode_fpn: 'True'
+  mode_mask: 'True'
+  backbone_norm: FreezeBN
+  backbone_weights: /efs/data/pretrained-models/ImageNet-R50-AlignPadding.npz
+  image_pull_policy: IfNotPresent
+  horovod_cycle_time: "0.5"
+  horovod_fusion_threshold: "67108864"
+  nccl_socket_ifname: eth0
+  nccl_min_rings: 8
+  nccl_debug: INFO
