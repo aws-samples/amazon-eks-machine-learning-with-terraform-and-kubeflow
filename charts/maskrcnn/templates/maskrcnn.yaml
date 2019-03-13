@@ -13,9 +13,9 @@ spec:
     spec:
       restartPolicy: Never
       volumes:
-      - name: efs
+      - name: {{ .Values.maskrcnn.shared_fs }} 
         persistentVolumeClaim:
-            claimName: {{ .Values.maskrcnn.efs_pvc }}
+            claimName: {{ .Values.maskrcnn.shared_pvc }}
       - name: ebs
         hostPath:
             path: /ebs
@@ -37,7 +37,7 @@ spec:
         - mpirun
         args:
         - --output-filename 
-        - /efs/{{ .Release.Name }}-{{ date "2006-01-02-15-04-05" .Release.Time  }}
+        - /{{ .Values.maskrcnn.shared_fs }}/{{ .Release.Name }}-{{ date "2006-01-02-15-04-05" .Release.Time  }}
         - --allow-run-as-root
         - --display-map
         - --tag-output
@@ -45,17 +45,17 @@ spec:
         - python3
         - /tensorpack/examples/FasterRCNN/train.py
         - --logdir 
-        - /efs/{{ .Release.Name }}-{{ date "2006-01-02-15-04-05" .Release.Time  }}/train_log/maskrcnn
+        - /{{ .Values.maskrcnn.shared_fs }}/{{ .Release.Name }}-{{ date "2006-01-02-15-04-05" .Release.Time  }}/train_log/maskrcnn
         - --config  
         - MODE_MASK={{ .Values.maskrcnn.mode_fpn }}
         - MODE_FPN={{ .Values.maskrcnn.mode_mask }}
-        - DATA.BASEDIR={{ .Values.maskrcnn.data_dir }}
+        - DATA.BASEDIR=/{{ .Values.maskrcnn.shared_fs }}/{{ .Values.maskrcnn.data_dir }}
         - DATA.TRAIN={{ .Values.maskrcnn.data_train }} 
         - DATA.VAL={{ .Values.maskrcnn.data_val }}
         - TRAIN.EVAL_PERIOD={{ .Values.maskrcnn.eval_period_in_epochs }}
         - TRAIN.STEPS_PER_EPOCH={{ .Values.maskrcnn.steps_per_epoch }}
         - TRAIN.LR_SCHEDULE={{ .Values.maskrcnn.lr_schedule }} 
-        - BACKBONE.WEIGHTS={{ .Values.maskrcnn.backbone_weights }}
+        - BACKBONE.WEIGHTS=/{{ .Values.maskrcnn.shared_fs }}/{{ .Values.maskrcnn.backbone_weights }}
         - BACKBONE.NORM={{ .Values.maskrcnn.backbone_norm }}
         - TRAINER=horovod
         image: {{ .Values.maskrcnn.image }} 
