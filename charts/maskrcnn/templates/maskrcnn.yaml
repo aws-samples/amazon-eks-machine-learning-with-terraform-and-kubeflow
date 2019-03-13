@@ -61,8 +61,8 @@ spec:
         image: {{ .Values.maskrcnn.image }} 
         imagePullPolicy: {{ .Values.maskrcnn.image_pull_policy }}
         volumeMounts:
-        - mountPath: /efs
-          name: efs
+        - mountPath: /{{ .Values.maskrcnn.shared_fs }}
+          name: {{ .Values.maskrcnn.shared_fs }}
         - mountPath: /ebs
           name: ebs
         resources:
