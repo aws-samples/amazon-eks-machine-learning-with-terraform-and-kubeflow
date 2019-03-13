@@ -89,7 +89,7 @@ Make sure the security groups used with the EFS or FSx file-system allow access 
 ### Copy Run Script to Shared File System
 **Only if you plan to use Ksonnet, not needed for Helm Charts** 
 
-From the root directory of this project, customize and copy ```run.sh``` to the root directory of the shared file system you selected to use, e.g. to ```/efs``` for EFS or ```/fsx``` for FSx. Note, even if you selected EBS for staging your data, you must use a shared file system for your training logs, and if applicable, for storing ```run.sh```.
+From the root directory of this project, customize and copy ```run.sh``` to the root directory of the shared file system you selected. Note, even if you selected EBS for staging your data, you must use a shared file system for your training logs, and if applicable, for staging run script file ```run.sh```.
 
 ## Create Amazon EKS Cluster
 
