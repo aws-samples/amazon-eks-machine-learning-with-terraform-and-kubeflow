@@ -48,11 +48,11 @@ To that end, we need to execute following steps:
 
 4. **Only if you plan to use Ksonnet** as described in later sections below, in the main project directory, customize ```run.sh``` script and execute ```scp run.sh user@<gp-instance>:~/``` to copy ```run.sh``` file to home directory on the general-purpose instance. If you plan to use Helm charts, this step is not needed.
 
-5. Customize and execute: ```scp eks-cluster/prepare-efs.sh user@<gp-instance>:~/``` to copy ```eks-cluster/prepare-efs.sh``` to the home directory on general-purpose instance.
+5. Customize and execute: ```scp eks-cluster/prepare-data.sh user@<gp-instance>:~/``` to copy ```eks-cluster/prepare-data.sh``` to the home directory on general-purpose instance.
 
 6. SSH to the general purpose instance: ```ssh user@<gp-instance>```
 
-7. On the general purpose instance, in the home directory, execute: ```nohup ./prepare-efs.sh &``` This step may take a while. You dont have to wait for this script to complete to proceed to next step. **You can use the [screen](https://linuxize.com/post/how-to-use-linux-screen/) command as an alternative to using ```nohup``` and ```screen``` appears to work more reliably than ```nohup``` command.**
+7. On the general purpose instance, in the home directory, execute: ```nohup ./prepare-data.sh &``` This step may take a while. You dont have to wait for this script to complete to proceed to next step. **You can use the [screen](https://linuxize.com/post/how-to-use-linux-screen/) command as an alternative to using ```nohup``` and ```screen``` appears to work more reliably than ```nohup``` command.**
 
 ## Create Amazon EKS Cluster
 
