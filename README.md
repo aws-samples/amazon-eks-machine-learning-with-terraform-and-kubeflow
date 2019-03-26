@@ -33,6 +33,9 @@ As a first step, we need to create a [VPC](https://docs.aws.amazon.com/vpc/lates
    
    3. Check the status of the CloudFormation Stack for creating VPC in AWS Management Console. When the status is CREATE_COMPLETE, note the Outputs of the CloudFormation Stack in AWS Management Console: You will need them later when you get ready to create an EKS cluster below.
 
+## Download COCO 2017 dataset and upload to AWS S3
+Customize ```eks-cluster/prepare-s3-bucket.sh``` for S3_BUCKET and execute ```eks-cluster/prepare-s3-bucket.sh ``` to download COCO 2017 dataset and upload it to AWS S3 bucket. 
+
 ## Stage Data
 
 Next we stage the data that will be later accessed as a persistent volume from all the Kubernetes Pods used in distributed training. We have three data store options for staging data:
