@@ -34,7 +34,7 @@ As a first step, we need to create a [VPC](https://docs.aws.amazon.com/vpc/lates
    3. Check the status of the CloudFormation Stack for creating VPC in AWS Management Console. When the status is CREATE_COMPLETE, note the Outputs of the CloudFormation Stack in AWS Management Console: You will need them later when you get ready to create an EKS cluster below.
 
 ## Download COCO 2017 dataset and upload to AWS S3
-Customize ```eks-cluster/prepare-s3-bucket.sh``` for S3_BUCKET and execute ```eks-cluster/prepare-s3-bucket.sh ``` to download COCO 2017 dataset and upload it to AWS S3 bucket. 
+Customize ```eks-cluster/prepare-s3-bucket.sh``` for ```S3_BUCKET``` and execute ```eks-cluster/prepare-s3-bucket.sh ``` to download COCO 2017 dataset and upload it to AWS S3 bucket. 
 
 ## Stage Data
 
@@ -61,7 +61,7 @@ The steps for staging data for each file-system option are shown below.
 
 4. Execute: ```scp eks-cluster/prepare-data.sh user@<gp-instance>:~/``` to copy ```eks-cluster/prepare-data.sh``` to the home directory on general-purpose instance. 
 
-6. SSH to the general purpose instance: ```ssh user@<gp-instance>```. Customize ```DATA_DIR``` variable in ```eks-cluster/prepare-data.sh```.
+6. SSH to the general purpose instance: ```ssh user@<gp-instance>```. Customize ```S3_BUCKET``` and ```DATA_DIR``` variables in ```eks-cluster/prepare-data.sh```.
 
 7. On the general purpose instance, in the home directory, execute: ```nohup ./prepare-data.sh &```. You dont have to wait for this script to complete to proceed to next step. 
 
@@ -74,17 +74,17 @@ The steps for staging data for each file-system option are shown below.
 
 4. Execute: ```scp eks-cluster/prepare-data.sh user@<gp-instance>:~/``` to copy ```eks-cluster/prepare-data.sh``` to the home directory on general-purpose instance. 
 
-6. SSH to the general purpose instance: ```ssh user@<gp-instance>```. Customize ```DATA_DIR``` variable in ```eks-cluster/prepare-data.sh```.
+6. SSH to the general purpose instance: ```ssh user@<gp-instance>```. Customize ```S3_BUCKET``` and ```DATA_DIR``` variables in ```eks-cluster/prepare-data.sh```.
 
 7. On the general purpose instance, in the home directory, execute: ```nohup ./prepare-data.sh &```. You dont have to wait for this script to complete to proceed to next step. 
 
 ### Amazon EBS
 
-1. Execute: ```scp eks-cluster/prepare-data.sh user@<eks-wroker-instance>:~/``` to copy ```eks-cluster/prepare-data.sh``` to the home directory on each EKS worker instance where you would like to stage the data.
+1. Customize ```S3_BUCKET``` variable and execute ```scp eks-cluster/prepare-data.sh user@<eks-worker-instance>:~/``` to copy ```eks-cluster/prepare-data.sh``` to the home directory on each EKS worker instance where you would like to stage the data as follows:
 
-2. SSH to the EKS worker instance: ```ssh user@<eks-wroker-instance>```
+    a. SSH to the EKS worker instance: ```ssh user@<eks-worker-instance>```
 
-3. On the EKS worker instance, in the home directory, execute: ```nohup ./prepare-data.sh &```. You dont have to wait for this script to complete to proceed to next step. 
+    b. On the EKS worker instance, in the home directory, execute: ```nohup ./prepare-data.sh &```. You dont have to wait for this script to complete to proceed to next step. 
 
 ### Check Security Groups
 
