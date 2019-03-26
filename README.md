@@ -15,12 +15,13 @@ In this project, we are focused on distributed training using [TensorFlow](https
 
 While all the concepts described here are quite general and are applicable to running any combination of TensorFlow, TensorPack and Horovod based algorithms on Amazon EKS, we will make these concepts concrete by focusing on distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example. 
 
-At a conceptual level, our objective is to:
+At a high level, we will:
 
-  1. Create an Amazon EKS Cluster
-  2. Stage data on an [Amazon Elastic File System (EFS)](https://aws.amazon.com/efs/)  in the same [Amazon VPC](https://aws.amazon.com/vpc/) as the EKS cluster
-  3. Create EKS Persistent Volume and Peristent Volume Claim based on the EFS file-system
-  4. Use [Ksonnet](https://github.com/ksonnet/ksonnet) to create an application that executes our training job using data from the EKS Persistent Volume mounted on the EKS Pods
+  1. Create an [Amazon EKS](https://aws.amazon.com/eks/) Cluster
+  2. Download [COCO 2017 dataset](http://cocodataset.org/#download) and upload it to an AWS S3 bucket
+  3. Stage COCO 2017 data for training on a shared file system, or replicate it on host attached volumes
+  4. Create EKS Persistent Volume and Peristent Volume Claim based on the selected shared file-system
+  5. Use [Helm charts](https://helm.sh/docs/developing_charts/) to manage training jobs in EKS cluster
 
 ## Create Amazon EKS Cluster VPC
 
