@@ -32,27 +32,64 @@ As a first step, we need to create a [VPC](https://docs.aws.amazon.com/vpc/lates
    
    3. Check the status of the CloudFormation Stack for creating VPC in AWS Management Console. When the status is CREATE_COMPLETE, note the Outputs of the CloudFormation Stack in AWS Management Console: You will need them later when you get ready to create an EKS cluster below.
 
-## Prepare Amazon EFS File System
+## Stage Data
 
-Next we will stage the data and code on an Amazon EFS File System that will be later accessed as a shared persistent volume from all the Kubernetes Pods used in distributed training. 
+Next we stage the data that will be later accessed as a persistent volume from all the Kubernetes Pods used in distributed training. We have three data store options for staging data:
 
-While the idea of using EFS to stage data is quite general, we will make the concept concrete by staging [Coco 2017](http://cocodataset.org/#download) dataset and [ImageNet-R50-AlignPadding](http://models.tensorpack.com/FasterRCNN/ImageNet-R50-AlignPadding.npz) pre-trained model, so we can do distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example 
+1. [Amazon EFS](https://aws.amazon.com/efs/)
+2. [Amazon FSx Lustre](https://aws.amazon.com/fsx/lustre/)
+3. [Amazon EBS](https://aws.amazon.com/ebs/)
 
-To that end, we need to execute following steps:
+We will make the concept concrete by staging [Coco 2017](http://cocodataset.org/#download) dataset and [ImageNet-R50-AlignPadding](http://models.tensorpack.com/FasterRCNN/ImageNet-R50-AlignPadding.npz) pre-trained model, so we can do distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example 
 
+First we need to select the option we would like to use for staging data: EFS, FSx or EBS. 
+
+EFS and FSx are both shared file-systems accessible from multiple K8s Pods running on multiple hosts. EBS provides network attached storage volumes. Each EBS volume is accessible to K8s Pods running on a single host. The performance characterstics of each file-system are different and may perform differently during training.
+
+The steps for staging data for each file-system option are shown below.
+
+### Amazon EFS 
 1. In the same VPC as the EKS cluster you created above, [create a General Purpose, Bursting Amazon EFS file system](https://docs.aws.amazon.com/efs/latest/ug/gs-step-two-create-efs-resources.html). Create EFS mount points in each of the VPC subnets.
 
 2. Using AWS Management console, in the same VPC as the EKS cluster, launch a general purpose computing EC2 instance with 200 GB storage using Ubuntu [Deep Learning AMI](https://aws.amazon.com/machine-learning/amis/). The purpose of this instance is to mount the EFS file system created above and prepare the EFS file-system for machine-learning training.
 
 3. Mount EFS file system on the general-purpose instance created in Step 2 above at ```/efs```. 
 
-4. **Only if you plan to use Ksonnet** as described in later sections below, in the main project directory, customize ```run.sh``` script and execute ```scp run.sh user@<gp-instance>:~/``` to copy ```run.sh``` file to home directory on the general-purpose instance. If you plan to use Helm charts, this step is not needed.
+4. Execute: ```scp eks-cluster/prepare-data.sh user@<gp-instance>:~/``` to copy ```eks-cluster/prepare-data.sh``` to the home directory on general-purpose instance. 
 
-5. Customize and execute: ```scp eks-cluster/prepare-efs.sh user@<gp-instance>:~/``` to copy ```eks-cluster/prepare-efs.sh``` to the home directory on general-purpose instance.
+6. SSH to the general purpose instance: ```ssh user@<gp-instance>```. Customize ```DATA_DIR``` variable in ```eks-cluster/prepare-data.sh```.
 
-6. SSH to the general purpose instance: ```ssh user@<gp-instance>```
+7. On the general purpose instance, in the home directory, execute: ```nohup ./prepare-data.sh &```. You dont have to wait for this script to complete to proceed to next step. 
 
-7. On the general purpose instance, in the home directory, execute: ```nohup ./prepare-efs.sh &``` This step may take a while. You dont have to wait for this script to complete to proceed to next step. **You can use the [screen](https://linuxize.com/post/how-to-use-linux-screen/) command as an alternative to using ```nohup``` and ```screen``` appears to work more reliably than ```nohup``` command.**
+### Amazon FSx
+1. In the same VPC as the EKS cluster you created above, [create a FSx Lustre file system](https://docs.aws.amazon.com/fsx/latest/LustreGuide/getting-started.html). 
+
+2. Using AWS Management console, in the same VPC as the EKS cluster, launch a general purpose computing EC2 instance with 200 GB storage using Ubuntu [Deep Learning AMI](https://aws.amazon.com/machine-learning/amis/). The purpose of this instance is to mount the FSx file system created above and prepare the FSx file-system for machine-learning training.
+
+3. [Mount FSx file system](https://docs.aws.amazon.com/fsx/latest/LustreGuide/getting-started.html#getting-started-step2)  on the general-purpose instance created in Step 2 above at ```/fsx```. 
+
+4. Execute: ```scp eks-cluster/prepare-data.sh user@<gp-instance>:~/``` to copy ```eks-cluster/prepare-data.sh``` to the home directory on general-purpose instance. 
+
+6. SSH to the general purpose instance: ```ssh user@<gp-instance>```. Customize ```DATA_DIR``` variable in ```eks-cluster/prepare-data.sh```.
+
+7. On the general purpose instance, in the home directory, execute: ```nohup ./prepare-data.sh &```. You dont have to wait for this script to complete to proceed to next step. 
+
+### Amazon EBS
+
+1. Execute: ```scp eks-cluster/prepare-data.sh user@<eks-wroker-instance>:~/``` to copy ```eks-cluster/prepare-data.sh``` to the home directory on each EKS worker instance where you would like to stage the data.
+
+2. SSH to the EKS worker instance: ```ssh user@<eks-wroker-instance>```
+
+3. On the EKS worker instance, in the home directory, execute: ```nohup ./prepare-data.sh &```. You dont have to wait for this script to complete to proceed to next step. 
+
+### Check Security Groups
+
+Make sure the security groups used with the EFS or FSx file-system allow access from EKS worker instances
+
+### Copy Run Script to Shared File System
+**Only if you plan to use Ksonnet, not needed for Helm Charts** 
+
+From the root directory of this project, customize and copy ```run.sh``` to the root directory of the shared file system you selected. Note, even if you selected EBS for staging your data, you must use a shared file system for your training logs, and if applicable, for staging run script file ```run.sh```.
 
 ## Create Amazon EKS Cluster
 
@@ -93,7 +130,10 @@ To install Ksonnet, [download and install a pre-built ksonnet binary](https://gi
 
 We need to package TensorFlow, TensorPack and Horovod in a Docker image and upload the image to Amazon ECR. To that end, in ```container/build_tools``` directory in this project, customize for AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your default AWS region. It is recommended that the Docker Image be built on an EC2 instance based on [Amazon Deep Learning AMIs](https://aws.amazon.com/machine-learning/amis/).
 
-## Create EKS Persistent Volume for EFS
+
+## Create EKS Persistent Volume
+
+### Persistent Volume for EFS
 
 1. Execute: ```kubectl create namespace kubeflow``` to create kubeflow namespace
 
@@ -102,6 +142,20 @@ We need to package TensorFlow, TensorPack and Horovod in a Docker image and uplo
 3. Check to see the persistent-volume was successfully created by executing: ```kubectl get pv -n kubeflow```
 
 4. Execute: ```kubectl apply -n kubeflow -f pvc-kubeflow-efs-gp-bursting.yaml``` to create an EKS persistent-volume-claim
+
+5. Check to see the persistent-volume was successfully bound to peristent-volume-claim by executing: ```kubectl get pv -n kubeflow```
+
+### Persistent Volume for FSx
+
+0. [Install K8s Container Storage Interface (CS) driver for Amazon FSx Lustre file system](https://github.com/aws/csi-driver-amazon-fsx) in your EKS cluster
+
+1. Execute: ```kubectl create namespace kubeflow``` to create kubeflow namespace
+
+2. In ```eks-cluster``` directory, customize ```pv-kubeflow-fsx.yaml``` for FSx file-system id and AWS region and execute: ``` kubectl apply -n kubeflow -f pv-kubeflow-fsx.yaml```
+
+3. Check to see the persistent-volume was successfully created by executing: ```kubectl get pv -n kubeflow```
+
+4. Execute: ```kubectl apply -n kubeflow -f pvc-kubeflow-fsx.yaml``` to create an EKS persistent-volume-claim
 
 5. Check to see the persistent-volume was successfully bound to peristent-volume-claim by executing: ```kubectl get pv -n kubeflow```
 
@@ -130,10 +184,12 @@ We need to package TensorFlow, TensorPack and Horovod in a Docker image and uplo
 
 1. In the ```charts``` folder in this project, execute ```helm install --name mpijob ./mpijob/``` to deploy Kubeflow **MPIJob** *CustomResouceDefintion* in EKS using *mpijob chart*. 
 
-2. In the ```charts/maskrcnn``` folder in this project, customize ```values.yaml``` as needed. In the ```charts``` folder in this project, execute ```helm install --name maskrcnn ./maskrcnn/``` to create the MPI Operator Deployment resource and also define an MPIJob resource for Mask-RCNN Training. 
+2. In the ```charts/maskrcnn``` folder in this project, customize ```values.yaml``` for ```shared_fs``` and ```shared_pvc``` variables as needed based on the shared file system selected, i.e. EFS or FSx.  
 
-3. Execute: ```kubectl get pods -n kubeflow``` to see the status of the pods
+3. In the ```charts``` folder in this project, execute ```helm install --name maskrcnn ./maskrcnn/``` to create the MPI Operator Deployment resource and also define an MPIJob resource for Mask-RCNN Training. 
 
-4. Execute: ```kubectl logs -f maskrcnn-launcher-xxxxx -n kubeflow``` to see live log of training from the launcher (change xxxxx to your specific pod name).
+4. Execute: ```kubectl get pods -n kubeflow``` to see the status of the pods
 
-9. Model checkpoints and logs will be placed on shared EFS file system
+5. Execute: ```kubectl logs -f maskrcnn-launcher-xxxxx -n kubeflow``` to see live log of training from the launcher (change xxxxx to your specific pod name).
+
+9. Model checkpoints and logs will be placed on the ```shared_fs``` file-system  set in ```values.yaml```, i.e. ```efs``` or ```fsx```.
