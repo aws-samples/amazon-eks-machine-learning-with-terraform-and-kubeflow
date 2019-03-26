@@ -20,7 +20,7 @@ At a high level, we will:
   1. Create an [Amazon EKS](https://aws.amazon.com/eks/) Cluster
   2. Download [COCO 2017 dataset](http://cocodataset.org/#download) and upload it to an AWS S3 bucket
   3. Stage COCO 2017 data for training on a shared file system, or replicate it on host attached volumes
-  4. Create EKS Persistent Volume and Peristent Volume Claim based on the selected shared file-system
+  4. Create EKS Persistent Volume and Persistent Volume Claim based on the selected shared file-system
   5. Use [Helm charts](https://helm.sh/docs/developing_charts/) to manage training jobs in EKS cluster
 
 ## Create Amazon EKS Cluster VPC
