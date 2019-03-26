@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Customize S3_BUCKET
+S3_BUCKET=
+
+# Customize S3_PREFIX
+S3_PREFIX=mask-rcnn/eks/input
+
 # Uncomment one of the options below
 # For EFS uncomment below
 DATA_DIR=/efs
@@ -9,39 +15,15 @@ DATA_DIR=/efs
 #DATA_DIR=$HOME
 
 
-# Customize Stage DIR
-# Stage directory must be on EBS volume with 100 GB available space
-STAGE_DIR=$HOME/stage
-
-if [ -e $STAGE_DIR ]
-then
-echo "$STAGE_DIR already exists"
-exit 1
-fi
-
 if [ -e $DATA_DIR/data ]
 then
 echo "$DATA_DIR/data already exists"
 exit 1
 fi
 
-mkdir -p $STAGE_DIR/data 
 mkdir -p $DATA_DIR/data
 
-wget -O $STAGE_DIR/data/train2017.zip http://images.cocodataset.org/zips/train2017.zip
-unzip $STAGE_DIR/data/train2017.zip  -d $DATA_DIR/data
-rm $STAGE_DIR/data/train2017.zip
-
-wget -O $STAGE_DIR/data/val2017.zip http://images.cocodataset.org/zips/val2017.zip
-unzip $STAGE_DIR/data/val2017.zip -d $DATA_DIR/data
-rm $STAGE_DIR/data/val2017.zip
-
-wget -O $STAGE_DIR/data/annotations_trainval2017.zip http://images.cocodataset.org/annotations/annotations_trainval2017.zip
-unzip $STAGE_DIR/data/annotations_trainval2017.zip -d $DATA_DIR/data
-rm $STAGE_DIR/data/annotations_trainval2017.zip
-
-mkdir $DATA_DIR/data/pretrained-models
-wget -O $DATA_DIR/data/pretrained-models/ImageNet-R50-AlignPadding.npz http://models.tensorpack.com/FasterRCNN/ImageNet-R50-AlignPadding.npz 
+aws s3 cp --recursive s3://$S3_BUCKET/$S3_PREFIX/data $DATA_DIR/data
 
 if [ -f ./run.sh ] 
 then
