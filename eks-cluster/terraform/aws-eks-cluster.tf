@@ -1,4 +1,5 @@
 
+
 variable "region" {
  default = "us-east-1"
  type    = "string"
@@ -56,24 +57,49 @@ variable "eks_gpu_ami" {
 
 variable "node_group_max" {
     default = "2"
+    type = "string"
 }
 
 variable "node_group_min" {
     default = "0" 
+    type = "string"
 }
 
 variable "efs_performance_mode" {
    default = "generalPurpose"
+   type = "string"
 }
 
 variable "efs_throughput_mode" {
    default = "bursting"
+   type = "string"
 }
 
 variable "efs_pv_name" {
   default = "efs-gp-bursting"
+  type = "string"
 }
 
+variable "fsx_sc" {
+  default = "my-fsx-sc"
+  type = "string"
+}
+
+# must be a globally unique name
+variable "s3_bucket" {
+  default = "my-s3-bucket"
+  type = "string"
+}
+
+variable "s3_input_prefix" {
+  default = "my-model/eks/input"
+  type = "string"
+}
+
+variable "s3_output_prefix" {
+  default = "my-model/eks/output"
+  type = "string"
+}
 
 provider "aws" {
   region                  = "${var.region}"
@@ -280,7 +306,9 @@ USERDATA
 
 
 resource "aws_launch_template" "node_template" {
-  name = "${var.cluster_name}-node-template"
+  count = 3
+
+  name = "${var.cluster_name}-node-template-${count.index}"
 
   block_device_mappings {
     device_name = "/dev/sda1"
@@ -319,7 +347,7 @@ resource "aws_launch_template" "node_template" {
   }
 
   placement {
-    availability_zone = "${var.region}"
+    availability_zone = "${data.aws_availability_zones.available.names[count.index]}"
   }
 
   vpc_security_group_ids = ["${aws_security_group.node_sg.id}"]
@@ -332,6 +360,10 @@ resource "aws_launch_template" "node_template" {
     }
   }
 
+  tags = {
+    Name = "${var.cluster_name}-launch-template-${count.index}"
+  }
+
   user_data = "${base64encode(local.node-userdata)}"
 
   depends_on = [
@@ -341,14 +373,16 @@ resource "aws_launch_template" "node_template" {
 
 
 resource "aws_autoscaling_group" "node_group" {
-  vpc_zone_identifier   = ["${aws_subnet.subnet.*.id}"] 
+  count = 3
+
+  vpc_zone_identifier   = ["${aws_subnet.subnet.*.id[count.index]}"] 
 
   desired_capacity   = "0"
   max_size           = "${var.node_group_max}" 
   min_size           = "${var.node_group_min}" 
 
   launch_template {
-    id      = "${aws_launch_template.node_template.id}"
+    id      = "${aws_launch_template.node_template.*.id[count.index]}"
     version = "$$Latest"
   }
 
@@ -466,4 +500,67 @@ EFSPV
 
 output "efspv" {
   value = "${local.efspv}"
+}
+
+locals {
+  fsx_sc0 = <<FSXSC
+
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: ${var.fsx_sc}0 
+provisioner: fsx.csi.aws.com
+parameters:
+  subnetId      = ${aws_subnet.subnet.*.id[0]}
+  securityGroupIds: ${aws_security_group.node_sg.id} 
+  s3ImportPath: s3://${var.s3_bucket}/${var.s3_input_prefix}
+  s3ExportPath: s3://${var.s3_bucket}/${var.s3_output_prefix}
+
+FSXSC
+}
+
+output "fsx_sc0" {
+  value = "${local.fsx_sc0}"
+}
+
+locals {
+  fsx_sc1 = <<FSXSC
+
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: ${var.fsx_sc}1 
+provisioner: fsx.csi.aws.com
+parameters:
+  subnetId      = ${aws_subnet.subnet.*.id[1]}
+  securityGroupIds: ${aws_security_group.node_sg.id} 
+  s3ImportPath: s3://${var.s3_bucket}/${var.s3_input_prefix}
+  s3ExportPath: s3://${var.s3_bucket}/${var.s3_output_prefix}
+
+FSXSC
+}
+
+output "fsx_sc1" {
+  value = "${local.fsx_sc1}"
+}
+
+locals {
+  fsx_sc2 = <<FSXSC
+
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: ${var.fsx_sc}1 
+provisioner: fsx.csi.aws.com
+parameters:
+  subnetId      = ${aws_subnet.subnet.*.id[2]}
+  securityGroupIds: ${aws_security_group.node_sg.id} 
+  s3ImportPath: s3://${var.s3_bucket}/${var.s3_input_prefix}
+  s3ExportPath: s3://${var.s3_bucket}/${var.s3_output_prefix}
+
+FSXSC
+}
+
+output "fsx_sc2" {
+  value = "${local.fsx_sc2}"
 }
