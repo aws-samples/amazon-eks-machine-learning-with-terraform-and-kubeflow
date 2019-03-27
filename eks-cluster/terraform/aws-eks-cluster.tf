@@ -70,6 +70,11 @@ variable "efs_throughput_mode" {
    default = "bursting"
 }
 
+variable "efs_pv_name" {
+  default = "efs-gp-bursting"
+}
+
+
 provider "aws" {
   region                  = "${var.region}"
   shared_credentials_file = "${var.credentials}"
@@ -429,4 +434,36 @@ KUBECONFIG
 
 output "kubeconfig" {
   value = "${local.kubeconfig}"
+}
+
+locals {
+  efspv = <<EFSPV
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ${var.efs_pv_name}
+spec:
+  capacity:
+    storage: 1Pi
+  accessModes:
+    - ReadWriteMany
+  mountOptions:
+    - nfsvers=4.1
+    - rsize=1048576
+    - wsize=1048576
+    - hard
+    - timeo=600
+    - retrans=2
+    - timeo=600
+    - noresvport
+  nfs:
+    server: ${aws_efs_file_system.fs.id}.${var.region}.amazonaws.com
+    path: "/"
+
+EFSPV
+}
+
+output "efspv" {
+  value = "${local.efspv}"
 }
