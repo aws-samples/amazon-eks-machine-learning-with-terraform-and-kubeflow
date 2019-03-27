@@ -16,7 +16,7 @@ variable "profile" {
 
 
 variable "cluster_name" {
-  default = "eks-cluster-3"
+  default = "my-eks-cluster"
  type    = "string"
 }
 
@@ -62,12 +62,19 @@ variable "node_group_min" {
     default = "0" 
 }
 
+variable "efs_performance_mode" {
+   default = "generalPurpose"
+}
+
+variable "efs_throughput_mode" {
+   default = "bursting"
+}
+
 provider "aws" {
   region                  = "${var.region}"
   shared_credentials_file = "${var.credentials}"
   profile                 = "${var.profile}"
 }
-
 
 data "aws_availability_zones" "available" {}
 
@@ -343,6 +350,26 @@ resource "aws_autoscaling_group" "node_group" {
   depends_on = [
     "aws_eks_cluster.eks_cluster"
   ]
+}
+
+resource "aws_efs_file_system" "fs" {
+
+ performance_mode = "${var.efs_performance_mode}"
+ 
+ throughput_mode = "${var.efs_throughput_mode}"
+
+
+  tags = {
+    Name = "${var.cluster_name}-fs"
+  }
+}
+
+resource "aws_efs_mount_target" "target" {
+  file_system_id = "${aws_efs_file_system.fs.id}"
+  count = 3
+
+  subnet_id      = "${aws_subnet.subnet.*.id[count.index]}"
+  security_groups = ["${aws_security_group.node_sg.id}"] 
 }
 
 
