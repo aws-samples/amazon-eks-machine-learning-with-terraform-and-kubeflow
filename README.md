@@ -183,15 +183,13 @@ We need to package TensorFlow, TensorPack and Horovod in a Docker image and uplo
 
 3. In tensorpack directory created under your project, execute ```ks show default > /tmp/tensorpack.yaml``` to examine the Kubernetest manifest file corresponding to the Ksonnet appliction.
 
-4. At this point, you need to verify that the ```prepare-efs.sh``` script has completed successfully and the data is staged on the EFS file ssytem.
+4. In tensorpack directory created under your project, execute ```ks apply default``` to launch distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example.
 
-5. In tensorpack directory created under your project, execute ```ks apply default``` to launch distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example.
+5. Execute: ```kubectl get pods -n kubeflow``` to see the status of the pods
 
-6. Execute: ```kubectl get pods -n kubeflow``` to see the status of the pods
+6. Execute: ```kubectl describe pods tensorpack-master -n kubeflow``` if the pods are in pending state
 
-7. Execute: ```kubectl describe pods tensorpack-master -n kubeflow``` if the pods are in pending state
+7. Execute: ```kubectl logs -f tensorpack-master -n kubeflow``` to see live log of training
 
-8. Execute: ```kubectl logs -f tensorpack-master -n kubeflow``` to see live log of training
-
-9. Model checkpoints and logs will be placed on shared EFS file system
+8. Model checkpoints and logs will be placed on shared EFS file system
 
