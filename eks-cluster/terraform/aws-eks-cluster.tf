@@ -1,7 +1,6 @@
 
-
-variable "region" {
- default = "us-east-1"
+variable "cluster_name" {
+  default = "my-eks-cluster"
  type    = "string"
 }
 
@@ -15,10 +14,14 @@ variable "profile" {
  type    = "string"
 }
 
-
-variable "cluster_name" {
-  default = "my-eks-cluster"
+variable "region" {
+ default = "us-east-1"
  type    = "string"
+}
+
+variable "azs" {
+ default = [ "us-east-1c", "us-east-1d", "us-east-1f" ]
+ type = "list"
 }
 
 variable "cidr_vpc" {
@@ -107,8 +110,6 @@ provider "aws" {
   profile                 = "${var.profile}"
 }
 
-data "aws_availability_zones" "available" {}
-
 resource "aws_vpc" "vpc" {
   cidr_block = "${var.cidr_vpc}"
 
@@ -118,9 +119,9 @@ resource "aws_vpc" "vpc" {
 }
 
 resource "aws_subnet" "subnet" {
-  count = 3
+  count = "${length(var.azs)}" 
 
-  availability_zone = "${data.aws_availability_zones.available.names[count.index]}"
+  availability_zone = "${var.azs[count.index]}"
   cidr_block        = "${var.cidr_subnet[count.index]}"
   vpc_id            = "${aws_vpc.vpc.id}"
 
@@ -151,7 +152,7 @@ resource "aws_route_table" "rt" {
 }
 
 resource "aws_route_table_association" "rta" {
-  count = 3
+  count = "${length(var.azs)}" 
 
   subnet_id      = "${aws_subnet.subnet.*.id[count.index]}"
   route_table_id = "${aws_route_table.rt.id}"
@@ -300,92 +301,50 @@ locals {
   node-userdata = <<USERDATA
 #!/bin/bash
 set -o xtrace
-/etc/eks/bootstrap.sh --apiserver-endpoint '${aws_eks_cluster.eks_cluster.endpoint}' --b64-cluster-ca '${aws_eks_cluster.eks_cluster.certificate_authority.0.data}' '${var.cluster_name}'
+/etc/eks/bootstrap.sh '${var.cluster_name}'
 USERDATA
 }
 
-
-resource "aws_launch_template" "node_template" {
-  count = 3
-
-  name = "${var.cluster_name}-node-template-${count.index}"
-
-  block_device_mappings {
-    device_name = "/dev/sda1"
-
-    ebs {
-      volume_size = "${var.node_volume_size}" 
-    }
-  }
-
-  capacity_reservation_specification {
-    capacity_reservation_preference = "open"
-  }
-
-  credit_specification {
-    cpu_credits = "standard"
-  }
-
-  disable_api_termination = false 
-
-  ebs_optimized = true
-
-  iam_instance_profile {
-    name = "${aws_iam_instance_profile.node_profile.name}"
-  }
-
-  image_id = "${lookup(var.eks_gpu_ami, var.region, "us-east-1")}"
-
-  instance_initiated_shutdown_behavior = "terminate"
-
-  instance_type = "${var.node_instance_type}"
-
+resource "aws_launch_configuration" "eks_gpu" {
+  associate_public_ip_address = true 
+  iam_instance_profile        = "${aws_iam_instance_profile.node_profile.name}"
+  image_id                    = "${lookup(var.eks_gpu_ami, var.region, "us-east-1")}"
+  instance_type               = "${var.node_instance_type}"
+  name_prefix                 = "${var.cluster_name}-node"
+  security_groups             = ["${aws_security_group.node_sg.id}"]
+  user_data                   = "${base64encode(local.node-userdata)}"
+  
   key_name = "${var.key_pair}"
-
-  monitoring {
-    enabled = true
+  enable_monitoring = true
+  ebs_optimized = true
+  
+  root_block_device {
+  	delete_on_termination = true
+  	volume_size = "${var.node_volume_size}"
   }
-
-  placement {
-    availability_zone = "${data.aws_availability_zones.available.names[count.index]}"
-  }
-
-  vpc_security_group_ids = ["${aws_security_group.node_sg.id}"]
-
-  tag_specifications {
-    resource_type = "instance"
-
-  tags = {
-      Name = "${var.cluster_name}-node"
-    }
-  }
-
-  tags = {
-    Name = "${var.cluster_name}-launch-template-${count.index}"
-  }
-
-  user_data = "${base64encode(local.node-userdata)}"
 
   depends_on = [
     "aws_eks_cluster.eks_cluster"
   ]
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
-
 resource "aws_autoscaling_group" "node_group" {
-  count = 3
+  count = "${length(var.azs)}" 
 
   vpc_zone_identifier   = ["${aws_subnet.subnet.*.id[count.index]}"] 
 
+  health_check_grace_period = "0"
   desired_capacity   = "0"
   max_size           = "${var.node_group_max}" 
   min_size           = "${var.node_group_min}" 
 
-  launch_template {
-    id      = "${aws_launch_template.node_template.*.id[count.index]}"
-    version = "$$Latest"
-  }
+  launch_configuration = "${aws_launch_configuration.eks_gpu.id}"
 
+ 
   depends_on = [
     "aws_eks_cluster.eks_cluster"
   ]
@@ -404,8 +363,9 @@ resource "aws_efs_file_system" "fs" {
 }
 
 resource "aws_efs_mount_target" "target" {
+  count = "${length(var.azs)}" 
+
   file_system_id = "${aws_efs_file_system.fs.id}"
-  count = 3
 
   subnet_id      = "${aws_subnet.subnet.*.id[count.index]}"
   security_groups = ["${aws_security_group.node_sg.id}"] 
@@ -503,15 +463,15 @@ output "efspv" {
 }
 
 locals {
-  fsx_sc0 = <<FSXSC
+  fsx_sc = <<FSXSC
 
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: ${var.fsx_sc}0 
+  name: ${var.fsx_sc}
 provisioner: fsx.csi.aws.com
 parameters:
-  subnetId      = ${aws_subnet.subnet.*.id[0]}
+  subnetId: ${aws_subnet.subnet.*.id[0]}
   securityGroupIds: ${aws_security_group.node_sg.id} 
   s3ImportPath: s3://${var.s3_bucket}/${var.s3_input_prefix}
   s3ExportPath: s3://${var.s3_bucket}/${var.s3_output_prefix}
@@ -519,48 +479,7 @@ parameters:
 FSXSC
 }
 
-output "fsx_sc0" {
-  value = "${local.fsx_sc0}"
+output "fsx_sc" {
+  value = "${local.fsx_sc}"
 }
 
-locals {
-  fsx_sc1 = <<FSXSC
-
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-  name: ${var.fsx_sc}1 
-provisioner: fsx.csi.aws.com
-parameters:
-  subnetId      = ${aws_subnet.subnet.*.id[1]}
-  securityGroupIds: ${aws_security_group.node_sg.id} 
-  s3ImportPath: s3://${var.s3_bucket}/${var.s3_input_prefix}
-  s3ExportPath: s3://${var.s3_bucket}/${var.s3_output_prefix}
-
-FSXSC
-}
-
-output "fsx_sc1" {
-  value = "${local.fsx_sc1}"
-}
-
-locals {
-  fsx_sc2 = <<FSXSC
-
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-  name: ${var.fsx_sc}1 
-provisioner: fsx.csi.aws.com
-parameters:
-  subnetId      = ${aws_subnet.subnet.*.id[2]}
-  securityGroupIds: ${aws_security_group.node_sg.id} 
-  s3ImportPath: s3://${var.s3_bucket}/${var.s3_input_prefix}
-  s3ExportPath: s3://${var.s3_bucket}/${var.s3_output_prefix}
-
-FSXSC
-}
-
-output "fsx_sc2" {
-  value = "${local.fsx_sc2}"
-}
