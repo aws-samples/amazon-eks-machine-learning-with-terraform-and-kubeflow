@@ -274,6 +274,26 @@ resource "aws_security_group" "node_sg" {
   }
 }
 
+resource "aws_security_group_rule" "cluster_ingress_self" {
+  description              = "Allow nodes to communicate with each other"
+  from_port                = 0
+  protocol                 = "-1"
+  security_group_id        = "${aws_security_group.cluster_sg.id}"
+  source_security_group_id = "${aws_security_group.cluster_sg.id}"
+  to_port                  = 65535
+  type                     = "ingress"
+}
+
+resource "aws_security_group_rule" "cluster_ingress_workers" {
+  description              = "Allow worker Kubelets and pods to communicate to control plane"
+  from_port                = 0 
+  protocol                 = "-1"
+  security_group_id        = "${aws_security_group.cluster_sg.id}"
+  source_security_group_id = "${aws_security_group.node_sg.id}"
+  to_port                  = 65535
+  type                     = "ingress"
+}
+
 resource "aws_security_group_rule" "node_ingress_self" {
   description              = "Allow nodes to communicate with each other"
   from_port                = 0
@@ -286,8 +306,8 @@ resource "aws_security_group_rule" "node_ingress_self" {
 
 resource "aws_security_group_rule" "node_ingress_control" {
   description              = "Allow worker Kubelets and pods to receive communication from the cluster control plane"
-  from_port                = 1025
-  protocol                 = "tcp"
+  from_port                = 0 
+  protocol                 = "-1"
   security_group_id        = "${aws_security_group.node_sg.id}"
   source_security_group_id = "${aws_security_group.cluster_sg.id}"
   to_port                  = 65535
@@ -470,6 +490,7 @@ locals {
   subnet: ${aws_subnet.subnet.*.id[2]}
   control plane security group: ${aws_security_group.cluster_sg.id}
   node security group: ${aws_security_group.node_sg.id} 
+  node role ARN: ${aws_iam_role.node_role.arn}
 
 SUMMARY
 }
