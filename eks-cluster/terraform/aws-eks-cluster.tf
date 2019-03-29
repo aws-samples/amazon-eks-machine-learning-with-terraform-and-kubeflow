@@ -1,69 +1,74 @@
-
-variable "cluster_name" {
-  default = "my-eks-cluster"
- type    = "string"
-}
+# BEGIN variables
 
 variable "credentials" {
+ description = "path to the aws credentials file"
  default = "~/.aws/credentials"
  type    = "string"
 }
 
 variable "profile" {
+ description = "name of the aws config profile"
  default = "default"
  type    = "string"
 }
 
+variable "cluster_name" {
+  description = "unique name of the eks cluster"
+  default = "my-eks-cluster"
+  type    = "string"
+}
+
 variable "region" {
+ description = "name of aws region to use"
  default = "us-east-1"
  type    = "string"
 }
 
 variable "azs" {
+ description = "list of aws availabilty zones in aws region"
  default = [ "us-east-1c", "us-east-1d", "us-east-1f" ]
  type = "list"
 }
 
+
 variable "cidr_vpc" {
+ description = "RFC 1918 CIDR range for EKS cluster VPC"
  default = "192.168.0.0/16"
  type    = "string"
 }
 
 variable "cidr_subnet" {
+ description = "RFC 1918 CIDR range list for EKS cluster VPC subnets"
  default = ["192.168.64.0/18", "192.168.128.0/18", "192.168.192.0/18"]
  type    = "list"
 }
 
 variable "node_volume_size" {
+  description = "EKS cluster worker node EBS volume size in GBs"
   default="200"
   type="string"
 }
 
 variable "node_instance_type" {
+  description = "EC2 GPU enabled instance type for EKS cluster worker nodes"
   default = "p3.16xlarge"
   type = "string"
 }
 
 variable "key_pair" {
+  description = "Name of EC2 key pair used to launch EKS cluster worker node EC2 instances"
   default = "saga"
   type = "string"
 }
 
-variable "eks_gpu_ami" {
-    type = "map"
-    default = {
-        "us-east-1"  = "ami-000412c12949aa8dd"
-        "us-east-2"  = "ami-018bc34828bcbf65e"
-        "us-west-2"  = "ami-0805ff53a28e7b904"
-    }
-}
-
 variable "node_group_max" {
+    description = "EKS worker node auto-scaling group maximum"
     default = "2"
     type = "string"
 }
 
 variable "node_group_min" {
+    description = "EKS worker node auto-scaling group minimum"
     default = "0" 
     type = "string"
 }
@@ -74,35 +79,33 @@ variable "efs_performance_mode" {
 }
 
 variable "efs_throughput_mode" {
+   description = "EFS performance mode"
    default = "bursting"
    type = "string"
 }
 
 variable "efs_pv_name" {
+  description = "K8s persistent volume name for EFS"
   default = "efs-gp-bursting"
   type = "string"
 }
 
 variable "fsx_sc" {
+  description = "k8s storage class for FSx"
   default = "my-fsx-sc"
   type = "string"
 }
 
-# must be a globally unique name
-variable "s3_bucket" {
-  default = "my-s3-bucket"
-  type = "string"
+variable "eks_gpu_ami" {
+    description = "GPU enabled EKS AMI: https://docs.aws.amazon.com/eks/latest/userguide/gpu-ami.html"
+    type = "map"
+    default = {
+        "us-east-1"  = "ami-06ec2ea207616c078"
+        "us-east-2"  = "ami-0e6993a35aae3407b"
+        "us-west-2"  = "ami-08377056d89909b2a"
+    }
 }
-
-variable "s3_input_prefix" {
-  default = "my-model/eks/input"
-  type = "string"
-}
-
-variable "s3_output_prefix" {
-  default = "my-model/eks/output"
-  type = "string"
-}
+# END variables
 
 provider "aws" {
   region                  = "${var.region}"
@@ -160,7 +163,7 @@ resource "aws_route_table_association" "rta" {
 
 
 resource "aws_iam_role" "cluster_role" {
-  name = "${var.cluster_name}-cluster-role"
+  name = "${var.cluster_name}-control-role"
 
   assume_role_policy = <<POLICY
 {
@@ -306,11 +309,11 @@ USERDATA
 }
 
 resource "aws_launch_configuration" "eks_gpu" {
+  name                        = "${var.cluster_name}-node-config"
   associate_public_ip_address = true 
   iam_instance_profile        = "${aws_iam_instance_profile.node_profile.name}"
   image_id                    = "${lookup(var.eks_gpu_ami, var.region, "us-east-1")}"
   instance_type               = "${var.node_instance_type}"
-  name_prefix                 = "${var.cluster_name}-node"
   security_groups             = ["${aws_security_group.node_sg.id}"]
   user_data                   = "${base64encode(local.node-userdata)}"
   
@@ -330,11 +333,13 @@ resource "aws_launch_configuration" "eks_gpu" {
   lifecycle {
     create_before_destroy = true
   }
+
 }
 
 resource "aws_autoscaling_group" "node_group" {
   count = "${length(var.azs)}" 
 
+  name = "${var.cluster_name}-node-asg-${count.index}"
   vpc_zone_identifier   = ["${aws_subnet.subnet.*.id[count.index]}"] 
 
   health_check_grace_period = "0"
@@ -344,7 +349,6 @@ resource "aws_autoscaling_group" "node_group" {
 
   launch_configuration = "${aws_launch_configuration.eks_gpu.id}"
 
- 
   depends_on = [
     "aws_eks_cluster.eks_cluster"
   ]
@@ -463,23 +467,20 @@ output "efspv" {
 }
 
 locals {
-  fsx_sc = <<FSXSC
+  summary = <<SUMMARY
 
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-  name: ${var.fsx_sc}
-provisioner: fsx.csi.aws.com
-parameters:
-  subnetId: ${aws_subnet.subnet.*.id[0]}
-  securityGroupIds: ${aws_security_group.node_sg.id} 
-  s3ImportPath: s3://${var.s3_bucket}/${var.s3_input_prefix}
-  s3ExportPath: s3://${var.s3_bucket}/${var.s3_output_prefix}
+  network summary: 
+  vpc:    ${aws_vpc.vpc.id}
+  subnet: ${aws_subnet.subnet.*.id[0]}
+  subnet: ${aws_subnet.subnet.*.id[1]}
+  subnet: ${aws_subnet.subnet.*.id[2]}
+  control plane security group: ${aws_security_group.cluster_sg.id}
+  node security group: ${aws_security_group.node_sg.id} 
 
-FSXSC
+SUMMARY
 }
 
-output "fsx_sc" {
-  value = "${local.fsx_sc}"
+output "summary" {
+  value = "${local.summary}"
 }
 
