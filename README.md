@@ -103,7 +103,7 @@ From the root directory of this project, customize and copy ```run.sh``` to the 
 
 3. *Ensure that you have at least version 1.16.73 of the AWS CLI installed, your system's Python version must be Python 3, or Python 2.7.9 or greater, and you have completed ```aws configure```. Also make sure the command ```aws-iam-authenticator help``` works.*
    
-   In ```eks-cluster``` directory, execute: ```./update-kubeconfig.sh``` to update kube configuration 
+   In ```eks-cluster``` directory, customize ```set-cluster.sh``` and execute: ```./update-kubeconfig.sh``` to update kube configuration 
 
 4. [Upgrade Amazon CNI Plugin for Kubernetes](https://docs.aws.amazon.com/eks/latest/userguide/cni-upgrades.html) if needed
 
