@@ -57,7 +57,7 @@ variable "node_instance_type" {
 
 variable "key_pair" {
   description = "Name of EC2 key pair used to launch EKS cluster worker node EC2 instances"
-  default = "saga"
+  default = ""
   type = "string"
 }
 
