@@ -111,7 +111,7 @@ From the root directory of this project, customize and copy ```run.sh``` to the 
 
 6. Check the status of the CloudFormation Stack in AWS Management Console. When the status is CREATE_COMPLETE, under the Outputs tab of the CloudFomration Stack in AWS Management Console, copy *NodeInstanceRole* and proceed to next step. 
 
-7. In ```eks-cluster``` directory, customize *NodeInstanceRole* in ```aws-auth-cm.yaml``` and execute: ```./apply-aws-auth-cm.sh``` to allow worker nodes to join EKS cluster
+7. In ```eks-cluster``` directory, customize *NodeInstanceRole* in ```aws-auth-cm.yaml``` and execute: ```./apply-aws-auth-cm.sh``` to allow worker nodes to join EKS cluster. Note, if this is not your first node group, you must add the new node instnace role Amazon Resource Name (ARN), while keeping the existing role ARNs. 
 
 8. In ```eks-cluster``` directory, execute: ```./apply-nvidia-plugin.sh``` to create NVIDIA-plugin daemon set
 
