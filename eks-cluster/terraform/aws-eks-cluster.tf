@@ -90,12 +90,6 @@ variable "efs_pv_name" {
   type = "string"
 }
 
-variable "fsx_sc" {
-  description = "k8s storage class for FSx"
-  default = "my-fsx-sc"
-  type = "string"
-}
-
 variable "eks_gpu_ami" {
     description = "GPU enabled EKS AMI: https://docs.aws.amazon.com/eks/latest/userguide/gpu-ami.html"
     type = "map"
