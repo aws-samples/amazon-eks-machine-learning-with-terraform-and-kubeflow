@@ -43,7 +43,7 @@ spec:
         - --tag-output
         - --timestamp-output
         - python3
-        - /tensorpack/examples/FasterRCNN/train.py
+        - {{ .Values.maskrcnn.train_script }} 
         - --logdir 
         - /{{ .Values.maskrcnn.shared_fs }}/{{ .Release.Name }}-{{ date "2006-01-02-15-04-05" .Release.Time  }}/train_log/maskrcnn
         - --config  
