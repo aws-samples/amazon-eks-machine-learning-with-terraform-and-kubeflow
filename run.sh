@@ -27,7 +27,7 @@ mpirun -np $NUM_PARALLEL \
 --allow-run-as-root --display-map --tag-output --timestamp-output \
 bash -c "HOROVOD_CYCLE_TIME=0.5 \
 HOROVOD_FUSION_THRESHOLD=67108864 \
-NCCL_SOCKET_IFNAME=eth0 \
+NCCL_SOCKET_IFNAME=^lo,docker0 \
 NCCL_MIN_NRINGS=8 \
 NCCL_DEBUG=INFO \
 python3 $SRC_DIR/examples/FasterRCNN/train.py \
