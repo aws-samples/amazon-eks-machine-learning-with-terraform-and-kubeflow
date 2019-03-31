@@ -7,4 +7,3 @@ parameters:
   subnetId: <subnet id for FSX file system> 
   securityGroupIds: <security group id> 
   s3ImportPath: s3://<bucket>/<prefix>/input # Put input data at this path
-  s3ExportPath: s3://<bucket>/<prefix>/output # Output data will be written to this path
