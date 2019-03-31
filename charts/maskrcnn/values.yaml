@@ -21,6 +21,6 @@ maskrcnn:
   image_pull_policy: IfNotPresent
   horovod_cycle_time: "0.5"
   horovod_fusion_threshold: "67108864"
-  nccl_socket_ifname: eth0
+  nccl_socket_ifname: ^lo,docker0 
   nccl_min_rings: 8
   nccl_debug: INFO
