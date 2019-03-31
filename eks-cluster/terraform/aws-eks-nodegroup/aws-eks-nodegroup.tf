@@ -12,35 +12,30 @@ variable "profile" {
  type    = "string"
 }
 
+variable "region" {
+ description = "name of aws region to use"
+ type    = "string"
+}
+
 variable "cluster_name" {
   description = "unique name of the eks cluster"
-  default = "my-eks-cluster"
   type    = "string"
 }
 
-variable "region" {
- description = "name of aws region to use"
- default = "us-east-1"
- type    = "string"
+variable "nodegroup_name" {
+  description = "Node group name in cluster"
+  default = "ng"
+  type    = "string"
 }
 
-variable "azs" {
- description = "list of aws availabilty zones in aws region"
- default = [ "us-east-1c", "us-east-1d", "us-east-1f" ]
- type = "list"
+variable "cluster_sg" {
+  description = "cluster security group"
+  type = "string"
 }
 
-
-variable "cidr_vpc" {
- description = "RFC 1918 CIDR range for EKS cluster VPC"
- default = "192.168.0.0/16"
- type    = "string"
-}
-
-variable "cidr_subnet" {
- description = "RFC 1918 CIDR range list for EKS cluster VPC subnets"
- default = ["192.168.64.0/18", "192.168.128.0/18", "192.168.192.0/18"]
- type    = "list"
+variable "subnet_id" {
+  description = "subnet id for ndoe group"
+  type = "string"
 }
 
 variable "node_volume_size" {
@@ -57,7 +52,7 @@ variable "node_instance_type" {
 
 variable "key_pair" {
   description = "Name of EC2 key pair used to launch EKS cluster worker node EC2 instances"
-  default = ""
+  default = "saga"
   type = "string"
 }
 
@@ -91,7 +86,7 @@ variable "efs_pv_name" {
 }
 
 variable "eks_gpu_ami" {
-    description = "GPU enabled EKS AMI: https://docs.aws.amazon.com/eks/latest/userguide/gpu-ami.html"
+    description = "See https://docs.aws.amazon.com/eks/latest/userguide/gpu-ami.html. Must match k8s version."
     type = "map"
     default = {
         "us-east-1"  = "ami-06ec2ea207616c078"
@@ -99,6 +94,13 @@ variable "eks_gpu_ami" {
         "us-west-2"  = "ami-08377056d89909b2a"
     }
 }
+
+variable "associate_public_ip" {
+   description = "associate public IP with node instance"
+   type = "string"
+   default = "true"
+}
+
 # END variables
 
 provider "aws" {
@@ -107,118 +109,12 @@ provider "aws" {
   profile                 = "${var.profile}"
 }
 
-resource "aws_vpc" "vpc" {
-  cidr_block = "${var.cidr_vpc}"
-
-  tags = {
-    Name = "${var.cluster_name}-vpc",
-  }
-}
-
-resource "aws_subnet" "subnet" {
-  count = "${length(var.azs)}" 
-
-  availability_zone = "${var.azs[count.index]}"
-  cidr_block        = "${var.cidr_subnet[count.index]}"
-  vpc_id            = "${aws_vpc.vpc.id}"
-
-  tags = {
-    Name = "${var.cluster_name}-subnet-${count.index}",
-  }
-}
-
-resource "aws_internet_gateway" "igw" {
-  vpc_id = "${aws_vpc.vpc.id}"
-
-  tags = {
-    Name = "${var.cluster_name}-igw"
-  }
-}
-
-resource "aws_route_table" "rt" {
-  vpc_id = "${aws_vpc.vpc.id}"
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = "${aws_internet_gateway.igw.id}"
-  }
-
-  tags = {
-    Name = "${var.cluster_name}-rt"
-  }
-}
-
-resource "aws_route_table_association" "rta" {
-  count = "${length(var.azs)}" 
-
-  subnet_id      = "${aws_subnet.subnet.*.id[count.index]}"
-  route_table_id = "${aws_route_table.rt.id}"
-}
-
-
-resource "aws_iam_role" "cluster_role" {
-  name = "${var.cluster_name}-control-role"
-
-  assume_role_policy = <<POLICY
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "eks.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-POLICY
-}
-
-resource "aws_iam_role_policy_attachment" "cluster_AmazonEKSClusterPolicy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-  role       = "${aws_iam_role.cluster_role.name}"
-}
-
-resource "aws_iam_role_policy_attachment" "cluster_AmazonEKSServicePolicy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSServicePolicy"
-  role       = "${aws_iam_role.cluster_role.name}"
-}
-
-resource "aws_security_group" "cluster_sg" {
-  name = "${var.cluster_name}-cluster-sg"
-  description = "Cluster communication with worker nodes"
-  vpc_id      = "${aws_vpc.vpc.id}"
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.cluster_name}-cluster-sg"
-  }
-}
-
-resource "aws_eks_cluster" "eks_cluster" {
-  name            = "${var.cluster_name}"
-  role_arn        = "${aws_iam_role.cluster_role.arn}"
-
-  vpc_config {
-    security_group_ids = ["${aws_security_group.cluster_sg.id}"]
-    subnet_ids         = ["${aws_subnet.subnet.*.id}"]
-  }
-
-  depends_on = [
-    "aws_iam_role_policy_attachment.cluster_AmazonEKSClusterPolicy",
-    "aws_iam_role_policy_attachment.cluster_AmazonEKSServicePolicy",
-  ]
+data "aws_eks_cluster" "eks_cluster" {
+   name = "${var.cluster_name}"
 }
 
 resource "aws_iam_role" "node_role" {
-  name = "${var.cluster_name}-node-role"
+  name = "${data.aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}-role"
 
   assume_role_policy = <<POLICY
 {
@@ -253,14 +149,14 @@ resource "aws_iam_role_policy_attachment" "node_AmazonEC2ContainerRegistryReadOn
 }
 
 resource "aws_iam_instance_profile" "node_profile" {
-  name = "${var.cluster_name}-node-profile"
+  name = "${data.aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}-profile"
   role = "${aws_iam_role.node_role.name}"
 }
 
 resource "aws_security_group" "node_sg" {
-  name = "${var.cluster_name}-nodes-sg"
+  name = "${data.aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}-sg"
   description = "Security group for all nodes in the cluster"
-  vpc_id      = "${aws_vpc.vpc.id}"
+  vpc_id      = "${lookup(data.aws_eks_cluster.eks_cluster.vpc_config[0], "vpc_id")}"
 
   egress {
     from_port   = 0
@@ -270,25 +166,15 @@ resource "aws_security_group" "node_sg" {
   }
 
   tags = {
-    Name = "${var.cluster_name}-nodes-sg"
+    Name = "${data.aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}-sg"
   }
-}
-
-resource "aws_security_group_rule" "cluster_ingress_self" {
-  description              = "Allow nodes to communicate with each other"
-  from_port                = 0
-  protocol                 = "-1"
-  security_group_id        = "${aws_security_group.cluster_sg.id}"
-  source_security_group_id = "${aws_security_group.cluster_sg.id}"
-  to_port                  = 65535
-  type                     = "ingress"
 }
 
 resource "aws_security_group_rule" "cluster_ingress_workers" {
   description              = "Allow worker Kubelets and pods to communicate to control plane"
   from_port                = 0 
   protocol                 = "-1"
-  security_group_id        = "${aws_security_group.cluster_sg.id}"
+  security_group_id        = "${var.cluster_sg}"
   source_security_group_id = "${aws_security_group.node_sg.id}"
   to_port                  = 65535
   type                     = "ingress"
@@ -309,7 +195,7 @@ resource "aws_security_group_rule" "node_ingress_control" {
   from_port                = 0 
   protocol                 = "-1"
   security_group_id        = "${aws_security_group.node_sg.id}"
-  source_security_group_id = "${aws_security_group.cluster_sg.id}"
+  source_security_group_id = "${var.cluster_sg}"
   to_port                  = 65535
   type                     = "ingress"
 }
@@ -318,13 +204,13 @@ locals {
   node-userdata = <<USERDATA
 #!/bin/bash
 set -o xtrace
-/etc/eks/bootstrap.sh '${var.cluster_name}'
+/etc/eks/bootstrap.sh '${data.aws_eks_cluster.eks_cluster.id}'
 USERDATA
 }
 
 resource "aws_launch_configuration" "eks_gpu" {
-  name                        = "${var.cluster_name}-node-config"
-  associate_public_ip_address = true 
+  name_prefix                 = "${data.aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}"
+  associate_public_ip_address = "${var.associate_public_ip}" 
   iam_instance_profile        = "${aws_iam_instance_profile.node_profile.name}"
   image_id                    = "${lookup(var.eks_gpu_ami, var.region, "us-east-1")}"
   instance_type               = "${var.node_instance_type}"
@@ -340,10 +226,6 @@ resource "aws_launch_configuration" "eks_gpu" {
   	volume_size = "${var.node_volume_size}"
   }
 
-  depends_on = [
-    "aws_eks_cluster.eks_cluster"
-  ]
-
   lifecycle {
     create_before_destroy = true
   }
@@ -351,10 +233,8 @@ resource "aws_launch_configuration" "eks_gpu" {
 }
 
 resource "aws_autoscaling_group" "node_group" {
-  count = "${length(var.azs)}" 
-
-  name = "${var.cluster_name}-node-asg-${count.index}"
-  vpc_zone_identifier   = ["${aws_subnet.subnet.*.id[count.index]}"] 
+  name_prefix = "${data.aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}"
+  vpc_zone_identifier   = ["${var.subnet_id}"]
 
   health_check_grace_period = "0"
   desired_capacity   = "0"
@@ -362,10 +242,6 @@ resource "aws_autoscaling_group" "node_group" {
   min_size           = "${var.node_group_min}" 
 
   launch_configuration = "${aws_launch_configuration.eks_gpu.id}"
-
-  depends_on = [
-    "aws_eks_cluster.eks_cluster"
-  ]
 }
 
 resource "aws_efs_file_system" "fs" {
@@ -376,16 +252,14 @@ resource "aws_efs_file_system" "fs" {
 
 
   tags = {
-    Name = "${var.cluster_name}-fs"
+    Name = "${data.aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}"
   }
 }
 
 resource "aws_efs_mount_target" "target" {
-  count = "${length(var.azs)}" 
-
   file_system_id = "${aws_efs_file_system.fs.id}"
 
-  subnet_id      = "${aws_subnet.subnet.*.id[count.index]}"
+  subnet_id      = "${var.subnet_id}"
   security_groups = ["${aws_security_group.node_sg.id}"] 
 }
 
@@ -411,41 +285,6 @@ CONFIGMAPAWSAUTH
 
 output "config_map_aws_auth" {
   value = "${local.config_map_aws_auth}"
-}
-
-locals {
-  kubeconfig = <<KUBECONFIG
-
-
-apiVersion: v1
-clusters:
-- cluster:
-    server: ${aws_eks_cluster.eks_cluster.endpoint}
-    certificate-authority-data: ${aws_eks_cluster.eks_cluster.certificate_authority.0.data}
-  name: kubernetes
-contexts:
-- context:
-    cluster: kubernetes
-    user: aws
-  name: aws
-current-context: aws
-kind: Config
-preferences: {}
-users:
-- name: aws
-  user:
-    exec:
-      apiVersion: client.authentication.k8s.io/v1alpha1
-      command: aws-iam-authenticator
-      args:
-        - "token"
-        - "-i"
-        - "${var.cluster_name}"
-KUBECONFIG
-}
-
-output "kubeconfig" {
-  value = "${local.kubeconfig}"
 }
 
 locals {
@@ -483,14 +322,10 @@ output "efspv" {
 locals {
   summary = <<SUMMARY
 
-  network summary: 
-  vpc:    ${aws_vpc.vpc.id}
-  subnet: ${aws_subnet.subnet.*.id[0]}
-  subnet: ${aws_subnet.subnet.*.id[1]}
-  subnet: ${aws_subnet.subnet.*.id[2]}
-  control plane security group: ${aws_security_group.cluster_sg.id}
-  node security group: ${aws_security_group.node_sg.id} 
-  node role ARN: ${aws_iam_role.node_role.arn}
+  EKS Cluster NodeGroup Summary: 
+  Node security group: ${aws_security_group.node_sg.id} 
+  Node instance role arn: ${aws_iam_role.node_role.arn}
+  Efs DNS: ${aws_efs_file_system.fs.id}.${var.region}.amazonaws.com
 
 SUMMARY
 }
