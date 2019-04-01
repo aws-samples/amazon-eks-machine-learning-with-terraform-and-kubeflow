@@ -52,8 +52,13 @@ variable "node_instance_type" {
 
 variable "key_pair" {
   description = "Name of EC2 key pair used to launch EKS cluster worker node EC2 instances"
-  default = "saga"
   type = "string"
+}
+
+variable "node_group_desired" {
+    description = "EKS worker node auto-scaling group desired size"
+    default = "2"
+    type = "string"
 }
 
 variable "node_group_max" {
@@ -68,20 +73,8 @@ variable "node_group_min" {
     type = "string"
 }
 
-variable "efs_performance_mode" {
-   default = "generalPurpose"
-   type = "string"
-}
-
-variable "efs_throughput_mode" {
-   description = "EFS performance mode"
-   default = "bursting"
-   type = "string"
-}
-
-variable "efs_pv_name" {
-  description = "K8s persistent volume name for EFS"
-  default = "efs-gp-bursting"
+variable "efs_id" {
+  description = "EFS file-system id"
   type = "string"
 }
 
@@ -148,6 +141,11 @@ resource "aws_iam_role_policy_attachment" "node_AmazonEC2ContainerRegistryReadOn
   role       = "${aws_iam_role.node_role.name}"
 }
 
+resource "aws_iam_role_policy_attachment" "node_AmazonS3ReadOnlyPolicy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+  role       = "${aws_iam_role.node_role.name}"
+}
+
 resource "aws_iam_instance_profile" "node_profile" {
   name = "${data.aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}-profile"
   role = "${aws_iam_role.node_role.name}"
@@ -204,7 +202,7 @@ locals {
   node-userdata = <<USERDATA
 #!/bin/bash
 set -o xtrace
-/etc/eks/bootstrap.sh '${data.aws_eks_cluster.eks_cluster.id}'
+/etc/eks/bootstrap.sh --apiserver-endpoint '${data.aws_eks_cluster.eks_cluster.endpoint}' --b64-cluster-ca '${data.aws_eks_cluster.eks_cluster.certificate_authority.0.data}' '${data.aws_eks_cluster.eks_cluster.id}'
 USERDATA
 }
 
@@ -237,27 +235,26 @@ resource "aws_autoscaling_group" "node_group" {
   vpc_zone_identifier   = ["${var.subnet_id}"]
 
   health_check_grace_period = "0"
-  desired_capacity   = "0"
+  desired_capacity   = "${var.node_group_desired}"
   max_size           = "${var.node_group_max}" 
   min_size           = "${var.node_group_min}" 
 
   launch_configuration = "${aws_launch_configuration.eks_gpu.id}"
-}
+  tag {
+    key                 = "Name"
+    value               = "${var.cluster_name}-${var.nodegroup_name}-node"
+    propagate_at_launch = true
+  }
 
-resource "aws_efs_file_system" "fs" {
-
- performance_mode = "${var.efs_performance_mode}"
- 
- throughput_mode = "${var.efs_throughput_mode}"
-
-
-  tags = {
-    Name = "${data.aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}"
+  tag {
+    key                 = "kubernetes.io/cluster/${var.cluster_name}"
+    value               = "owned"
+    propagate_at_launch = true
   }
 }
 
 resource "aws_efs_mount_target" "target" {
-  file_system_id = "${aws_efs_file_system.fs.id}"
+  file_system_id = "${var.efs_id}"
 
   subnet_id      = "${var.subnet_id}"
   security_groups = ["${aws_security_group.node_sg.id}"] 
@@ -293,7 +290,7 @@ locals {
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: ${var.efs_pv_name}
+  name: ${var.cluster_name}-${var.nodegroup_name}
 spec:
   capacity:
     storage: 1Pi
@@ -309,7 +306,7 @@ spec:
     - timeo=600
     - noresvport
   nfs:
-    server: ${aws_efs_file_system.fs.id}.${var.region}.amazonaws.com
+    server: ${var.efs_id}.${var.region}.amazonaws.com
     path: "/"
 
 EFSPV
@@ -320,12 +317,34 @@ output "efspv" {
 }
 
 locals {
+  efspvc = <<EFSPVC
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ${var.cluster_name}-${var.nodegroup_name}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 100Gi
+
+EFSPVC
+}
+
+output "efspvc" {
+  value = "${local.efspvc}"
+}
+
+locals {
   summary = <<SUMMARY
 
   EKS Cluster NodeGroup Summary: 
   Node security group: ${aws_security_group.node_sg.id} 
   Node instance role arn: ${aws_iam_role.node_role.arn}
-  Efs DNS: ${aws_efs_file_system.fs.id}.${var.region}.amazonaws.com
+  Efs DNS: ${var.efs_id}.${var.region}.amazonaws.com
 
 SUMMARY
 }

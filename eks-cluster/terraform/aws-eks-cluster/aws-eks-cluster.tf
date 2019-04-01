@@ -46,6 +46,17 @@ variable "cidr_subnet" {
  type    = "list"
 }
 
+variable "efs_performance_mode" {
+   default = "generalPurpose"
+   type = "string"
+}
+
+variable "efs_throughput_mode" {
+   description = "EFS performance mode"
+   default = "bursting"
+   type = "string"
+}
+
 # END variables
 
 provider "aws" {
@@ -159,6 +170,18 @@ resource "aws_security_group_rule" "cluster_ingress_self" {
   type                     = "ingress"
 }
 
+resource "aws_efs_file_system" "fs" {
+
+ performance_mode = "${var.efs_performance_mode}"
+ 
+ throughput_mode = "${var.efs_throughput_mode}"
+
+
+  tags = {
+    Name = "${var.cluster_name}"
+  }
+}
+
 resource "aws_eks_cluster" "eks_cluster" {
   name            = "${var.cluster_name}"
   role_arn        = "${aws_iam_role.cluster_role.arn}"
@@ -216,8 +239,9 @@ locals {
   EKS Cluster Summary: 
   vpc:    ${aws_vpc.vpc.id}
   subnets: ${join(",", aws_subnet.subnet.*.id)}
-  control security group: ${aws_security_group.cluster_sg.id}
+  cluster security group: ${aws_security_group.cluster_sg.id}
   endpoint: ${aws_eks_cluster.eks_cluster.endpoint}
+  EFS file system id: ${aws_efs_file_system.fs.id}
 
 SUMMARY
 }
