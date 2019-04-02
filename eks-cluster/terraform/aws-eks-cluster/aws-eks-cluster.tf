@@ -67,10 +67,13 @@ provider "aws" {
 
 resource "aws_vpc" "vpc" {
   cidr_block = "${var.cidr_vpc}"
+  enable_dns_support = true
+  enable_dns_hostnames  = true
 
   tags = {
     Name = "${var.cluster_name}-vpc",
   }
+
 }
 
 resource "aws_subnet" "subnet" {
@@ -83,6 +86,7 @@ resource "aws_subnet" "subnet" {
   tags = {
     Name = "${var.cluster_name}-subnet-${count.index}",
   }
+
 }
 
 resource "aws_internet_gateway" "igw" {
