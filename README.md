@@ -31,7 +31,7 @@ At a high level, we will:
 
 0. [Install Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html)
 
-1. In ```eks-cluster/terraform/aws-eks-cluster``` folder, run ```terraform init```, ```terraform plan``` and ```terraform apply``` to create an EKS cluster. Customize Terraform variables as appropriate. Use the outout for input into next step.
+1. In ```eks-cluster/terraform/aws-eks-cluster``` folder, run ```terraform init```, ```terraform plan``` and ```terraform apply``` to create an EKS cluster. Customize Terraform variables as appropriate. Use the outout for input into following steps.
 
 2. *This step uses an [EKS-optimized AMI with GPU support](https://aws.amazon.com/marketplace/pp/B07GRHFXGM). You would need to explicitly subscribe to this AMI in AWS Marketplace before you can execute this step.*
   
@@ -88,7 +88,7 @@ We need to package TensorFlow, TensorPack and Horovod in a Docker image and uplo
 
 ## Stage Data
 
-Next we stage the data that will be later accessed as a persistent volume from all the Kubernetes Pods used in distributed training. Customize ```eks-cluster/stage-data.ymal``` and execute ```kubectl apply -f stage-data.yaml -n kubeflow``` to stage data on selected persistent volume claim for EFS or FSX. Use the Docker image you just uploaded to ECR>
+Next we stage the data that will be later accessed as a persistent volume from all the Kubernetes Pods used in distributed training. Customize ```eks-cluster/stage-data.ymal``` and execute ```kubectl apply -f stage-data.yaml -n kubeflow``` to stage data on selected persistent volume claim for EFS or FSX. Use the Docker image you just uploaded to ECR.
 
 ## Install Helm and Kubeflow
 
