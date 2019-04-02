@@ -96,14 +96,6 @@ Next we stage the data that will be later accessed as a persistent volume from a
 
 [Kubeflow](https://www.kubeflow.org/docs/about/kubeflow/) project objective is to simplify the management of Machine Learning workflows on Kubernetes. Follow the [Kubeflow quick start guide](https://www.kubeflow.org/docs/started/getting-started/) to install Kubeflow.
 
-## Install ksonnet
-**Deprecated. Ksonnet project is ending. Use Kubeflow MPIJob with Helm charts as described above.**
-
-We will use [Ksonnet](https://github.com/ksonnet/ksonnet) to manage the Kubernetes manifests needed for doing distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example in Amazon EKS. To that end, we need to install Ksonnet client on the machine you just installed EKS kubectl in the previous section.
-
-To install Ksonnet, [download and install a pre-built ksonnet binary](https://github.com/ksonnet/ksonnet/releases) as an executable named ```ks``` under ```/usr/local/bin``` or some other directory in your PATH. If the pre-built binary option does not work for you, please see other [ksonnet install](https://github.com/ksonnet/ksonnet) options.
-
-
 ## Build Kubeflow MPIJob with Helm charts for EKS Training
 
 1. In the ```charts``` folder in this project, execute ```helm install --name mpijob ./mpijob/``` to deploy Kubeflow **MPIJob** *CustomResouceDefintion* in EKS using *mpijob chart*. 
@@ -117,6 +109,13 @@ To install Ksonnet, [download and install a pre-built ksonnet binary](https://gi
 5. Execute: ```kubectl logs -f maskrcnn-launcher-xxxxx -n kubeflow``` to see live log of training from the launcher (change xxxxx to your specific pod name).
 
 9. Model checkpoints and logs will be placed on the ```shared_fs``` file-system  set in ```values.yaml```, i.e. ```efs``` or ```fsx```.
+
+## Install ksonnet
+**Deprecated. Ksonnet project is ending. Use Kubeflow MPIJob with Helm charts as described above.**
+
+We will use [Ksonnet](https://github.com/ksonnet/ksonnet) to manage the Kubernetes manifests needed for doing distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example in Amazon EKS. To that end, we need to install Ksonnet client on the machine you just installed EKS kubectl in the previous section.
+
+To install Ksonnet, [download and install a pre-built ksonnet binary](https://github.com/ksonnet/ksonnet/releases) as an executable named ```ks``` under ```/usr/local/bin``` or some other directory in your PATH. If the pre-built binary option does not work for you, please see other [ksonnet install](https://github.com/ksonnet/ksonnet) options.
 
 ## Build Ksonnet Application for EKS Training
 **Deprecated. Ksonnet project is ending. Use Kubeflow MPIJob with Helm charts as described above.**
