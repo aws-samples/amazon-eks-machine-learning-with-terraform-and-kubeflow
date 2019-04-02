@@ -306,7 +306,7 @@ spec:
     - timeo=600
     - noresvport
   nfs:
-    server: ${var.efs_id}.${var.region}.amazonaws.com
+    server: ${var.efs_id}.efs.${var.region}.amazonaws.com
     path: "/"
 
 EFSPV
@@ -344,7 +344,7 @@ locals {
   EKS Cluster NodeGroup Summary: 
   Node security group: ${aws_security_group.node_sg.id} 
   Node instance role arn: ${aws_iam_role.node_role.arn}
-  Efs DNS: ${var.efs_id}.${var.region}.amazonaws.com
+  Efs DNS: ${var.efs_id}.efs.${var.region}.amazonaws.com
 
 SUMMARY
 }
