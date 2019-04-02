@@ -5,16 +5,16 @@ metadata:
   name: stage-data 
 data:
   stage-data.sh: |
-    aws s3 cp --recursive s3://$S3_BUCKET/$S3_PREFIX /fsx
+    aws s3 cp --recursive s3://$S3_BUCKET/$S3_PREFIX $STAGE_DIR
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-  name: stage-fsx 
+  name: stage-data 
 spec:
   restartPolicy: Never
   volumes:
-  - name: fsx
+  - name: efs # efs, or fsx
     persistentVolumeClaim:
       claimName: # name space persistent volume claim 
   - name: config
@@ -32,6 +32,8 @@ spec:
       value: my-bucket 
     - name: S3_PREFIX
       value: my-bucket-prefix 
+    - name: STAGE_DIR 
+      value: /efs # /efs or /fsx
     command:
     -  sh 
     - /etc/config/stage-data.sh
@@ -40,5 +42,5 @@ spec:
     volumeMounts:
     - mountPath: /etc/config
       name: config
-    - mountPath: /fsx
-      name: fsx
+    - mountPath: /efs # /efs or /fsx
+      name: efs # efs, or fsx
