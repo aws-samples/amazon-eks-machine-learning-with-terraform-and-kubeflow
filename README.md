@@ -88,7 +88,7 @@ We need to package TensorFlow, TensorPack and Horovod in a Docker image and uplo
 
 ## Stage Data
 
-Next we stage the data that will be later accessed as a persistent volume from all the Kubernetes Pods used in distributed training. Customize ```eks-cluster/stage-data.ymal``` and execute ```kubectl apply -f stage-data.yaml -n kubeflow``` to stage data on selected persistent volume claim for EFS or FSX. Use the Docker image you just uploaded to ECR.
+Next we stage the data that will be later accessed as a persistent volume from all the Kubernetes Pods used in distributed training. Customize ```eks-cluster/stage-data.yaml``` and execute ```kubectl apply -f stage-data.yaml -n kubeflow``` to stage data on selected persistent volume claim for EFS or FSX. Use the Docker image you just uploaded to ECR.
 
 ## Install Helm and Kubeflow
 
