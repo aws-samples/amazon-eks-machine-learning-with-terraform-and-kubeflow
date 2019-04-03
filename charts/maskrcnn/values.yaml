@@ -7,6 +7,7 @@ maskrcnn:
   image: # ECR image id 
   train_script: /tensorpack/examples/FasterRCNN/train.py
   shared_fs: efs
+  data_fs: efs
   shared_pvc: tensorpack-efs-gp-bursting
   data_dir: data
   steps_per_epoch: 15000  # Must be equal to 120000/gpus 
