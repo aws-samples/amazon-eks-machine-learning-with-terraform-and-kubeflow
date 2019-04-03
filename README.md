@@ -91,10 +91,18 @@ We need to package TensorFlow, TensorPack and Horovod in a Docker image and uplo
 Next we stage the data that will be later accessed as a persistent volume from all the Kubernetes Pods used in distributed training. We have two options for staging data:
 
 ### Use EFS, or FSx
-To stage data on EFS or FSx, customize ```eks-cluster/stage-data.yaml``` and execute ```kubectl apply -f stage-data.yaml -n kubeflow``` to stage data on selected persistent volume claim for EFS or FSX. Use the Docker image you just uploaded to ECR in ```eks-cluster/stage-data.yaml```. To verify data has been staged correctly, custmize and use ```eks-cluster/attach-pvc.yaml``` pod: This pod will attach to specififed persistent volume claim.
+To stage data on EFS or FSx, customize ```eks-cluster/stage-data.yaml``` and execute ```kubectl apply -f stage-data.yaml -n kubeflow``` to stage data on selected persistent volume claim for EFS or FSX. Use the Docker image you just uploaded to ECR in ```eks-cluster/stage-data.yaml```. To verify data has been staged correctly, custmize ```eks-cluster/attach-pvc.yaml``` and execute following commands:
+
+  ```kubectl apply -f attach-pvc.yaml -n kubeflow```  
+  ```kubectl exec attach-pvc -it -n kubeflow -- /bin/bash```  
+
+You will be attached to the EFS or FSx file system presistent volume. Type ```exit``` once you have verified the data.
 
 ### Use EBS
-Alternatively, you can replicate data on all EKS worker nodes by cusotmizing and executing ```kubectl apply -f replicate-data.yaml```. This will create a K8s DeamonSet that will run on all EKS worker nodes, pulling down data from specififed S3 bucket to ```/ebs``` directory on the host. 
+Alternatively, you can replicate data on all EKS worker nodes by cusotmizing and executing ```kubectl apply -f replicate-data.yaml -n kubeflow```. This will create a K8s DeamonSet that will run on all EKS worker nodes, pulling down data from specififed S3 bucket to ```/ebs``` directory on the host. You can safely delete the DaemonSet once data has been replicated to all nodes:
+  
+    kubectl delete DaemonSet replicate-data -n kubeflow
+    
 
 ## Install Helm and Kubeflow
 
