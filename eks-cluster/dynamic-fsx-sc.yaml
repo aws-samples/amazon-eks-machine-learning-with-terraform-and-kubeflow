@@ -1,9 +1,0 @@
-kind: StorageClass
-apiVersion: storage.k8s.io/v1
-metadata:
-  name: dynamic-fsx-sc  # name must be unique for each set of paramters
-provisioner: fsx.csi.aws.com
-parameters:
-  subnetId: <subnet id for FSX file system> 
-  securityGroupIds: <security group id> 
-  s3ImportPath: s3://<bucket>/<prefix>/input # Put input data at this path
