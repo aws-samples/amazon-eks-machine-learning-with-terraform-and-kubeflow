@@ -95,7 +95,7 @@ Next we stage the data that will be later accessed as a persistent volume from a
 [Helm](https://helm.sh/docs/using_helm/) is package manager for Kubernetes. It uses a package format named *charts*. A Helm chart is a collection of files that define Kubernetes resources. Install helm according to instructions [here](https://helm.sh/docs/using_helm/#installing-helm).
 
 After installing Helm, initalize Helm as described below:
-  1. In ```eks-cluster``` folder, execute ```kubectl create -f rbac-config.yaml```. You should see following two messages:
+  1. In ```eks-cluster``` folder, execute ```kubectl create -f tiller-rbac-config.yaml```. You should see following two messages:
   
           serviceaccount "tiller" created  
           clusterrolebinding "tiller" created  
