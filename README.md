@@ -33,15 +33,27 @@ At a high level, we will:
 
 1. In ```eks-cluster/terraform/aws-eks-cluster``` folder, run ```terraform init```, ```terraform plan``` and ```terraform apply``` to create an EKS cluster. Customize Terraform variables as appropriate. Use the outout for input into following steps.
 
-2. *This step uses an [EKS-optimized AMI with GPU support](https://aws.amazon.com/marketplace/pp/B07GRHFXGM). You would need to explicitly subscribe to this AMI in AWS Marketplace before you can execute this step.*
-  
-    In ```eks-cluster/terraform/aws-eks-nodegroup``` folder, run ```terraform init```, ```terraform plan``` and ```terraform     apply``` to create an EKS cluster nodegroup. Customize Terraform variables as appropriate. Use the outout for input into     following steps.
+    Example:
+    
+    ```terraform plan -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]'```
+    
+    ```terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]'```
+
+2. In ```eks-cluster/terraform/aws-eks-nodegroup``` folder, run ```terraform init```, ```terraform plan``` and ```terraform  apply``` to create an EKS cluster nodegroup. Customize Terraform variables as appropriate. Use the outout for input into     following steps.
+    
+    Example:
+    
+    ```terraform plan  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=xxx" -var="subnet_id=xxx" -var="key_pair=xxx" -var="cluster_sg=xxx"```
+    
+     ```terraform apply  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=xxx" -var="subnet_id=xxx" -var="key_pair=xxx" -var="cluster_sg=xxx"```
+    
+    *This step uses an [EKS-optimized AMI with GPU support](https://aws.amazon.com/marketplace/pp/B07GRHFXGM): click the link to subscribe to AMI.*
 
 3. Next we install EKS kubectl client. For Linux client, in ```eks-cluster``` directory, execute: ```./install-kubectl-linux.sh``` For other operating systems, [install and configure kubectl for EKS](https://docs.aws.amazon.com/eks/latest/userguide/configure-kubectl.html).
 
-3. *Ensure that you have at least version 1.16.73 of the AWS CLI installed, your system's Python version must be Python 3, or Python 2.7.9 or greater, and you have completed ```aws configure```. Also make sure the command ```aws-iam-authenticator help``` works.*
+3. *Ensure that you have at least version 1.16.73 of the AWS CLI installed. Your system's Python version must be Python 3, or Python 2.7.9 or greater.*
    
-   In ```eks-cluster``` directory, customize ```set-cluster.sh``` and execute: ```./update-kubeconfig.sh``` to update kube configuration 
+   Install aws-iam-authenticator (https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html) and make sure the command ```aws-iam-authenticator help``` works. In ```eks-cluster``` directory, customize ```set-cluster.sh``` and execute: ```./update-kubeconfig.sh``` to update kube configuration 
 
 4. [Upgrade Amazon CNI Plugin for Kubernetes](https://docs.aws.amazon.com/eks/latest/userguide/cni-upgrades.html) if needed
 
