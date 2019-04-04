@@ -31,7 +31,7 @@ At a high level, we will:
 
 0. [Install Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html)
 
-1. In ```eks-cluster/terraform/aws-eks-cluster``` folder, run ```terraform init```, ```terraform plan``` and ```terraform apply``` to create an EKS cluster. Customize Terraform variables as appropriate. Use the outout for input into following steps.
+1. In ```eks-cluster/terraform/aws-eks-cluster``` folder, run ```terraform init```, ```terraform plan``` and ```terraform apply``` to create an EKS cluster. Customize Terraform variables as appropriate. Use the summary output from ```terraform apply``` for input into following steps. K8s version can be specified using ```-var="k8s_version=x.xx"```. Current default k8s version in this Terraform module is 1.11.
 
     Example:
     
@@ -39,7 +39,7 @@ At a high level, we will:
     
     ```terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]'```
 
-2. In ```eks-cluster/terraform/aws-eks-nodegroup``` folder, run ```terraform init```, ```terraform plan``` and ```terraform  apply``` to create an EKS cluster nodegroup. Customize Terraform variables as appropriate. Use the outout for input into     following steps.
+2. In ```eks-cluster/terraform/aws-eks-nodegroup``` folder, run ```terraform init```, ```terraform plan``` and ```terraform  apply``` to create an EKS cluster nodegroup. Customize Terraform variables as appropriate. Use the outout for input into     following steps. 
     
     Example:
     
@@ -47,7 +47,7 @@ At a high level, we will:
     
      ```terraform apply  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=xxx" -var="subnet_id=xxx" -var="key_pair=xxx" -var="cluster_sg=xxx"```
     
-    *This step uses an [EKS-optimized AMI with GPU support](https://aws.amazon.com/marketplace/pp/B07GRHFXGM): click the link to subscribe to AMI.*
+    *This step uses an [EKS-optimized AMI with GPU support](https://aws.amazon.com/marketplace/pp/B07GRHFXGM): click the link to subscribe to AMI. The version of AMI used must be compatible with the version of K8s. Current default k8s version is 1.11.*
 
 3. Next we install EKS kubectl client. For Linux client, in ```eks-cluster``` directory, execute: ```./install-kubectl-linux.sh``` For other operating systems, [install and configure kubectl for EKS](https://docs.aws.amazon.com/eks/latest/userguide/configure-kubectl.html).
 
