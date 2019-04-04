@@ -113,7 +113,11 @@ To stage data on EFS or FSx, customize ```eks-cluster/stage-data.yaml``` and exe
 You will be attached to the EFS or FSx file system presistent volume. Type ```exit``` once you have verified the data.
 
 ### Use EBS
-Alternatively, you can replicate data on all EKS worker nodes by cusotmizing and executing ```kubectl apply -f replicate-data.yaml -n kubeflow```. This will create a K8s DeamonSet that will run on all EKS worker nodes, pulling down data from specififed S3 bucket to ```/ebs``` directory on the host. You can safely delete the DaemonSet once data has been replicated to all nodes:
+Alternatively, you can replicate data on all EKS worker nodes by cusotmizing and executing 
+
+  ```kubectl apply -f replicate-data.yaml -n kubeflow```
+  
+This will create a K8s DeamonSet that will run on all EKS worker nodes, pulling down data from specififed S3 bucket to ```/ebs``` directory on the host. You can safely delete the DaemonSet once data has been replicated to all nodes:
   
     kubectl delete DaemonSet replicate-data -n kubeflow
     
