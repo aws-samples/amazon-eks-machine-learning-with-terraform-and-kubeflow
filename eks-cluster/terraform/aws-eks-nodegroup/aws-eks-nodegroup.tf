@@ -24,7 +24,6 @@ variable "cluster_name" {
 
 variable "nodegroup_name" {
   description = "Node group name in cluster"
-  default = "ng"
   type    = "string"
 }
 
@@ -207,7 +206,7 @@ USERDATA
 }
 
 resource "aws_launch_configuration" "eks_gpu" {
-  name_prefix                 = "${data.aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}"
+  name                        = "${data.aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}"
   associate_public_ip_address = "${var.associate_public_ip}" 
   iam_instance_profile        = "${aws_iam_instance_profile.node_profile.name}"
   image_id                    = "${lookup(var.eks_gpu_ami, var.region, "us-east-1")}"
@@ -231,7 +230,7 @@ resource "aws_launch_configuration" "eks_gpu" {
 }
 
 resource "aws_autoscaling_group" "node_group" {
-  name_prefix = "${data.aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}"
+  name                  = "${data.aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}"
   vpc_zone_identifier   = ["${var.subnet_id}"]
 
   health_check_grace_period = "0"
