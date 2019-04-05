@@ -140,7 +140,7 @@ After installing Helm, initalize Helm as described below:
 
 1. In the ```charts``` folder in this project, execute ```helm install --name mpijob ./mpijob/``` to deploy Kubeflow **MPIJob** *CustomResouceDefintion* in EKS using *mpijob chart*. 
 
-2. In the ```charts/maskrcnn``` folder in this project, customize ```values.yaml``` for ```shared_fs``` and ```shared_pvc``` variables as needed based on the shared file system selected, i.e. EFS or FSx.  
+2. In the ```charts/maskrcnn``` folder in this project, customize ```values.yaml``` for ```shared_fs``` and ```shared_pvc``` variables as needed based on the shared file system selected, i.e. EFS or FSx. Set ```data_fs``` in ```values.yaml``` to ```efs```, ```fsx``` or ```ebs``` depending on where you staged data.
 
 3. In the ```charts``` folder in this project, execute ```helm install --name maskrcnn ./maskrcnn/``` to create the MPI Operator Deployment resource and also define an MPIJob resource for Mask-RCNN Training. 
 
