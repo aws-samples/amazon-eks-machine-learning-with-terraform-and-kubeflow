@@ -40,12 +40,14 @@ At a high level, we will:
     ```terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]'```
 
 2. In ```eks-cluster/terraform/aws-eks-nodegroup``` folder, run ```terraform init```, ```terraform plan``` and ```terraform  apply``` to create an EKS cluster nodegroup. Customize Terraform variables as appropriate. Use the outout for input into     following steps. 
+
+   To create more than one nodegroup in an EKS cluster, copy ```eks-cluster/terraform/aws-eks-nodegroup``` folder to a new folder under ```eks-cluster/terraform/``` and specify a unique value for ```nodegroup_name``` variable.
     
     Example:
     
-    ```terraform plan  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=xxx" -var="subnet_id=xxx" -var="key_pair=xxx" -var="cluster_sg=xxx"```
+    ```terraform plan  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=xxx" -var="subnet_id=xxx" -var="key_pair=xxx" -var="cluster_sg=xxx" -var="nodegroup_name=xxx"```
     
-     ```terraform apply  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=xxx" -var="subnet_id=xxx" -var="key_pair=xxx" -var="cluster_sg=xxx"```
+     ```terraform apply  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=xxx" -var="subnet_id=xxx" -var="key_pair=xxx" -var="cluster_sg=xxx"  -var="nodegroup_name=xxx"```
     
     *This step uses an [EKS-optimized AMI with GPU support](https://aws.amazon.com/marketplace/pp/B07GRHFXGM): click the link to subscribe to AMI. The version of AMI used must be compatible with the version of K8s. Current default k8s version is 1.11.*
 
@@ -111,7 +113,11 @@ To stage data on EFS or FSx, customize ```eks-cluster/stage-data.yaml``` and exe
 You will be attached to the EFS or FSx file system presistent volume. Type ```exit``` once you have verified the data.
 
 ### Use EBS
-Alternatively, you can replicate data on all EKS worker nodes by cusotmizing and executing ```kubectl apply -f replicate-data.yaml -n kubeflow```. This will create a K8s DeamonSet that will run on all EKS worker nodes, pulling down data from specififed S3 bucket to ```/ebs``` directory on the host. You can safely delete the DaemonSet once data has been replicated to all nodes:
+Alternatively, you can replicate data on all EKS worker nodes by cusotmizing and executing 
+
+  ```kubectl apply -f replicate-data.yaml -n kubeflow```
+  
+This will create a K8s DeamonSet that will run on all EKS worker nodes, pulling down data from specififed S3 bucket to ```/ebs``` directory on the host. You can safely delete the DaemonSet once data has been replicated to all nodes:
   
     kubectl delete DaemonSet replicate-data -n kubeflow
     
@@ -134,7 +140,7 @@ After installing Helm, initalize Helm as described below:
 
 1. In the ```charts``` folder in this project, execute ```helm install --name mpijob ./mpijob/``` to deploy Kubeflow **MPIJob** *CustomResouceDefintion* in EKS using *mpijob chart*. 
 
-2. In the ```charts/maskrcnn``` folder in this project, customize ```values.yaml``` for ```shared_fs``` and ```shared_pvc``` variables as needed based on the shared file system selected, i.e. EFS or FSx.  
+2. In the ```charts/maskrcnn``` folder in this project, customize ```values.yaml``` for ```shared_fs``` and ```shared_pvc``` variables as needed based on the shared file system selected, i.e. EFS or FSx. Set ```data_fs``` in ```values.yaml``` to ```efs```, ```fsx``` or ```ebs``` depending on where you staged data.
 
 3. In the ```charts``` folder in this project, execute ```helm install --name maskrcnn ./maskrcnn/``` to create the MPI Operator Deployment resource and also define an MPIJob resource for Mask-RCNN Training. 
 
