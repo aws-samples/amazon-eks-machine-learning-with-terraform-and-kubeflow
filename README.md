@@ -142,6 +142,8 @@ After installing Helm, initalize Helm as described below:
 
 2. In the ```charts/maskrcnn``` folder in this project, customize ```values.yaml``` for ```shared_fs``` and ```shared_pvc``` variables as needed based on the shared file system selected, i.e. EFS or FSx. Set ```data_fs``` in ```values.yaml``` to ```efs```, ```fsx``` or ```ebs``` depending on where you staged data.
 
+    To create a new Helm chart for defining a new MPIJOb, copy ```maskrcnn``` folder to a new folder under ```charts```. Update the chart name in ```Chart.yaml```. Update the ```namespace``` global variable  in ```values.yaml``` to use a new K8s namespace. Create a new K8s namespace using ```kuebctl apply ns my-namespace```.  
+
 3. In the ```charts``` folder in this project, execute ```helm install --name maskrcnn ./maskrcnn/``` to create the MPI Operator Deployment resource and also define an MPIJob resource for Mask-RCNN Training. 
 
 4. Execute: ```kubectl get pods -n kubeflow``` to see the status of the pods
