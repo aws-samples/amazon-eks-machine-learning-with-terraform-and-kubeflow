@@ -1,4 +1,4 @@
-FROM nvidia/cuda:10.0-devel-ubuntu16.04
+FROM nvidia/cuda:10.0-devel-ubuntu18.04
 
 ENV TF_RELEASE https://github.com/armandmcqueen/tensorpack-mask-rcnn/releases/download/v0.0.0-WIP/tensorflow-1.13.0-cp36-cp36m-linux_x86_64.whl
 
@@ -99,16 +99,16 @@ RUN mkdir -p /var/run/sshd && \
 RUN apt-get install -y --no-install-recommends --allow-downgrades --allow-change-held-packages \
     ethtool \
     less \
-    iproute
+    iproute2
 
 
 
 RUN pip3 install Cython
 RUN pip3 install boto3 ujson opencv-python pycocotools matplotlib
 RUN pip3 install --ignore-installed numpy==1.16.2
-
+ARG CACHEBUST=1
 RUN git clone https://github.com/armandmcqueen/tensorpack-mask-rcnn.git /tensorpack-mask-rcnn
-RUN cd /tensorpack-mask-rcnn && git fetch origin d6b712784f9d55ffda2d8be4e0b47b54b8b5bfea
-RUN cd /tensorpack-mask-rcnn && git reset --hard d6b712784f9d55ffda2d8be4e0b47b54b8b5bfea 
+RUN cd /tensorpack-mask-rcnn && git fetch origin 7084edd4532d5beeb6e3133c35cde419d52bbe60 
+RUN cd /tensorpack-mask-rcnn && git reset --hard 7084edd4532d5beeb6e3133c35cde419d52bbe60 
 RUN chmod -R +w /tensorpack-mask-rcnn
 RUN pip3 install --ignore-installed -e /tensorpack-mask-rcnn/
