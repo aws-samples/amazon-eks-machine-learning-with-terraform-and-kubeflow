@@ -100,6 +100,11 @@ We have two shared file system options for staging data for distirbuted training
 
 We need to package TensorFlow, TensorPack and Horovod in a Docker image and upload the image to Amazon ECR. To that end, in ```container/build_tools``` directory in this project, customize for AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your default AWS region. It is recommended that the Docker Image be built on an EC2 instance based on [Amazon Deep Learning AMIs](https://aws.amazon.com/machine-learning/amis/).
 
+### Optimized MaskRCNN
+
+To use an [optimized version of MaskRCNN](https://github.com/armandmcqueen/tensorpack-mask-rcnn) under active development, 
+go into ```container-optimized/build_tools``` directory in this project, customize for AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your default AWS region. It is recommended that the Docker Image be built on an EC2 instance based on [Amazon Deep Learning AMIs](https://aws.amazon.com/machine-learning/amis/).
+
 ## Stage Data
 
 Next we stage the data that will be later accessed as a persistent volume from all the Kubernetes Pods used in distributed training. We have two options for staging data:
@@ -140,9 +145,12 @@ After installing Helm, initalize Helm as described below:
 
 1. In the ```charts``` folder in this project, execute ```helm install --name mpijob ./mpijob/``` to deploy Kubeflow **MPIJob** *CustomResouceDefintion* in EKS using *mpijob chart*. 
 
-2. In the ```charts/maskrcnn``` folder in this project, customize ```values.yaml``` for ```shared_fs``` and ```shared_pvc``` variables as needed based on the shared file system selected, i.e. EFS or FSx. Set ```data_fs``` in ```values.yaml``` to ```efs```, ```fsx``` or ```ebs``` depending on where you staged data.
+2. 
+    a) In the ```charts/maskrcnn``` folder in this project, customize ```image```, ```data_fs```, ```shared_fs``` and ```shared_pvc``` variables in ```valuex.yaml```. Set ```image``` to ECR docker image URL you built and uploaded in a previous step. Set ```shared_fs``` to ```efs``` or ```fsx```, as applicable. Set ```data_fs``` to ```efs```, ```fsx``` or ```ebs```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume you created in relevant k8s namespace. 
 
-    *To create a new Helm chart for defining a new MPIJOb, copy ```maskrcnn``` folder to a new folder under ```charts```. Update the chart name in ```Chart.yaml```. Update the ```namespace``` global variable  in ```values.yaml``` to specify a new K8s namespace.*
+    b) To use an optimized version of MaskRCNN under active development, in the ```charts/maskrcnn-optimized``` folder in this project, customize ```image```, ```data_fs```, ```shared_fs``` and ```shared_pvc``` variables in ```valuex.yaml```. Set ```image``` to the optimized MaskRCNN ECR docker image URL you built and uploaded in a previous step. Set ```shared_fs``` to ```efs``` or ```fsx```, as applicable. Set ```data_fs``` to ```efs```, ```fsx``` or ```ebs```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume you created in relevant k8s namespace.  
+
+    c) *To create a brand new Helm chart for defining a new MPIJOb, copy ```maskrcnn``` folder to a new folder under ```charts```. Update the chart name in ```Chart.yaml```. Update the ```namespace``` global variable  in ```values.yaml``` to specify a new K8s namespace.*
 
 3. In the ```charts``` folder in this project, execute ```helm install --name maskrcnn ./maskrcnn/``` to create the MPI Operator Deployment resource and also define an MPIJob resource for Mask-RCNN Training. 
 
