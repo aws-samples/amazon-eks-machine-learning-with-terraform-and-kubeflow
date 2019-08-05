@@ -1,9 +1,9 @@
-FROM nvidia/cuda:9.0-devel-ubuntu16.04
+FROM nvidia/cuda:10.0-devel-ubuntu16.04
 
-ENV TENSORFLOW_VERSION=1.12.0
-ENV HOROVOD_VERSION=0.15.2
-ENV CUDNN_VERSION=7.1.4.18-1+cuda9.0
-ENV NCCL_VERSION=2.2.13-1+cuda9.0
+ENV TENSORFLOW_VERSION=1.13.2
+ENV HOROVOD_VERSION=0.16.1
+ENV CUDNN_VERSION=7.6.2.24-1+cuda10.0
+ENV NCCL_VERSION=2.4.2-1+cuda10.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends --allow-downgrades --allow-change-held-packages \
       build-essential \
@@ -37,9 +37,9 @@ RUN pip3 install --upgrade pip
 # Install Open MPI
 RUN mkdir /tmp/openmpi && \
     cd /tmp/openmpi && \
-    wget https://www.open-mpi.org/software/ompi/v3.0/downloads/openmpi-3.0.0.tar.gz && \
-    tar zxf openmpi-3.0.0.tar.gz && \
-    cd openmpi-3.0.0 && \
+    wget https://download.open-mpi.org/release/open-mpi/v4.0/openmpi-4.0.1.tar.gz && \
+    tar zxf openmpi-4.0.1.tar.gz && \
+    cd openmpi-4.0.1 && \
     ./configure --enable-orterun-prefix-by-default && \
     make -j $(nproc) all && \
     make install && \
@@ -51,7 +51,7 @@ RUN mkdir /tmp/openmpi && \
 RUN pip3 install tensorflow-gpu==${TENSORFLOW_VERSION} keras h5py
 
 # Install Horovod, temporarily using CUDA stubs
-RUN ldconfig /usr/local/cuda-9.0/targets/x86_64-linux/lib/stubs && \
+RUN ldconfig /usr/local/cuda-10.0/targets/x86_64-linux/lib/stubs && \
     HOROVOD_GPU_ALLREDUCE=NCCL HOROVOD_WITH_TENSORFLOW=1 pip3 install --no-cache-dir horovod==${HOROVOD_VERSION} && \
     ldconfig
 
@@ -93,14 +93,13 @@ RUN apt-get install -y --no-install-recommends --allow-downgrades --allow-change
 RUN pip3 install awscli
 RUN pip3 install boto3
 RUN pip3 install ujson==1.35
-RUN pip3 install opencv-python==4.0.0.21
+RUN pip3 install opencv-python==4.1.0.25
 RUN pip3 install Cython==0.28.4
 RUN pip3 install pycocotools==2.0.0
-RUN pip3 install matplotlib==3.0.2
+RUN pip3 install matplotlib==3.0.3
+RUN pip3 install markdown==3.1
 
 RUN git clone https://github.com/tensorpack/tensorpack.git /tensorpack
-RUN cd /tensorpack && git fetch origin 860f7a382f8dc245e46c5f637866ef6384db1733 
-RUN cd /tensorpack && git reset --hard 860f7a382f8dc245e46c5f637866ef6384db1733 
+RUN cd /tensorpack && git fetch origin 26664c3f1d58ae029ea6c3ba0af6ae11900b1e55 
+RUN cd /tensorpack && git reset --hard 26664c3f1d58ae029ea6c3ba0af6ae11900b1e55 
 RUN pip3 install --ignore-installed -e /tensorpack
-RUN pip3 uninstall -y numpy
-RUN pip3 install numpy==1.16.0
