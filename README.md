@@ -1,4 +1,4 @@
-# TensorFlow + TensorPack + Horovod + Amazon EKS
+# Distributed TensorFlow training using Kubeflow on Amazon EKS
 
 ## Prerequisites
 1. [Create and activate an AWS Account](https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/)
@@ -11,29 +11,27 @@
 
 4. The steps described below require adequate [AWS IAM](https://docs.aws.amazon.com/IAM/latest/UserGuide/access.html) permissions.
 
-## Overview
+## Step by step
 
-In this project, we are focused on distributed training using [TensorFlow](https://github.com/tensorflow/tensorflow), [TensorPack](https://github.com/tensorpack/tensorpack) and [Horovod](https://eng.uber.com/horovod/) on [Amazon EKS](https://aws.amazon.com/eks/).
+While all the concepts described here are quite general, we will make these concepts concrete by focusing on distributed TensorFlow training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model. 
 
-While all the concepts described here are quite general and are applicable to running any combination of TensorFlow, TensorPack and Horovod based algorithms on Amazon EKS, we will make these concepts concrete by focusing on distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example. 
-
-At a high level, we will:
+The high-level outline of steps is as follows:
 
   1. Download [COCO 2017 dataset](http://cocodataset.org/#download) and upload it to an AWS S3 bucket
-  2. Create an [Amazon EKS](https://aws.amazon.com/eks/) Cluster
-  3. Create EKS Persistent Volume and Persistent Volume Claim for Amazon EFS or FSx file system
+  2. Create a GPU enabled [Amazon EKS](https://aws.amazon.com/eks/) cluster
+  3. Create [Persistent Volume](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#persistent-volumes) and [Persistent Volume Claim](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#persistentvolumeclaims) for [Amazon EFS](https://aws.amazon.com/efs/) or [Amazon FSx](https://aws.amazon.com/fsx/) file system
   4. Stage COCO 2017 data for training on Amazon EFS or FSx file system
   5. Use [Helm charts](https://helm.sh/docs/developing_charts/) to manage training jobs in EKS cluster
 
 ## Download COCO 2017 dataset and upload to AWS S3
-  1. Use an EC2 instance with ```aws cli``` installed. Setup AWS access permissions to provide read-write access to your S3  bucket. 
-  2. Customize ```eks-cluster/prepare-s3-bucket.sh``` for ```S3_BUCKET``` and execute ```eks-cluster/prepare-s3-bucket.sh ``` to download COCO 2017 dataset and upload it to AWS S3 bucket. 
+  1. On the build environment instance with ```aws cli``` installed, setup read-write access to your Amazon S3  bucket. This typically requires use of [AWS access keys](https://docs.aws.amazon.com/general/latest/gr/aws-access-keys-best-practices.html).
+  2. Customize ```eks-cluster/prepare-s3-bucket.sh``` for ```S3_BUCKET``` and execute ```eks-cluster/prepare-s3-bucket.sh ``` to download COCO 2017 dataset to your build environment instance and upload it to Amazon S3 bucket. 
   
 ## Create Amazon EKS Cluster
 
-0. [Install Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html)
+1. [Install Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html)
 
-1. In ```eks-cluster/terraform/aws-eks-cluster``` folder, run ```terraform init```, ```terraform plan``` and ```terraform apply``` to create an EKS cluster. Customize Terraform variables as appropriate. Use the summary output from ```terraform apply``` for input into following steps. K8s version can be specified using ```-var="k8s_version=x.xx"```. Current default k8s version in this Terraform module is 1.11.
+2. In ```eks-cluster/terraform/aws-eks-cluster``` folder, run ```terraform init```, ```terraform plan``` and ```terraform apply``` to create an EKS cluster. Customize Terraform variables as appropriate. Use the summary output from ```terraform apply``` for input into following steps. K8s version can be specified using ```-var="k8s_version=x.xx"```. 
 
     Example:
     
@@ -41,7 +39,7 @@ At a high level, we will:
     
     ```terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]'```
 
-2. In ```eks-cluster/terraform/aws-eks-nodegroup``` folder, run ```terraform init```, ```terraform plan``` and ```terraform  apply``` to create an EKS cluster nodegroup. Customize Terraform variables as appropriate. Use the outout for input into     following steps. 
+3. In ```eks-cluster/terraform/aws-eks-nodegroup``` folder, run ```terraform init```, ```terraform plan``` and ```terraform  apply``` to create an EKS cluster nodegroup. Customize Terraform variables as appropriate. Use the outout for input into     following steps. 
 
    *To create more than one nodegroup in an EKS cluster, copy ```eks-cluster/terraform/aws-eks-nodegroup``` folder to a new folder under ```eks-cluster/terraform/``` and specify a unique value for ```nodegroup_name``` variable.*
     
@@ -50,16 +48,14 @@ At a high level, we will:
     ```terraform plan  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=xxx" -var="subnet_id=xxx" -var="key_pair=xxx" -var="cluster_sg=xxx" -var="nodegroup_name=xxx"```
     
      ```terraform apply  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=xxx" -var="subnet_id=xxx" -var="key_pair=xxx" -var="cluster_sg=xxx"  -var="nodegroup_name=xxx"```
-    
-    *This step uses an [EKS-optimized AMI with GPU support](https://aws.amazon.com/marketplace/pp/B07GRHFXGM): click the link to subscribe to AMI. The version of AMI used must be compatible with the version of K8s. Current default k8s version is 1.11.*
 
-3. Next we install EKS kubectl client. For Linux client, in ```eks-cluster``` directory, execute: ```./install-kubectl-linux.sh``` For other operating systems, [install and configure kubectl for EKS](https://docs.aws.amazon.com/eks/latest/userguide/configure-kubectl.html).
+4. To install EKS kubectl Linux client, in ```eks-cluster``` directory, execute: ```./install-kubectl-linux.sh``` For other operating systems, [install and configure kubectl for EKS](https://docs.aws.amazon.com/eks/latest/userguide/configure-kubectl.html).
 
-3. *Ensure that you have at least version 1.16.73 of the AWS CLI installed. Your system's Python version must be Python 3, or Python 2.7.9 or greater.*
-   
-   Install aws-iam-authenticator (https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html) and make sure the command ```aws-iam-authenticator help``` works. In ```eks-cluster``` directory, customize ```set-cluster.sh``` and execute: ```./update-kubeconfig.sh``` to update kube configuration 
+5. Install aws-iam-authenticator (https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html) and make sure the command ```aws-iam-authenticator help``` works. In ```eks-cluster``` directory, customize ```set-cluster.sh``` and execute: ```./update-kubeconfig.sh``` to update kube configuration.
 
-4. [Upgrade Amazon CNI Plugin for Kubernetes](https://docs.aws.amazon.com/eks/latest/userguide/cni-upgrades.html) if needed
+  *Ensure that you have at least version 1.16.73 of the AWS CLI installed. Your system's Python version must be Python 3, or Python 2.7.9 or greater.*
+
+6. [Upgrade Amazon CNI Plugin for Kubernetes](https://docs.aws.amazon.com/eks/latest/userguide/cni-upgrades.html) if needed
 
 7. In ```eks-cluster``` directory, customize *NodeInstanceRole* in ```aws-auth-cm.yaml``` and execute: ```./apply-aws-auth-cm.sh``` to allow worker nodes to join EKS cluster. Note, if this is not your first node group, you must add the new node instnace role Amazon Resource Name (ARN), while perserving the existing role ARNs in ```aws-auth-cm.yaml```. 
 
@@ -117,7 +113,7 @@ To stage data on EFS or FSx, customize ```eks-cluster/stage-data.yaml``` and exe
   ```kubectl apply -f attach-pvc.yaml -n kubeflow```  
   ```kubectl exec attach-pvc -it -n kubeflow -- /bin/bash```  
 
-You will be attached to the EFS or FSx file system presistent volume. Type ```exit``` once you have verified the data.
+You will be attached to the EFS or FSx file system persistent volume. Type ```exit``` once you have verified the data.
 
 ### Use EBS
 Alternatively, you can replicate data on all EKS worker nodes by cusotmizing and executing 
