@@ -21,8 +21,8 @@ The high-level outline of steps is as follows:
   4. Stage COCO 2017 data for training on Amazon EFS or FSx file system
   5. Use [Helm charts](https://helm.sh/docs/developing_charts/) to manage training jobs in EKS cluster
 
-## Download COCO 2017 dataset and upload to AWS S3
-  1. On the build environment instance with ```aws cli``` installed, setup read-write access to your Amazon S3  bucket. This typically requires use of [AWS access keys](https://docs.aws.amazon.com/general/latest/gr/aws-access-keys-best-practices.html).
+## Download COCO 2017 dataset and upload to Amazon S3
+  1. On the build environment instance with ```aws cli``` installed, setup read-write access to your Amazon S3 object store bucket. This typically requires use of [AWS access keys](https://docs.aws.amazon.com/general/latest/gr/aws-access-keys-best-practices.html).
   2. To download COCO 2017 dataset to your build environment instance and upload it to Amazon S3 bucket, customize ```eks-cluster/prepare-s3-bucket.sh``` script to specify your S3 bucket in ```S3_BUCKET``` variable and execute ```eks-cluster/prepare-s3-bucket.sh ``` 
   
 ## Create GPU Enabled Amazon EKS Cluster
