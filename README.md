@@ -133,7 +133,7 @@ After installing Helm, initalize Helm as described below:
 
 [Kubeflow](https://www.kubeflow.org/docs/about/kubeflow/) project objective is to simplify the management of Machine Learning workflows on Kubernetes. Follow the [Kubeflow quick start guide](https://www.kubeflow.org/docs/started/getting-started/) to install Kubeflow. Installing Kubeflow is optional for this project.
 
-## Build Kubeflow MPIJob with Helm charts for EKS Training
+## Install Helm charts for training using Kubeflow
 
 1. In the ```charts``` folder in this project, execute ```helm install --name mpijob ./mpijob/``` to deploy Kubeflow **MPIJob** *CustomResouceDefintion* in EKS using *mpijob chart*. 
 
@@ -154,7 +154,7 @@ After installing Helm, initalize Helm as described below:
 
 ## Destroy GPU enabled EKS cluster
 
-When you are done with distributed training, you can execute ```terraform destroy``` in ```eks-cluster/terraform/eks-cluster/terraform/aws-eks-nodegroup``` folder to destroy the GPU enabled EKS nodegroup, and then execute ```terraform destroy``` in ``eks-cluster/terraform/aws-eks-cluster``` to destroy EKS cluster.
+When you are done with distributed training, you can execute ```terraform destroy``` in ```eks-cluster/terraform/eks-cluster/terraform/aws-eks-nodegroup``` folder to destroy the GPU enabled EKS nodegroup, and then execute ```terraform destroy``` in ```eks-cluster/terraform/aws-eks-cluster``` to destroy EKS cluster.
 
 ## Install ksonnet
 **Deprecated. Ksonnet project is ending. Use Kubeflow MPIJob with Helm charts as described above.**
