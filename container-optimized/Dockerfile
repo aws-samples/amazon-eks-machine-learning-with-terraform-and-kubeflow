@@ -9,6 +9,7 @@ RUN pip uninstall -y tensorflow tensorboard tensorflow-estimator keras h5py horo
 # Download and install custom Tensorflow binary
 RUN wget https://github.com/armandmcqueen/tensorpack-mask-rcnn/releases/download/v0.0.0-WIP/tensorflow-1.13.0-cp36-cp36m-linux_x86_64.whl && \
     pip install tensorflow-1.13.0-cp36-cp36m-linux_x86_64.whl && \
+    pip install tensorflow-estimator==1.13.0 && \
     rm tensorflow-1.13.0-cp36-cp36m-linux_x86_64.whl
 
 RUN pip install keras h5py
@@ -30,17 +31,8 @@ RUN pip install Cython
 RUN pip install ujson opencv-python pycocotools matplotlib
 RUN pip install --ignore-installed numpy==1.16.2
 
-
-# TODO: Do I really need this now that we are using the DL container?
-ARG CACHEBUST=1
-
 RUN git clone https://github.com/armandmcqueen/tensorpack-mask-rcnn.git /tensorpack-mask-rcnn
-RUN cd /tensorpack-mask-rcnn && git fetch origin 51246e341c8af6cd40dd71acae5b3c57783d568f 
-RUN cd /tensorpack-mask-rcnn && git reset --hard 51246e341c8af6cd40dd71acae5b3c57783d568f 
+RUN cd /tensorpack-mask-rcnn && git fetch origin ec1100d71dea0d597b64f8b4f8f53dc33c8ab79f 
+RUN cd /tensorpack-mask-rcnn && git reset --hard ec1100d71dea0d597b64f8b4f8f53dc33c8ab79f 
 RUN chmod -R +w /tensorpack-mask-rcnn
 RUN pip3 install --ignore-installed -e /tensorpack-mask-rcnn/
-
-
-
-
-

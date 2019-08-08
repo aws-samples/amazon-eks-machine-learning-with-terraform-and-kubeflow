@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.tensorboard.name }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.tensorboard.name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  ports:
+  - port: {{ .Values.tensorboard.port }} 
+    targetPort:  {{ .Values.tensorboard.target_port }}
+  selector:
+    app: {{ .Values.tensorboard.name }}
+  type: LoadBalancer
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{ .Values.tensorboard.name }}
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.tensorboard.name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.tensorboard.name }}
+    spec:
+      volumes:
+      - name: {{ .Values.global.shared_fs }} 
+        persistentVolumeClaim:
+            claimName: {{ .Values.global.shared_pvc }}
+      containers:
+      - name:  {{ .Values.tensorboard.name }}
+        command:
+        - tensorboard
+        args:
+        - --logdir=/{{ .Values.global.shared_fs }}/{{ .Release.Name }}-{{ date "2006-01-02-15-04-05" .Release.Time  }}/train_log/maskrcnn
+        image: {{ .Values.tensorboard.image }} 
+        imagePullPolicy: {{ .Values.tensorboard.image_pull_policy }}
+        ports:
+        - containerPort:  {{ .Values.tensorboard.target_port }}
+        volumeMounts:
+        - mountPath: /{{ .Values.global.shared_fs }}
+          name: {{ .Values.global.shared_fs }}

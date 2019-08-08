@@ -1,16 +1,16 @@
 global:
   namespace: kubeflow
+  shared_fs: efs 
+  shared_pvc: tensorpack-efs-gp-bursting 
 maskrcnn:
   name: maskrcnn-nbc
-  gpus: 8 
+  gpus: 16
   gpus_per_node: 8
-  image: <aws-<account-id>.dkr.ecr.<region>.amazonaws.com/tensorpack-mask-rcnn-optimized:51246e3
+  image:  # ECR image URL
   train_script: /tensorpack-mask-rcnn/MaskRCNN/train.py
   tp_16: 1
   batch_size_per_gpu: 4
-  shared_fs: efs 
   data_fs: efs
-  shared_pvc: tensorpack-efs-gp-bursting 
   data_dir: data
   working_dir:  /tensorpack-mask-rcnn
   images_per_epoch: 120000 

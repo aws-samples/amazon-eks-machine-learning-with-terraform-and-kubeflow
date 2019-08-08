@@ -1,0 +1,6 @@
+tensorboard:
+  name: tensorboard
+  port: 80
+  target_port: 6006
+  image: tensorflow/tensorflow:1.13.2
+  image_pull_policy: IfNotPresent
