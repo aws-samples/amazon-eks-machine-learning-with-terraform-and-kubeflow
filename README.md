@@ -157,29 +157,4 @@ When training is complete, yoy may purge a release by exeucting ```helm del --pu
 
 When you are done with distributed training, you can execute ```terraform destroy``` in ```eks-cluster/terraform/eks-cluster/terraform/aws-eks-nodegroup``` folder to destroy the GPU enabled EKS nodegroup, and then execute ```terraform destroy``` in ```eks-cluster/terraform/aws-eks-cluster``` to destroy EKS cluster. Pass the same arguments to ```terraform destroy``` that you passed in the apply step above when you created the EKS cluster.
 
-## Install ksonnet
-**Deprecated. Ksonnet project is ending. Use Kubeflow MPIJob with Helm charts as described above.**
-
-We will use [Ksonnet](https://github.com/ksonnet/ksonnet) to manage the Kubernetes manifests needed for doing distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example in Amazon EKS. To that end, we need to install Ksonnet client on the machine you just installed EKS kubectl in the previous section.
-
-To install Ksonnet, [download and install a pre-built ksonnet binary](https://github.com/ksonnet/ksonnet/releases) as an executable named ```ks``` under ```/usr/local/bin``` or some other directory in your PATH. If the pre-built binary option does not work for you, please see other [ksonnet install](https://github.com/ksonnet/ksonnet) options.
-
-## Build Ksonnet Application for EKS Training
-**Deprecated. Ksonnet project is ending. Use Kubeflow MPIJob with Helm charts as described above.**
-
-1. In the project folder, customize ```tensorpack.sh``` shell script to specify your IMAGE URL in ECR. You may optionally add an authentication GITHUB_TOKEN. You may customize WORKERS variable to specify number of available WORKER nodes you will like to use for training.
-
-2. Execute: ```./tensorpack.sh``` The output of the script execution is a directory named ```tensorpack``` that contains the tensorpack Ksonnet application. 
-
-3. In tensorpack directory created under your project, execute ```ks show default > /tmp/tensorpack.yaml``` to examine the Kubernetest manifest file corresponding to the Ksonnet appliction.
-
-4. In tensorpack directory created under your project, execute ```ks apply default``` to launch distributed training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) example.
-
-5. Execute: ```kubectl get pods -n kubeflow``` to see the status of the pods
-
-6. Execute: ```kubectl describe pods tensorpack-master -n kubeflow``` if the pods are in pending state
-
-7. Execute: ```kubectl logs -f tensorpack-master -n kubeflow``` to see live log of training
-
-8. Model checkpoints and logs will be placed on shared EFS file system
 
