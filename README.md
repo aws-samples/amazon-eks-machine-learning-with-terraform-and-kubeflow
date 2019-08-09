@@ -119,7 +119,7 @@ This will create a K8s DeamonSet that will run on all EKS worker nodes, pulling 
     kubectl delete DaemonSet replicate-data -n kubeflow
     
 
-## Install Helm and Kubeflow
+## Install Helm
 
 [Helm](https://helm.sh/docs/using_helm/) is package manager for Kubernetes. It uses a package format named *charts*. A Helm chart is a collection of files that define Kubernetes resources. Install helm according to instructions [here](https://helm.sh/docs/using_helm/#installing-helm).
 
@@ -131,9 +131,7 @@ After installing Helm, initalize Helm as described below:
           
   2. Execute ```helm init --service-account tiller --history-max 200```
 
-[Kubeflow](https://www.kubeflow.org/docs/about/kubeflow/) project objective is to simplify the management of Machine Learning workflows on Kubernetes. Follow the [Kubeflow quick start guide](https://www.kubeflow.org/docs/started/getting-started/) to install Kubeflow. Installing Kubeflow is optional for this project.
-
-## Install Helm charts for training using Kubeflow
+## Release Helm charts for training
 
 1. In the ```charts``` folder in this project, execute ```helm install --name mpijob ./mpijob/``` to deploy Kubeflow **MPIJob** *CustomResouceDefintion* in EKS using *mpijob chart*. 
 
@@ -151,6 +149,9 @@ After installing Helm, initalize Helm as described below:
 5. Execute: ```kubectl logs -f maskrcnn-launcher-xxxxx -n kubeflow``` to see live log of training from the launcher (change xxxxx to your specific pod name).
 
 9. Model checkpoints and logs will be placed on the ```shared_fs``` file-system  set in ```values.yaml```, i.e. ```efs``` or ```fsx```.
+
+## Purge Helm charts after training
+When training is complete, yoy may purge a release by exeucting ```helm del --purge maskrcnn```
 
 ## Destroy GPU enabled EKS cluster
 
