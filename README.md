@@ -27,7 +27,7 @@ The high-level outline of steps is as follows:
   
 ## Create GPU Enabled Amazon EKS Cluster
 
-1. [Install Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html)
+1. [Install Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html). 
 2. In ```eks-cluster/terraform/aws-eks-cluster``` folder, run ```terraform init```, ```terraform plan``` and ```terraform apply``` to create an EKS cluster. Customize Terraform variables as appropriate. Use the summary output from ```terraform apply``` for input into following steps. K8s version can be specified using ```-var="k8s_version=x.xx"```. 
 
     Example:
@@ -41,9 +41,9 @@ The high-level outline of steps is as follows:
     
     Example:
     
-    ```terraform plan  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=xxx" -var="subnet_id=xxx" -var="key_pair=xxx" -var="cluster_sg=xxx" -var="nodegroup_name=xxx"```
+    ```terraform plan  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=fs-xxx" -var="subnet_id=subnet-xxx" -var="key_pair=xxx" -var="cluster_sg=sg-xxx" -var="nodegroup_name=xxx"```
     
-     ```terraform apply  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=xxx" -var="subnet_id=xxx" -var="key_pair=xxx" -var="cluster_sg=xxx"  -var="nodegroup_name=xxx"```
+     ```terraform apply  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=fs-xxx" -var="subnet_id=subnet-xxx" -var="key_pair=xxx" -var="cluster_sg=sg-xxx"  -var="nodegroup_name=xxx"```
 
 4. In ```eks-cluster``` directory, execute: ```./install-kubectl-linux.sh``` to install ```kubectl``` on Linux clients. For other operating systems, [install and configure kubectl for EKS](https://docs.aws.amazon.com/eks/latest/userguide/configure-kubectl.html).
 5. Install aws-iam-authenticator (https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html) and make sure the command ```aws-iam-authenticator help``` works. In ```eks-cluster``` directory, customize ```set-cluster.sh``` and execute: ```./update-kubeconfig.sh``` to update kube configuration.
@@ -154,7 +154,7 @@ After installing Helm, initalize Helm as described below:
 
 ## Destroy GPU enabled EKS cluster
 
-When you are done with distributed training, you can execute ```terraform destroy``` in ```eks-cluster/terraform/eks-cluster/terraform/aws-eks-nodegroup``` folder to destroy the GPU enabled EKS nodegroup, and then execute ```terraform destroy``` in ```eks-cluster/terraform/aws-eks-cluster``` to destroy EKS cluster.
+When you are done with distributed training, you can execute ```terraform destroy``` in ```eks-cluster/terraform/eks-cluster/terraform/aws-eks-nodegroup``` folder to destroy the GPU enabled EKS nodegroup, and then execute ```terraform destroy``` in ```eks-cluster/terraform/aws-eks-cluster``` to destroy EKS cluster. Pass the same arguments to ```terraform destroy``` that you passed in the apply step above when you created the EKS cluster.
 
 ## Install ksonnet
 **Deprecated. Ksonnet project is ending. Use Kubeflow MPIJob with Helm charts as described above.**
