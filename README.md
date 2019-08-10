@@ -7,7 +7,9 @@
 
 3. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) so you can launch at least 4 EKS-optimized GPU enabled [Amazon EC2 P3](https://aws.amazon.com/ec2/instance-types/p3/) instances.
 
-3. We need a build environment with [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html), [Terraform](https://www.terraform.io/), and [Docker](https://www.docker.com/) installed. We recommend you launch a *m5.xlarge* Amazon EC2 instance using AWS Deep Learning AMI (Ubuntu) and use this instance as the build environment for this project. All steps described under *Step by step* section below must be executed on the build environment instance.
+4. We need a build environment with [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html), [Terraform](https://www.terraform.io/), and [Docker](https://www.docker.com/) installed. We recommend you launch a *m5.xlarge* Amazon EC2 instance using AWS Deep Learning AMI (Ubuntu) and use this instance as the build environment for this project. All steps described under *Step by step* section below must be executed on the build environment instance.
+
+5. The steps below require various [Amazon IAM](https://aws.amazon.com/iam/) permissions. One option is to use AWS managed [Administrator access policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html#jf_administrator). Another option is to execute a step and if it fails due to lack of IAM permissions, add relevant [AWS managed permissions policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html#jf_administrator) to the IAM user or role and try again.
 
 ## Step by step
 
@@ -62,6 +64,8 @@ We have two shared file system options for staging data for distributed training
 1. [Amazon EFS](https://aws.amazon.com/efs/)
 2. [Amazon FSx Lustre](https://aws.amazon.com/fsx/lustre/)
 
+Below, you only need to create Persistent Volume and Persistent Volume Claim for EFS, or FSx, not both.
+
 ### Persistent Volume for EFS
 
 1. Execute: ```kubectl create namespace kubeflow``` to create kubeflow namespace
@@ -88,7 +92,7 @@ We have two shared file system options for staging data for distributed training
 
 7. Check to see the persistent-volume was successfully bound to peristent-volume-claim by executing: ```kubectl get pv -n kubeflow```
 
-## Build and Upload Docker Image to ECR
+## Build and Upload Docker Image to Amazon EC2 Container Registry (ECR)
 
 We need to package TensorFlow, TensorPack and Horovod in a Docker image and upload the image to Amazon ECR. To that end, in ```container/build_tools``` directory in this project, customize for AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your selected AWS region. 
 
