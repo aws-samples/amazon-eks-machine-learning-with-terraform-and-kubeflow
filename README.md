@@ -143,11 +143,16 @@ After installing Helm, initalize Helm as described below:
 
 9. Model checkpoints and logs will be placed on the ```shared_fs``` file-system  set in ```values.yaml```, i.e. ```efs``` or ```fsx```.
 
+## Tensorboard summaries
+Execute: ```kubectl get services -n kubeflow``` to get Tensorboard service DNS address. Access the Tensorboard DNS service in a browser on port 80 to visualize Tensorboard summaries.
+
 ## Purge Helm charts after training
-When training is complete, yoy may purge a release by exeucting ```helm del --purge maskrcnn```
+When training is complete, yoy may purge a release by exeucting ```helm del --purge maskrcnn```. This will destroy all pods used in training, including Tensorboard service pods. However, the training output will be preserved in the EFS or FSx shared file system used for training.
 
 ## Destroy GPU enabled EKS cluster
 
 When you are done with distributed training, you can execute ```terraform destroy``` in ```eks-cluster/terraform/eks-cluster/terraform/aws-eks-nodegroup``` folder to destroy the GPU enabled EKS nodegroup, and then execute ```terraform destroy``` in ```eks-cluster/terraform/aws-eks-cluster``` to destroy EKS cluster. Pass the same arguments to ```terraform destroy``` that you passed in the apply step above when you created the EKS cluster.
+
+This step will not destroy the shared EFS or FSx file-system used in training.
 
 
