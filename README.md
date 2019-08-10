@@ -102,8 +102,7 @@ To use an [optimized version of MaskRCNN](https://github.com/armandmcqueen/tenso
 go into ```container-optimized/build_tools``` directory in this project, customize AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your default AWS region. 
 
 ## Stage Data
-
-Next, we stage the data that will be later accessed through a persistent volume claim from all the Kubernetes Pods used in distributed TensorFlow training. We have two shared file system options for staging data:
+Next, we stage the data that will be later accessed through a persistent volume claim from all the Kubernetes Pods used in distributed TensorFlow training. We have two shared file system options for staging data: EFS or FSx. We need to use either EFS or FSx, not both. 
 
 ### Use EFS, or FSx
 To stage data on EFS or FSx, customize ```eks-cluster/stage-data.yaml``` and execute ```kubectl apply -f stage-data.yaml -n kubeflow``` to stage data on selected persistent volume claim for EFS or FSX. Use the Docker image you just uploaded to ECR in ```eks-cluster/stage-data.yaml```. To verify data has been staged correctly, custmize ```eks-cluster/attach-pvc.yaml``` and execute following commands:
@@ -111,17 +110,7 @@ To stage data on EFS or FSx, customize ```eks-cluster/stage-data.yaml``` and exe
   ```kubectl apply -f attach-pvc.yaml -n kubeflow```  
   ```kubectl exec attach-pvc -it -n kubeflow -- /bin/bash```  
 
-You will be attached to the EFS or FSx file system persistent volume. Type ```exit``` once you have verified the data.
-
-### Use EBS
-Alternatively, you can replicate data on all EKS worker nodes by customizing and executing 
-
-  ```kubectl apply -f replicate-data.yaml -n kubeflow```
-  
-This will create a K8s DeamonSet that will run on all EKS worker nodes, pulling down data from specififed S3 bucket to ```/ebs``` directory on the host. You can safely delete the DaemonSet once data has been replicated to all nodes:
-  
-    kubectl delete DaemonSet replicate-data -n kubeflow
-    
+You will be attached to the EFS or FSx file system persistent volume. Type ```exit``` once you have verified the data. 
 
 ## Install Helm
 
