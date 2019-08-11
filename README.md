@@ -90,7 +90,7 @@ Below, you only need to create Persistent Volume and Persistent Volume Claim for
 
 6. Execute: ```kubectl apply -n kubeflow -f pvc-kubeflow-fsx.yaml``` to create an EKS persistent-volume-claim
 
-7. Check to see the persistent-volume was successfully bound to peristent-volume-claim by executing: ```kubectl get pv -n kubeflow```
+7. Check to see the persistent-volume was successfully bound to persistent-volume-claim by executing: ```kubectl get pv -n kubeflow```
 
 ## Build and Upload Docker Image to Amazon EC2 Container Registry (ECR)
 
