@@ -26,12 +26,12 @@ spec:
         path: stage-data.sh
       name: stage-data 
   containers:
-  - name: data
+  - name: stage-data
     env:
     - name: S3_BUCKET
       value: my-bucket 
     - name: S3_PREFIX
-      value: my-bucket-prefix 
+      value: mask-rcnn/eks/input 
     - name: STAGE_DIR 
       value: /efs # /efs or /fsx
     command:
