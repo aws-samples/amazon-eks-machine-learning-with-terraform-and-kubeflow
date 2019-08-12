@@ -16,37 +16,34 @@
 While all the concepts described here are quite general, we will make these concepts concrete by focusing on distributed TensorFlow training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model. 
 
 The high-level outline of steps is as follows:
-
-  1. Download [COCO 2017 dataset](http://cocodataset.org/#download) and upload it to an AWS S3 bucket
-  2. Create GPU enabled [Amazon EKS](https://aws.amazon.com/eks/) cluster
-  3. Create [Persistent Volume](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#persistent-volumes) and [Persistent Volume Claim](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#persistentvolumeclaims) for [Amazon EFS](https://aws.amazon.com/efs/) or [Amazon FSx](https://aws.amazon.com/fsx/) file system
-  4. Stage COCO 2017 data for training on Amazon EFS or FSx file system
-  5. Use [Helm charts](https://helm.sh/docs/developing_charts/) to manage training jobs in EKS cluster
-
-## Download COCO 2017 dataset and upload to Amazon S3
-  1. On the build environment instance with ```aws cli``` installed, setup read-write access to your Amazon S3 object store bucket. This typically requires use of [AWS access keys](https://docs.aws.amazon.com/general/latest/gr/aws-access-keys-best-practices.html).
-  2. To download COCO 2017 dataset to your build environment instance and upload it to Amazon S3 bucket, customize ```eks-cluster/prepare-s3-bucket.sh``` script to specify your S3 bucket in ```S3_BUCKET``` variable and execute ```eks-cluster/prepare-s3-bucket.sh ``` 
+  1. Create GPU enabled [Amazon EKS](https://aws.amazon.com/eks/) cluster
+  2. Create [Persistent Volume](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#persistent-volumes) and [Persistent Volume Claim](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#persistentvolumeclaims) for [Amazon EFS](https://aws.amazon.com/efs/) or [Amazon FSx](https://aws.amazon.com/fsx/) file system
+  3. Stage COCO 2017 data for training on Amazon EFS or FSx file system
+  4. Use [Helm charts](https://helm.sh/docs/developing_charts/) to manage training jobs in EKS cluster 
   
 ## Create GPU Enabled Amazon EKS Cluster
 
 1. [Install Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html). 
-2. In ```eks-cluster/terraform/aws-eks-cluster``` folder, run ```terraform init```, ```terraform plan``` and ```terraform apply``` to create an EKS cluster. Customize Terraform variables as appropriate. Use the summary output from ```terraform apply``` for input into following steps. K8s version can be specified using ```-var="k8s_version=x.xx"```. 
+2. In ```eks-cluster/terraform/aws-eks-cluster``` folder, execute:
 
-    Example:
+    ```terraform init```
     
     ```terraform plan -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]'```
     
     ```terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]'```
-3. In ```eks-cluster/terraform/aws-eks-nodegroup``` folder, run ```terraform init```, ```terraform plan``` and ```terraform  apply``` to create an EKS cluster nodegroup. Customize Terraform variables as appropriate. Use the output for input into     following steps. 
+   
+    Customize Terraform variables as appropriate. K8s version can be specified using ```-var="k8s_version=x.xx"```. Save the output of the apply command for next step below.
+   
+3. In ```eks-cluster/terraform/aws-eks-nodegroup``` folder, using the output of previous ```terraform apply``` as inputs into this step, execute:
 
-   *To create more than one nodegroup in an EKS cluster, copy ```eks-cluster/terraform/aws-eks-nodegroup``` folder to a new folder under ```eks-cluster/terraform/``` and specify a unique value for ```nodegroup_name``` variable.*
-    
-    Example:
+   ```terraform init```
     
     ```terraform plan  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=fs-xxx" -var="subnet_id=subnet-xxx" -var="key_pair=xxx" -var="cluster_sg=sg-xxx" -var="nodegroup_name=xxx"```
     
      ```terraform apply  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=fs-xxx" -var="subnet_id=subnet-xxx" -var="key_pair=xxx" -var="cluster_sg=sg-xxx"  -var="nodegroup_name=xxx"```
 
+    *To create more than one nodegroup in an EKS cluster, copy ```eks-cluster/terraform/aws-eks-nodegroup``` folder to a new folder under ```eks-cluster/terraform/``` and specify a unique value for ```nodegroup_name``` variable.*
+    
 4. In ```eks-cluster``` directory, execute: ```./install-kubectl-linux.sh``` to install ```kubectl``` on Linux clients. For other operating systems, [install and configure kubectl for EKS](https://docs.aws.amazon.com/eks/latest/userguide/configure-kubectl.html).
 5. Install aws-iam-authenticator (https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html) and make sure the command ```aws-iam-authenticator help``` works. In ```eks-cluster``` directory, customize ```set-cluster.sh``` and execute: ```./update-kubeconfig.sh``` to update kube configuration.
 
@@ -94,7 +91,7 @@ Below, you only need to create Persistent Volume and Persistent Volume Claim for
 
 ## Build and Upload Docker Image to Amazon EC2 Container Registry (ECR)
 
-We need to package TensorFlow, TensorPack and Horovod in a Docker image and upload the image to Amazon ECR. To that end, in ```container/build_tools``` directory in this project, customize for AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your selected AWS region. 
+We need to package TensorFlow, TensorPack and Horovod in a Docker image and upload the image to Amazon ECR. To that end, in ```container/build_tools``` directory in this project, customize for AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your selected AWS region. Note the ECR URL as you will need it in later steps.
 
 ### Optimized MaskRCNN
 
@@ -102,10 +99,13 @@ To use an [optimized version of MaskRCNN](https://github.com/armandmcqueen/tenso
 go into ```container-optimized/build_tools``` directory in this project, customize AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your default AWS region. 
 
 ## Stage Data
-Next, we stage the data that will be later accessed through a persistent volume claim from all the Kubernetes Pods used in distributed TensorFlow training. We have two shared file system options for staging data: EFS or FSx. We need to use either EFS or FSx, not both. 
+
+To download COCO 2017 dataset to your build environment instance and upload it to Amazon S3 bucket, customize ```eks-cluster/prepare-s3-bucket.sh``` script to specify your S3 bucket in ```S3_BUCKET``` variable and execute ```eks-cluster/prepare-s3-bucket.sh ``` 
+ 
+Next, we stage the data on EFS or FSx file-system. We need to use either EFS or FSx below, not both. 
 
 ### Use EFS, or FSx
-To stage data on EFS or FSx, customize ```eks-cluster/stage-data.yaml``` and execute ```kubectl apply -f stage-data.yaml -n kubeflow``` to stage data on selected persistent volume claim for EFS or FSX. Use the Docker image you just uploaded to ECR in ```eks-cluster/stage-data.yaml```. To verify data has been staged correctly, custmize ```eks-cluster/attach-pvc.yaml``` and execute following commands:
+To stage data on EFS or FSx, set ```image``` in ```eks-cluster/stage-data.yaml``` to the ECR URL you noted above and execute ```kubectl apply -f stage-data.yaml -n kubeflow``` to stage data on selected persistent volume claim for EFS or FSX. This step may take several minutes. To verify data has been staged correctly, custmize ```eks-cluster/attach-pvc.yaml``` and execute following commands:
 
   ```kubectl apply -f attach-pvc.yaml -n kubeflow```  
   ```kubectl exec attach-pvc -it -n kubeflow -- /bin/bash```  
@@ -143,7 +143,7 @@ After installing Helm, initalize Helm as described below:
 
 9. Model checkpoints and logs will be placed on the ```shared_fs``` file-system  set in ```values.yaml```, i.e. ```efs``` or ```fsx```.
 
-## Tensorboard summaries
+## Visualize Tensorboard summaries
 Execute: ```kubectl get services -n kubeflow``` to get Tensorboard service DNS address. Access the Tensorboard DNS service in a browser on port 80 to visualize Tensorboard summaries.
 
 ## Purge Helm charts after training
@@ -151,7 +151,7 @@ When training is complete, yoy may purge a release by exeucting ```helm del --pu
 
 ## Destroy GPU enabled EKS cluster
 
-When you are done with distributed training, you can execute ```terraform destroy``` in ```eks-cluster/terraform/aws-eks-nodegroup``` folder to destroy the GPU enabled EKS nodegroup, and then execute ```terraform destroy``` in ```eks-cluster/terraform/aws-eks-cluster``` to destroy EKS cluster. Pass the same arguments to ```terraform destroy``` commands that you passed in the ```terraform apply``` commands, respectively.
+When you are done with distributed training, in ```eks-cluster/terraform/aws-eks-nodegroup``` folder, execute ```terraform destroy```  with same arguments as ```terraform apply``` above to destroy the GPU enabled EKS nodegroup, and then similarly execute ```terraform destroy``` in ```eks-cluster/terraform/aws-eks-cluster``` to destroy EKS cluster. 
 
 This step will not destroy the shared EFS or FSx file-system used in training.
 
