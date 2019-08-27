@@ -95,7 +95,7 @@ We need to package TensorFlow, TensorPack and Horovod in a Docker image and uplo
 
 ### Optimized MaskRCNN
 
-To use an [optimized version of MaskRCNN](https://github.com/armandmcqueen/tensorpack-mask-rcnn), 
+To use an [optimized version of MaskRCNN](https://github.com/aws-samples/mask-rcnn-tensorflow), 
 go into ```container-optimized/build_tools``` directory in this project, customize AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your default AWS region. 
 
 ## Stage Data
@@ -131,7 +131,7 @@ After installing Helm, initalize Helm as described below:
 1. In the ```charts``` folder in this project, execute ```helm install --name mpijob ./mpijob/``` to deploy Kubeflow **MPIJob** *CustomResouceDefintion* in EKS using *mpijob chart*. 
 
 2. 
-    a) In the ```charts/maskrcnn``` folder in this project, customize ```image```, ```data_fs```, ```shared_fs``` and ```shared_pvc``` variables in ```valuex.yaml```. Set ```image``` to ECR docker image URL you built and uploaded in a previous step. Set ```shared_fs``` to ```efs``` or ```fsx```, as applicable. Set ```data_fs``` to ```efs```, ```fsx``` or ```ebs```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume you created in relevant k8s namespace. 
+    a) In the ```charts/maskrcnn``` folder in this project, customize ```image```, ```data_fs```, ```shared_fs``` and ```shared_pvc``` variables in ```values.yaml```. Set ```image``` to ECR docker image URL you built and uploaded in a previous step. Set ```shared_fs``` to ```efs``` or ```fsx```, as applicable. Set ```data_fs``` to ```efs```, ```fsx``` or ```ebs```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume you created in relevant k8s namespace. 
 
     b) To use an optimized version of MaskRCNN under active development, in the ```charts/maskrcnn-optimized``` folder in this project, customize ```image```, ```data_fs```, ```shared_fs``` and ```shared_pvc``` variables in ```valuex.yaml```. Set ```image``` to the optimized MaskRCNN ECR docker image URL you built and uploaded in a previous step. Set ```shared_fs``` to ```efs``` or ```fsx```, as applicable. Set ```data_fs``` to ```efs```, ```fsx``` or ```ebs```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume you created in relevant k8s namespace.  
 
