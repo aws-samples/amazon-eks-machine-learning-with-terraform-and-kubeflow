@@ -3,16 +3,16 @@ global:
   shared_fs: efs 
   shared_pvc: tensorpack-efs-gp-bursting 
 maskrcnn:
-  name: maskrcnn-nbc
-  gpus: 16
+  name: mask-rcnn-tensorflow
+  gpus: 32
   gpus_per_node: 8
-  image:  # ECR image URL
-  train_script: /tensorpack-mask-rcnn/MaskRCNN/train.py
+  image: 807253771232.dkr.ecr.us-east-1.amazonaws.com/mask-rcnn-tensorflow:latest # ECR image URL
+  train_script: /mask-rcnn-tensorflow/MaskRCNN/train.py
   tp_16: 1
   batch_size_per_gpu: 4
   data_fs: efs
   data_dir: data
-  working_dir:  /tensorpack-mask-rcnn
+  working_dir:  /mask-rcnn-tensorflow
   images_per_epoch: 120000 
   lr_epoch_schedule: "[(16, 0.1), (20, 0.01), (24, None)]"
   eval_period_in_epochs: 24

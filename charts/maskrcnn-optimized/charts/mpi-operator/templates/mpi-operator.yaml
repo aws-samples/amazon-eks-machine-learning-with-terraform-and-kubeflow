@@ -2,6 +2,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: {{ .Values.mpioperator.name }}
+  namespace: {{ .Values.global.namespace }}
   labels:
     app.kubernetes.io/name: {{ .Values.mpioperator.name }}
     app.kubernetes.io/instance: {{ .Release.Name }}
