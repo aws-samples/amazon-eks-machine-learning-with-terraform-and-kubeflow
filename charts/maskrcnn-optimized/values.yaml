@@ -4,7 +4,7 @@ global:
   shared_pvc: tensorpack-efs-gp-bursting 
 maskrcnn:
   name: mask-rcnn-tensorflow
-  gpus: 16
+  gpus: 32
   gpus_per_node: 8
   image: # ECR image URL
   train_script: /mask-rcnn-tensorflow/MaskRCNN/train.py
