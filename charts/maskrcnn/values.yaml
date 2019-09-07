@@ -4,13 +4,13 @@ global:
   shared_pvc: tensorpack-efs-gp-bursting
 maskrcnn:
   name: maskrcnn
-  gpus: 32
+  gpus: 16
   gpus_per_node: 8
   image: # ECR image id 
   train_script: /tensorpack/examples/FasterRCNN/train.py
   data_fs: efs
   data_dir: data
-  steps_per_epoch: 3750  # Must be equal to 120000/gpus 
+  steps_per_epoch: 7500  # Must be equal to 120000/gpus 
   lr_schedule: "[240000,320000,360000]"
   eval_period_in_epochs: 1
   data_train: "[\"coco_train2017\"]"
