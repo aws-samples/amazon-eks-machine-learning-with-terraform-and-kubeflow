@@ -1,4 +1,4 @@
 #!/bin/bash
 
-export EKS_CLUSTER=eks-cluster-1
-export AWS_REGION=us-east-1
+export EKS_CLUSTER=my-eks-cluster
+export AWS_REGION=us-west-2
