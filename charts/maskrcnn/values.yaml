@@ -4,7 +4,7 @@ global:
   shared_pvc: tensorpack-efs-gp-bursting
 maskrcnn:
   name: maskrcnn
-  gpus: 16
+  gpus: 32
   gpus_per_node: 8
   image: # ECR image id 
   train_script: /tensorpack/examples/FasterRCNN/train.py
