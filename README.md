@@ -91,12 +91,12 @@ Below, you only need to create Persistent Volume and Persistent Volume Claim for
 
 ## Build and Upload Docker Image to Amazon EC2 Container Registry (ECR)
 
-We need to package TensorFlow, TensorPack and Horovod in a Docker image and upload the image to Amazon ECR. To that end, in ```container/build_tools``` directory in this project, customize for AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your selected AWS region. Note the ECR URL as you will need it in later steps.
+We need to package TensorFlow, TensorPack and Horovod in a Docker image and upload the image to Amazon ECR. To that end, in ```container/build_tools``` directory in this project, customize for AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your selected AWS region, which by default is the region configured in your default [AWS CLI profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) and may not be us-west-2, the assumed region for this tutorial. Save the ECR URL of the pushed image for later steps.
 
 ### Optimized MaskRCNN
 
 To use an [optimized version of MaskRCNN](https://github.com/aws-samples/mask-rcnn-tensorflow), 
-go into ```container-optimized/build_tools``` directory in this project, customize AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your default AWS region. 
+go into ```container-optimized/build_tools``` directory in this project, customize AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your default AWS region, which by default is the region configured in your default [AWS CLI profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) and may not be us-west-2, the assumed region for this tutorial. Save the ECR URL of the pushed image for later steps. 
 
 ## Stage Data
 
