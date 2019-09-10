@@ -105,7 +105,11 @@ To download COCO 2017 dataset to your build environment instance and upload it t
 Next, we stage the data on EFS or FSx file-system. We need to use either EFS or FSx below, not both. 
 
 ### Use EFS, or FSx
-To stage data on EFS or FSx, set ```image``` in ```eks-cluster/stage-data.yaml``` to the ECR URL you noted above and execute ```kubectl apply -f stage-data.yaml -n kubeflow``` to stage data on selected persistent volume claim for EFS (default), or FSX. Customize persistent volume claim in ```eks-cluster/stage-data.yaml``` to use FSx. 
+To stage data on EFS or FSx, set ```image``` in ```eks-cluster/stage-data.yaml``` to the ECR URL you noted above, customize ```S3_BUCKET``` variable and execute:
+
+  ```kubectl apply -f stage-data.yaml -n kubeflow``` 
+  
+to stage data on selected persistent volume claim for EFS (default), or FSX. Customize persistent volume claim in ```eks-cluster/stage-data.yaml``` to use FSx. 
 
 Execute ```kubectl get pods -n kubeflow``` to check the status of ```stage-data``` Pod. Once the status of ```stage-data``` Pod is marked ```Completed```,  execute following commands to verify data has been staged correctly:
 
