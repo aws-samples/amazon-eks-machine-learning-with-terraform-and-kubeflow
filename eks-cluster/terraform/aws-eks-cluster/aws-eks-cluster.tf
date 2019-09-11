@@ -19,7 +19,7 @@ variable "cluster_name" {
 
 variable "k8s_version" {
   description = "kubernetes version"
-  default = "1.11"
+  default = "1.13"
   type    = "string"
 }
 

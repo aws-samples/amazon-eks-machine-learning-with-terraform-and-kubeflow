@@ -81,9 +81,21 @@ variable "eks_gpu_ami" {
     description = "See https://docs.aws.amazon.com/eks/latest/userguide/gpu-ami.html. Must match k8s version."
     type = "map"
     default = {
-        "us-east-1"  = "ami-06ec2ea207616c078"
-        "us-east-2"  = "ami-0e6993a35aae3407b"
-        "us-west-2"  = "ami-08377056d89909b2a"
+        "us-east-1"  = "ami-0b2f191b2ddb13526"
+        "us-east-2"  = "ami-080eaa48408e4cce8"
+        "us-west-2"  = "ami-0842679a8337cad05"
+        "ap-east-1" = "ami-0a63a7853310f3111"
+        "ap-south-1" = "ami-0e80f1d31941f6010"
+        "ap-northeast-1" = "ami-0a443fa8decd2df67"
+        "ap-northeast-2" = "ami-019966f3e72baba33"
+	"ap-southeast-1" = "ami-07f34d09a8d7fe5a4"
+	"ap-southeast-2" = "ami-03563e56d0af30647"
+        "eu-central-1" = "ami-0e262bd06b1cbc1d6"
+        "eu-west-1" = "ami-05cded29b25d50f91"
+        "eu-west-2" = "ami-0163f3b1681613866"
+        "eu-west-3" = "ami-0bc7f58961988d81e"
+        "eu-north-1" = "ami-0b219ca1c6aa2f7fb"
+        "me-south-1" = "ami-0dd405f6294e0414d"
     }
 }
 
