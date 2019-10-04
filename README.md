@@ -28,8 +28,6 @@ The high-level outline of steps is as follows:
 
     ```terraform init```
     
-    ```terraform plan -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="k8s_version=1.13" ```
-    
     ```terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="k8s_version=1.13" ```
    
     Customize Terraform variables as appropriate. K8s version can be specified using ```-var="k8s_version=x.xx"```. Save the output of the apply command for next step below.
@@ -37,10 +35,10 @@ The high-level outline of steps is as follows:
 3. In ```eks-cluster/terraform/aws-eks-nodegroup``` folder, using the output of previous ```terraform apply``` as inputs into this step, execute:
 
    ```terraform init```
-    
-    ```terraform plan  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=fs-xxx" -var="subnet_id=subnet-xxx" -var="key_pair=xxx" -var="cluster_sg=sg-xxx" -var="nodegroup_name=xxx"```
-    
-     ```terraform apply  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=fs-xxx" -var="subnet_id=subnet-xxx" -var="key_pair=xxx" -var="cluster_sg=sg-xxx"  -var="nodegroup_name=xxx"```
+   
+   The next command requires an [Amazon EC2 key pair](https://docs.aws.amazon.com/en_pv/AWSEC2/latest/UserGuide/ec2-key-pairs.html). If you have not already created an EC2 key pair, create one before executing the command below:
+   
+   ```terraform apply  -var="profile=default"  -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var="efs_id=fs-xxx" -var="subnet_id=subnet-xxx" -var="key_pair=xxx" -var="cluster_sg=sg-xxx"  -var="nodegroup_name=xxx"```
 
     *To create more than one nodegroup in an EKS cluster, copy ```eks-cluster/terraform/aws-eks-nodegroup``` folder to a new folder under ```eks-cluster/terraform/``` and specify a unique value for ```nodegroup_name``` variable.*
     
