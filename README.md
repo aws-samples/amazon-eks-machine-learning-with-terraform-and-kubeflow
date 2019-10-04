@@ -23,6 +23,26 @@ The high-level outline of steps is as follows:
   
 ## Create GPU Enabled Amazon EKS Cluster
 
+### Quick start option
+
+This option creates an Amazon EKS cluster with one worker node group. This is the recommended option for walking through this tutorial.
+
+1. In ```eks-cluster``` directory, execute: ```./install-kubectl-linux.sh``` to install ```kubectl``` on Linux clients. 
+
+    For non-linux operating systems, [install and configure kubectl for EKS](https://docs.aws.amazon.com/eks/latest/userguide/configure-kubectl.html), and install [aws-iam-authenticator](https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html) and make sure the command ```aws-iam-authenticator help``` works. 
+
+2. [Install Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html). 
+3. In ```eks-cluster/terraform/aws-eks-cluster-and-nodegroup``` folder, execute:
+
+      ```terraform init```
+    
+    The next command requires an [Amazon EC2 key pair](https://docs.aws.amazon.com/en_pv/AWSEC2/latest/UserGuide/ec2-key-pairs.html). If you have not already created an EC2 key pair, create one before executing the command below:
+    
+     ```terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="k8s_version=1.13" -var="key_pair=xxx" ```
+
+### Advanced option
+This option separates the creation of the EKS cluster from the worker node group. You can create the EKS cluster and later add one or more worker node groups to the cluster.
+
 1. [Install Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html). 
 2. In ```eks-cluster/terraform/aws-eks-cluster``` folder, execute:
 
@@ -43,7 +63,7 @@ The high-level outline of steps is as follows:
     *To create more than one nodegroup in an EKS cluster, copy ```eks-cluster/terraform/aws-eks-nodegroup``` folder to a new folder under ```eks-cluster/terraform/``` and specify a unique value for ```nodegroup_name``` variable.*
     
 4. In ```eks-cluster``` directory, execute: ```./install-kubectl-linux.sh``` to install ```kubectl``` on Linux clients. For other operating systems, [install and configure kubectl for EKS](https://docs.aws.amazon.com/eks/latest/userguide/configure-kubectl.html).
-5. Install aws-iam-authenticator (https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html) and make sure the command ```aws-iam-authenticator help``` works. In ```eks-cluster``` directory, customize ```set-cluster.sh``` and execute: ```./update-kubeconfig.sh``` to update kube configuration.
+5. Install [aws-iam-authenticator](https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html) and make sure the command ```aws-iam-authenticator help``` works. In ```eks-cluster``` directory, customize ```set-cluster.sh``` and execute: ```./update-kubeconfig.sh``` to update kube configuration.
 
     *Ensure that you have at least version 1.16.73 of the AWS CLI installed. Your system's Python version must be Python 3, or Python 2.7.9 or greater.*
 
