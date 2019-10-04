@@ -175,7 +175,13 @@ When training is complete, yoy may purge a release by exeucting ```helm del --pu
 
 ## Destroy GPU enabled EKS cluster
 
-When you are done with distributed training, in ```eks-cluster/terraform/aws-eks-nodegroup``` folder, execute ```terraform destroy```  with same arguments as ```terraform apply``` above to destroy the GPU enabled EKS nodegroup, and then similarly execute ```terraform destroy``` in ```eks-cluster/terraform/aws-eks-cluster``` to destroy EKS cluster. 
+When you are done with distributed training, you can destory the EKS cluster and worker node group.
+
+### Quick start option
+If you used the quick start option above to create the EKS cluster and worker node group, then in ```eks-cluster/terraform/aws-eks-cluster-and-nodegroup``` fodler, execute ```terraform destroy```  with the same arguments you used with ```terraform apply``` above.
+
+### Advanced option
+In ```eks-cluster/terraform/aws-eks-nodegroup``` folder, execute ```terraform destroy```  with the same arguments you used with ```terraform apply``` above to destroy the worker node group, and then similarly execute ```terraform destroy``` in ```eks-cluster/terraform/aws-eks-cluster``` to destroy EKS cluster. 
 
 This step will not destroy the shared EFS or FSx file-system used in training.
 
