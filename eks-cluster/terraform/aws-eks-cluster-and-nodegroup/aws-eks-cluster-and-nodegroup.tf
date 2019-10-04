@@ -490,7 +490,6 @@ locals {
   EKS Cluster NodeGroup Summary: 
   	node security group: ${aws_security_group.node_sg.id} 
   	node instance role arn: ${aws_iam_role.node_role.arn}
-ws_efs_file_system.fs.id}
   EFS Summary:
   	file system id: ${aws_efs_file_system.fs.id}
   	dns: ${aws_efs_file_system.fs.id}.efs.${var.region}.amazonaws.com
