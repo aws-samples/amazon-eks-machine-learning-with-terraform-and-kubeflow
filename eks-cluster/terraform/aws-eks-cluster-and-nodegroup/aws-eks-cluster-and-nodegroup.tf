@@ -473,7 +473,7 @@ resource "local_file" "aws_auth" {
   filename = "/tmp/aws-auth.yaml"
 
   provisioner "local-exec" {
-    command = "kubectl apply -f /tmp/aws-auth.yaml ; kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/master/nvidia-device-plugin.yml"
+    command = "kubectl apply -f /tmp/aws-auth.yaml ; kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/1.0.0-beta2/nvidia-device-plugin.yml"
   }
 
 }
@@ -490,7 +490,6 @@ locals {
   EKS Cluster NodeGroup Summary: 
   	node security group: ${aws_security_group.node_sg.id} 
   	node instance role arn: ${aws_iam_role.node_role.arn}
-ws_efs_file_system.fs.id}
   EFS Summary:
   	file system id: ${aws_efs_file_system.fs.id}
   	dns: ${aws_efs_file_system.fs.id}.efs.${var.region}.amazonaws.com
