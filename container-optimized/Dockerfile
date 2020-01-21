@@ -29,6 +29,7 @@ RUN rm -rf /root/.ssh/ && \
   cp /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys && \
   printf "Host *\n  StrictHostKeyChecking no\n" >> /root/.ssh/config
 
+RUN pip install numpy==1.17.5
 RUN pip install awscli
 RUN pip install boto3
 RUN pip install ujson==1.35
@@ -43,4 +44,4 @@ RUN cd /mask-rcnn-tensorflow && git fetch origin 153442bc70b06e59f2bbeadc4d359b2
 RUN cd /mask-rcnn-tensorflow && git reset --hard 153442bc70b06e59f2bbeadc4d359b240f64cbc2
 
 RUN chmod -R +w /mask-rcnn-tensorflow
-RUN pip install --ignore-installed -e /mask-rcnn-tensorflow/
+RUN pip install -e /mask-rcnn-tensorflow/
