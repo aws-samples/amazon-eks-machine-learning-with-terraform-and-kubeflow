@@ -81,21 +81,19 @@ variable "eks_gpu_ami" {
     description = "See https://docs.aws.amazon.com/eks/latest/userguide/gpu-ami.html. Must match k8s version."
     type = "map"
     default = {
-        "us-east-1"  = "ami-0b2f191b2ddb13526"
-        "us-east-2"  = "ami-080eaa48408e4cce8"
-        "us-west-2"  = "ami-0842679a8337cad05"
-        "ap-east-1" = "ami-0a63a7853310f3111"
-        "ap-south-1" = "ami-0e80f1d31941f6010"
-        "ap-northeast-1" = "ami-0a443fa8decd2df67"
-        "ap-northeast-2" = "ami-019966f3e72baba33"
-	"ap-southeast-1" = "ami-07f34d09a8d7fe5a4"
-	"ap-southeast-2" = "ami-03563e56d0af30647"
-        "eu-central-1" = "ami-0e262bd06b1cbc1d6"
-        "eu-west-1" = "ami-05cded29b25d50f91"
-        "eu-west-2" = "ami-0163f3b1681613866"
-        "eu-west-3" = "ami-0bc7f58961988d81e"
-        "eu-north-1" = "ami-0b219ca1c6aa2f7fb"
-        "me-south-1" = "ami-0dd405f6294e0414d"
+	"us-east-1"  = "ami-0730212bffaa1732a",
+ 	"us-east-2"  = "ami-095e1b9737cfe76bc",
+	"us-west-2"  = "ami-0ad9a8dc09680cfc2",
+	"ap-south-1"  = "ami-08a65b6849b5d0131",
+	"ap-northeast-1" = "ami-0e4846cf3cb2440e5",
+	"ap-northeast-2" = "ami-0bfd27f77f9bf86b3",
+	"ap-southeast-1" = "ami-024a58dc3e6f0d78b",
+	"ap-southeast-2" = "ami-0b24ff00f0fb4b71f",
+	"eu-central-1" = "ami-08b45c59715f94f5f",
+ 	"eu-west-1" =  "ami-03b8e736123fd2b9b",
+	"eu-west-2" = "ami-03a9c642e26334ac0",
+ 	"eu-west-3" = "ami-05e2c706ec723b102",
+	"eu-north-1"  = "ami-06f065fbe98f1b3a5"
     }
 }
 
