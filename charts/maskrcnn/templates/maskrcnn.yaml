@@ -58,6 +58,7 @@ spec:
         - BACKBONE.WEIGHTS=/{{ .Values.maskrcnn.data_fs }}/{{ .Values.maskrcnn.backbone_weights }}
         - BACKBONE.NORM={{ .Values.maskrcnn.backbone_norm }}
         - TRAINER=horovod
+        - {{ .Values.maskrcnn.extra_config }}
         image: {{ .Values.maskrcnn.image }} 
         imagePullPolicy: {{ .Values.maskrcnn.image_pull_policy }}
         volumeMounts:
