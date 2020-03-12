@@ -31,3 +31,5 @@ RUN pip install numba
 RUN apt install unzip
 
 ADD notebooks /notebooks
+
+RUN openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 -keyout /labs-key.key -out /labs-cert.pem -subj "/CN=mask-rcnn/emailAddress=admin@example.com/C=US/ST=Washington/L=Seattle/O=Amazon/OU=AWS"
