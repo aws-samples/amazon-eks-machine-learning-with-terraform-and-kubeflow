@@ -47,8 +47,8 @@ spec:
         - --logdir 
         - /{{ .Values.global.shared_fs }}/{{ .Release.Name }}-{{ date "2006-01-02-15-04-05" .Release.Time  }}/train_log/maskrcnn
         - --config  
-        - MODE_MASK={{ .Values.maskrcnn.mode_fpn }}
-        - MODE_FPN={{ .Values.maskrcnn.mode_mask }}
+        - MODE_MASK={{ .Values.maskrcnn.mode_mask }}
+        - MODE_FPN={{ .Values.maskrcnn.mode_fpn }}
         - DATA.BASEDIR=/{{ .Values.maskrcnn.data_fs }}/{{ .Values.maskrcnn.data_dir }}
         - DATA.TRAIN={{ .Values.maskrcnn.data_train }} 
         - DATA.VAL={{ .Values.maskrcnn.data_val }}

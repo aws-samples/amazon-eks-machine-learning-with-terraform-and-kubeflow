@@ -53,8 +53,8 @@ spec:
         - --images_per_epoch
         - "{{ .Values.maskrcnn.images_per_epoch }}"
         - --config  
-        - MODE_MASK={{ .Values.maskrcnn.mode_fpn }}
-        - MODE_FPN={{ .Values.maskrcnn.mode_mask }}
+        - MODE_MASK={{ .Values.maskrcnn.mode_mask }}
+        - MODE_FPN={{ .Values.maskrcnn.mode_fpn }}
         - DATA.BASEDIR=/{{ .Values.maskrcnn.data_fs }}/{{ .Values.maskrcnn.data_dir }}
         - DATA.TRAIN={{ .Values.maskrcnn.data_train }} 
         - DATA.VAL={{ .Values.maskrcnn.data_val }}
