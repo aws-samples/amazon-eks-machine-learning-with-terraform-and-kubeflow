@@ -52,3 +52,6 @@ spec:
         volumeMounts:
         - mountPath: /{{ .Values.global.shared_fs }}
           name: {{ .Values.global.shared_fs }}
+        resources:
+          limits:
+            nvidia.com/gpu: 1
