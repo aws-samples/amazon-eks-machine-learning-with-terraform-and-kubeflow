@@ -108,11 +108,13 @@ Below, you only need to create Persistent Volume and Persistent Volume Claim for
 
 ## Build and Upload Docker Image to Amazon EC2 Container Registry (ECR)
 
-We need to package [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) and relevant frameworks and libraries in a Docker image and upload the image to Amazon ECR. To that end, in ```container/build_tools``` directory in this project, customize for AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your selected AWS region, which by default is the region configured in your default [AWS CLI profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) and may not be ```us-west-2```, which is the assumed region for this tutorial. Save the ECR URI of the pushed image for later steps.
+### Tensorpack MaskRCNN
 
-### Optimized MaskRCNN
+To train [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, go into ```container/build_tools``` directory, customize AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your selected AWS region, which by default is the region configured in your default [AWS CLI profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) and may not be ```us-west-2```, which is the assumed region for this tutorial. Save the ECR URI of the pushed image for later steps.
 
-To use [AWS MaskRCNN](https://github.com/aws-samples/mask-rcnn-tensorflow), 
+### AWS MaskRCNN
+
+To train [AWS MaskRCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) model, 
 go into ```container-optimized/build_tools``` directory in this project, customize AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your default AWS region, which by default is the region configured in your default [AWS CLI profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) and may not be ```us-west-2```,  which is the assumed region for this tutorial. Save the ECR URI of the pushed image for later steps. 
 
 ## Stage Data
@@ -158,9 +160,9 @@ After installing Helm, initalize Helm as described below:
 
 2. You have three options for training Mask-RCNN model:
 
-    a) To train [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, in the ```charts/maskrcnn``` folder, customize variables in ```values.yaml```. At a minimum, set ```image``` to ECR docker image URL you built and uploaded in a previous step. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume you created in relevant k8s namespace. 
+    a) To train [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, in the ```charts/maskrcnn``` folder, customize variables in ```values.yaml```. At a minimum, set ```image``` to Tensorpack MaskRCNN image ECR URI you built and uploaded in a previous step. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume you created in relevant k8s namespace. 
 
-    b) To train [AWS MaskRCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, in the ```charts/maskrcnn-optimized``` folder in this project, customize variables in ```valuex.yaml```. At a minimum, set ```image``` to the optimized MaskRCNN ECR docker image URL you built and uploaded in a previous step. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume you created in relevant k8s namespace.  
+    b) To train [AWS MaskRCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, in the ```charts/maskrcnn-optimized``` folder in this project, customize variables in ```valuex.yaml```. At a minimum, set ```image``` to the AWS MaskRCNN ECR image URI you built and uploaded in a previous step. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume you created in relevant k8s namespace.  
 
     c) *To create a brand new Helm chart for defining a new MPIJOb, copy ```maskrcnn``` folder to a new folder under ```charts```. Update the chart name in ```Chart.yaml```. Update the ```namespace``` global variable  in ```values.yaml``` to specify a new K8s namespace.*
 
