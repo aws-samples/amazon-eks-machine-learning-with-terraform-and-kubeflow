@@ -31,14 +31,14 @@ This option creates an Amazon EKS cluster with one worker node group. This is th
 
     For non-linux operating systems, [install and configure kubectl for EKS](https://docs.aws.amazon.com/eks/latest/userguide/configure-kubectl.html), and install [aws-iam-authenticator](https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html) and make sure the command ```aws-iam-authenticator help``` works. 
 
-2. [Install Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html). 
+2. [Install Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html). Terraform configuration files in this repository are consistent with Terraform v0.13.0 syntax. 
 3. In ```eks-cluster/terraform/aws-eks-cluster-and-nodegroup``` folder, execute:
 
       ```terraform init```
     
     The next command requires an [Amazon EC2 key pair](https://docs.aws.amazon.com/en_pv/AWSEC2/latest/UserGuide/ec2-key-pairs.html). If you have not already created an EC2 key pair, create one before executing the command below:
     
-     ```terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="k8s_version=1.14" -var="key_pair=xxx" ```
+     ```terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="k8s_version=1.17" -var="key_pair=xxx" ```
 
 ### Advanced option
 This option separates the creation of the EKS cluster from the worker node group. You can create the EKS cluster and later add one or more worker node groups to the cluster.
@@ -48,7 +48,7 @@ This option separates the creation of the EKS cluster from the worker node group
 
     ```terraform init```
     
-    ```terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="k8s_version=1.14" ```
+    ```terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="k8s_version=1.17" ```
    
     Customize Terraform variables as appropriate. K8s version can be specified using ```-var="k8s_version=x.xx"```. Save the output of the apply command for next step below.
    
@@ -67,9 +67,8 @@ This option separates the creation of the EKS cluster from the worker node group
 
     *Ensure that you have at least version 1.16.73 of the AWS CLI installed. Your system's Python version must be Python 3, or Python 2.7.9 or greater.*
 
-6. [Upgrade Amazon CNI Plugin for Kubernetes](https://docs.aws.amazon.com/eks/latest/userguide/cni-upgrades.html), if needed (optional step)
-7. In ```eks-cluster``` directory, customize *NodeInstanceRole* in ```aws-auth-cm.yaml``` and execute: ```./apply-aws-auth-cm.sh``` to allow worker nodes to join EKS cluster. Note, if this is not your first EKS node group, you must add the new node instance role Amazon Resource Name (ARN) to ```aws-auth-cm.yaml```, while preserving the existing role ARNs in ```aws-auth-cm.yaml```. 
-8. In ```eks-cluster``` directory, execute: ```./apply-nvidia-plugin.sh``` to create NVIDIA-plugin daemon set
+6. In ```eks-cluster``` directory, customize *NodeInstanceRole* in ```aws-auth-cm.yaml``` and execute: ```./apply-aws-auth-cm.sh``` to allow worker nodes to join EKS cluster. Note, if this is not your first EKS node group, you must add the new node instance role Amazon Resource Name (ARN) to ```aws-auth-cm.yaml```, while preserving the existing role ARNs in ```aws-auth-cm.yaml```. 
+7. In ```eks-cluster``` directory, execute: ```./apply-nvidia-plugin.sh``` to create NVIDIA-plugin daemon set
 
 
 ## Create EKS Persistent Volume
@@ -109,12 +108,12 @@ Below, you only need to create Persistent Volume and Persistent Volume Claim for
 
 ## Build and Upload Docker Image to Amazon EC2 Container Registry (ECR)
 
-We need to package TensorFlow, TensorPack and Horovod in a Docker image and upload the image to Amazon ECR. To that end, in ```container/build_tools``` directory in this project, customize for AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your selected AWS region, which by default is the region configured in your default [AWS CLI profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) and may not be us-west-2, the assumed region for this tutorial. Save the ECR URL of the pushed image for later steps.
+We need to package [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) and relevant frameworks and libraries in a Docker image and upload the image to Amazon ECR. To that end, in ```container/build_tools``` directory in this project, customize for AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your selected AWS region, which by default is the region configured in your default [AWS CLI profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) and may not be ```us-west-2```, which is the assumed region for this tutorial. Save the ECR URI of the pushed image for later steps.
 
 ### Optimized MaskRCNN
 
-To use an [optimized version of MaskRCNN](https://github.com/aws-samples/mask-rcnn-tensorflow), 
-go into ```container-optimized/build_tools``` directory in this project, customize AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your default AWS region, which by default is the region configured in your default [AWS CLI profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) and may not be us-west-2, the assumed region for this tutorial. Save the ECR URL of the pushed image for later steps. 
+To use [AWS MaskRCNN](https://github.com/aws-samples/mask-rcnn-tensorflow), 
+go into ```container-optimized/build_tools``` directory in this project, customize AWS region and execute: ```./build_and_push.sh``` shell script. This script creates and uploads the required Docker image to Amazon ECR in your default AWS region, which by default is the region configured in your default [AWS CLI profile](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html) and may not be ```us-west-2```,  which is the assumed region for this tutorial. Save the ECR URI of the pushed image for later steps. 
 
 ## Stage Data
 
@@ -138,8 +137,9 @@ You will be attached to the EFS or FSx file system persistent volume. Type ```ex
 
 ## Install Helm
 
-[Helm](https://helm.sh/docs/using_helm/) is package manager for Kubernetes. It uses a package format named *charts*. A Helm chart is a collection of files that define Kubernetes resources. Install helm according to instructions [here](https://helm.sh/docs/using_helm/#installing-helm).
+[Helm](https://helm.sh/) is package manager for Kubernetes. It uses a package format named *charts*. A Helm chart is a collection of files that define Kubernetes resources. Install helm according to instructions [here](https://helm.sh/docs/intro/install/).
 
+### For Helm version 2.x only
 After installing Helm, initalize Helm as described below:
   1. In ```eks-cluster``` folder, execute ```kubectl create -f tiller-rbac-config.yaml```. You should see following two messages:
   
@@ -148,18 +148,26 @@ After installing Helm, initalize Helm as described below:
           
   2. Execute ```helm init --service-account tiller --history-max 200```
 
-## Release Helm charts for training
+## Install Helm charts to begin model training
 
-1. In the ```charts``` folder in this project, execute ```helm install --name mpijob ./mpijob/``` to deploy Kubeflow **MPIJob** *CustomResouceDefintion* in EKS using *mpijob chart*. 
+1. In the ```charts``` folder, deploy Kubeflow **MPIJob** *CustomResouceDefintion* using *mpijob chart*:
 
-2. 
-    a) In the ```charts/maskrcnn``` folder in this project, customize ```image```, ```data_fs```, ```shared_fs``` and ```shared_pvc``` variables in ```values.yaml```. Set ```image``` to ECR docker image URL you built and uploaded in a previous step. Set ```shared_fs``` to ```efs``` or ```fsx```, as applicable. Set ```data_fs``` to ```efs```, ```fsx``` or ```ebs```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume you created in relevant k8s namespace. 
+        helm install --debug mpijob ./mpijob/  # (Helm version 3.x)
+        helm install --debug --name mpijob ./mpijob/  # (Helm version 2.x)
+    
 
-    b) To use an optimized version of MaskRCNN under active development, in the ```charts/maskrcnn-optimized``` folder in this project, customize ```image```, ```data_fs```, ```shared_fs``` and ```shared_pvc``` variables in ```valuex.yaml```. Set ```image``` to the optimized MaskRCNN ECR docker image URL you built and uploaded in a previous step. Set ```shared_fs``` to ```efs``` or ```fsx```, as applicable. Set ```data_fs``` to ```efs```, ```fsx``` or ```ebs```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume you created in relevant k8s namespace.  
+2. You have three options for training Mask-RCNN model:
+
+    a) To train [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, in the ```charts/maskrcnn``` folder, customize variables in ```values.yaml```. At a minimum, set ```image``` to ECR docker image URL you built and uploaded in a previous step. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume you created in relevant k8s namespace. 
+
+    b) To train [AWS MaskRCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, in the ```charts/maskrcnn-optimized``` folder in this project, customize variables in ```valuex.yaml```. At a minimum, set ```image``` to the optimized MaskRCNN ECR docker image URL you built and uploaded in a previous step. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume you created in relevant k8s namespace.  
 
     c) *To create a brand new Helm chart for defining a new MPIJOb, copy ```maskrcnn``` folder to a new folder under ```charts```. Update the chart name in ```Chart.yaml```. Update the ```namespace``` global variable  in ```values.yaml``` to specify a new K8s namespace.*
 
-3. In the ```charts``` folder in this project, execute ```helm install --name maskrcnn ./maskrcnn/``` to create the MPI Operator Deployment resource and also define an MPIJob resource for Mask-RCNN Training. 
+3. In the ```charts``` folder, install the selected Helm chart, for example:
+
+          helm install --debug maskrcnn ./maskrcnn/  # (Helm version 3.x)
+          helm install --debug --name maskrcnn ./maskrcnn/  # (Helm version 2.x)
 
 4. Execute: ```kubectl get pods -n kubeflow``` to see the status of the pods
 
