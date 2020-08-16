@@ -94,7 +94,9 @@ Below, you only need to create Persistent Volume and Persistent Volume Claim for
 
 ### Persistent Volume for FSx
 
-1. [Install K8s Container Storage Interface (CS) driver for Amazon FSx Lustre file system](https://github.com/aws/csi-driver-amazon-fsx) in your EKS cluster
+1. Install K8s Container Storage Interface (CS) driver for Amazon FSx Lustre file system:
+
+        kubectl apply -k "github.com/kubernetes-sigs/aws-fsx-csi-driver/deploy/kubernetes/overlays/stable/?ref=master"
 
 2. Execute: ```kubectl create namespace kubeflow``` to create kubeflow namespace
 
