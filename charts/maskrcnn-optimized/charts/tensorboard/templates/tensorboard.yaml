@@ -1,30 +1,34 @@
+---
 apiVersion: v1
 kind: Service
 metadata:
   name: {{ .Values.tensorboard.name }}
   namespace: {{ .Values.global.namespace }}
-  labels:
-    app.kubernetes.io/name: {{ .Values.tensorboard.name }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-access-log-enabled: "false"
+    service.beta.kubernetes.io/aws-load-balancer-connection-draining-enabled: "false"
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
 spec:
   ports:
-  - port: {{ .Values.tensorboard.port }} 
+  - protocol: TCP
+    port: {{ .Values.tensorboard.port }} 
     targetPort:  {{ .Values.tensorboard.target_port }}
   selector:
     app: {{ .Values.tensorboard.name }}
   type: LoadBalancer
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Values.tensorboard.name }}
   namespace: {{ .Values.global.namespace }}
   labels:
-    app.kubernetes.io/name: {{ .Values.tensorboard.name }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app: {{ .Values.tensorboard.name }}
 spec:
+  replicas: 1
+  selector:
+    matchLabels:
+     app: {{ .Values.tensorboard.name }}
   template:
     metadata:
       labels:

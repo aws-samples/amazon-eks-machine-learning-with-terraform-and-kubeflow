@@ -111,20 +111,16 @@ metadata:
   name: {{ .Values.mpioperator.name }}
   namespace: {{ .Values.global.namespace }}
   labels:
-    app.kubernetes.io/name: {{ .Values.mpioperator.name }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app: {{ .Values.mpioperator.name }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-     app.kubernetes.io/name: {{ .Values.mpioperator.name }}
+     app: {{ .Values.mpioperator.name }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: {{ .Values.mpioperator.name }}
-        app.kubernetes.io/instance: {{ .Release.Name }}
-        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app: {{ .Values.mpioperator.name }}
     spec:
       containers:
       - args:

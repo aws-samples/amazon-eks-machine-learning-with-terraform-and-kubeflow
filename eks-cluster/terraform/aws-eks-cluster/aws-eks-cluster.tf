@@ -3,70 +3,70 @@
 variable "credentials" {
  description = "path to the aws credentials file"
  default = "~/.aws/credentials"
- type    = "string"
+ type    = string
 }
 
 variable "profile" {
  description = "name of the aws config profile"
  default = "default"
- type    = "string"
+ type    = string
 }
 
 variable "cluster_name" {
   description = "unique name of the eks cluster"
-  type    = "string"
+  type    = string
 }
 
 variable "k8s_version" {
   description = "kubernetes version"
-  default = "1.14"
-  type    = "string"
+  default = "1.17"
+  type    = string
 }
 
 variable "region" {
  description = "name of aws region to use"
- type    = "string"
+ type    = string
 }
 
 variable "azs" {
  description = "list of aws availabilty zones in aws region"
- type = "list"
+ type = list
 }
 
 
 variable "cidr_vpc" {
  description = "RFC 1918 CIDR range for EKS cluster VPC"
  default = "192.168.0.0/16"
- type    = "string"
+ type    = string
 }
 
 variable "cidr_subnet" {
  description = "RFC 1918 CIDR range list for EKS cluster VPC subnets"
  default = ["192.168.64.0/18", "192.168.128.0/18", "192.168.192.0/18"]
- type    = "list"
+ type    = list 
 }
 
 variable "efs_performance_mode" {
    default = "generalPurpose"
-   type = "string"
+   type = string
 }
 
 variable "efs_throughput_mode" {
    description = "EFS performance mode"
    default = "bursting"
-   type = "string"
+   type = string
 }
 
 # END variables
 
 provider "aws" {
-  region                  = "${var.region}"
-  shared_credentials_file = "${var.credentials}"
-  profile                 = "${var.profile}"
+  region                  = var.region
+  shared_credentials_file = var.credentials
+  profile                 = var.profile
 }
 
 resource "aws_vpc" "vpc" {
-  cidr_block = "${var.cidr_vpc}"
+  cidr_block = var.cidr_vpc
   enable_dns_support = true
   enable_dns_hostnames  = true
 
@@ -77,11 +77,11 @@ resource "aws_vpc" "vpc" {
 }
 
 resource "aws_subnet" "subnet" {
-  count = "${length(var.azs)}" 
+  count = length(var.azs) 
 
-  availability_zone = "${var.azs[count.index]}"
-  cidr_block        = "${var.cidr_subnet[count.index]}"
-  vpc_id            = "${aws_vpc.vpc.id}"
+  availability_zone = var.azs[count.index]
+  cidr_block        = var.cidr_subnet[count.index]
+  vpc_id            = aws_vpc.vpc.id
 
   tags = {
     Name = "${var.cluster_name}-subnet-${count.index}",
@@ -90,7 +90,7 @@ resource "aws_subnet" "subnet" {
 }
 
 resource "aws_internet_gateway" "igw" {
-  vpc_id = "${aws_vpc.vpc.id}"
+  vpc_id = aws_vpc.vpc.id
 
   tags = {
     Name = "${var.cluster_name}-igw"
@@ -98,11 +98,11 @@ resource "aws_internet_gateway" "igw" {
 }
 
 resource "aws_route_table" "rt" {
-  vpc_id = "${aws_vpc.vpc.id}"
+  vpc_id = aws_vpc.vpc.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = "${aws_internet_gateway.igw.id}"
+    gateway_id = aws_internet_gateway.igw.id
   }
 
   tags = {
@@ -111,10 +111,10 @@ resource "aws_route_table" "rt" {
 }
 
 resource "aws_route_table_association" "rta" {
-  count = "${length(var.azs)}" 
+  count = length(var.azs) 
 
-  subnet_id      = "${aws_subnet.subnet.*.id[count.index]}"
-  route_table_id = "${aws_route_table.rt.id}"
+  subnet_id      = aws_subnet.subnet.*.id[count.index]
+  route_table_id = aws_route_table.rt.id
 }
 
 
@@ -139,18 +139,18 @@ POLICY
 
 resource "aws_iam_role_policy_attachment" "cluster_AmazonEKSClusterPolicy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-  role       = "${aws_iam_role.cluster_role.name}"
+  role       = aws_iam_role.cluster_role.name
 }
 
 resource "aws_iam_role_policy_attachment" "cluster_AmazonEKSServicePolicy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSServicePolicy"
-  role       = "${aws_iam_role.cluster_role.name}"
+  role       = aws_iam_role.cluster_role.name
 }
 
 resource "aws_security_group" "cluster_sg" {
   name = "${var.cluster_name}-cluster-sg"
   description = "Cluster communication with worker nodes"
-  vpc_id      = "${aws_vpc.vpc.id}"
+  vpc_id      = aws_vpc.vpc.id
 
   egress {
     from_port   = 0
@@ -168,37 +168,36 @@ resource "aws_security_group_rule" "cluster_ingress_self" {
   description              = "Allow cluster control plabe to communicate with each other"
   from_port                = 0
   protocol                 = "-1"
-  security_group_id        = "${aws_security_group.cluster_sg.id}"
-  source_security_group_id = "${aws_security_group.cluster_sg.id}"
+  security_group_id        = aws_security_group.cluster_sg.id
+  source_security_group_id = aws_security_group.cluster_sg.id
   to_port                  = 65535
   type                     = "ingress"
 }
 
 resource "aws_efs_file_system" "fs" {
 
- performance_mode = "${var.efs_performance_mode}"
- 
- throughput_mode = "${var.efs_throughput_mode}"
+ performance_mode = var.efs_performance_mode
+ throughput_mode = var.efs_throughput_mode
 
 
   tags = {
-    Name = "${var.cluster_name}"
+    Name = var.cluster_name
   }
 }
 
 resource "aws_eks_cluster" "eks_cluster" {
-  name            = "${var.cluster_name}"
-  role_arn        = "${aws_iam_role.cluster_role.arn}"
-  version	  = "${var.k8s_version}"
+  name            = var.cluster_name
+  role_arn        = aws_iam_role.cluster_role.arn
+  version	  = var.k8s_version
 
   vpc_config {
-    security_group_ids = ["${aws_security_group.cluster_sg.id}"]
-    subnet_ids         = flatten(["${aws_subnet.subnet.*.id}"])
+    security_group_ids = [aws_security_group.cluster_sg.id]
+    subnet_ids         = flatten([aws_subnet.subnet.*.id])
   }
 
   depends_on = [
-    "aws_iam_role_policy_attachment.cluster_AmazonEKSClusterPolicy",
-    "aws_iam_role_policy_attachment.cluster_AmazonEKSServicePolicy",
+    aws_iam_role_policy_attachment.cluster_AmazonEKSClusterPolicy,
+    aws_iam_role_policy_attachment.cluster_AmazonEKSServicePolicy,
   ]
 }
 
@@ -229,7 +228,7 @@ users:
       args:
         - "token"
         - "-i"
-        - "${var.cluster_name}"
+        - var.cluster_name
 KUBECONFIG
 }
 
@@ -251,6 +250,6 @@ SUMMARY
 }
 
 output "summary" {
-  value = "${local.summary}"
+  value = local.summary
 }
 
