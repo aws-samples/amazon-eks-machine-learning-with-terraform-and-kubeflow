@@ -4,14 +4,17 @@ metadata:
   name: tensorpack-fsx
 spec:
   capacity:
-    storage: 7Pi
+    storage: 1200Gi 
   volumeMode: Filesystem
   accessModes:
     - ReadWriteMany
+  mountOptions:
+    - noatime
+    - flock
   persistentVolumeReclaimPolicy: Retain
-  storageClassName: fsx-sc
   csi:
     driver: fsx.csi.aws.com
     volumeHandle: <fsx-file-system-id>
     volumeAttributes:
       dnsname: <fsx-file-system-id>.fsx.<aws-region>.amazonaws.com
+      mountname: <fsx-mount-name>
