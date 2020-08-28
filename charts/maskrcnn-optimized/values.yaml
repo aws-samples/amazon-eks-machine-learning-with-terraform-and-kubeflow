@@ -2,6 +2,7 @@ global:
   namespace: kubeflow
   shared_fs: efs 
   shared_pvc: tensorpack-efs-gp-bursting 
+  source_cidr: "0.0.0.0/0"
 maskrcnn:
   name: mask-rcnn-tensorflow
   gpus: 16

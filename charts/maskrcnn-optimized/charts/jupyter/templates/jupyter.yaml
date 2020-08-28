@@ -8,6 +8,7 @@ metadata:
     service.beta.kubernetes.io/aws-load-balancer-access-log-enabled: "false"
     service.beta.kubernetes.io/aws-load-balancer-connection-draining-enabled: "false"
     service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-internal: "false"
 spec:
   ports:
   - protocol: TCP
@@ -16,6 +17,8 @@ spec:
   selector:
     app: {{ .Values.jupyter.name }}
   type: LoadBalancer
+  loadBalancerSourceRanges:
+  - {{ .Values.global.source_cidr }}
 ---
 apiVersion: apps/v1
 kind: Deployment
