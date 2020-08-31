@@ -37,7 +37,7 @@ spec:
     command:
     -  sh 
     - /etc/config/stage-data.sh
-    image: # use image with aws cli support  
+    image: amazon/aws-cli # use image with aws cli support
     imagePullPolicy: IfNotPresent
     volumeMounts:
     - mountPath: /etc/config
