@@ -4,6 +4,7 @@ RUN apt update
 RUN apt install -y python3-opencv
 RUN pip install --upgrade pip
 
+RUN pip install --upgrade pip
 RUN pip install numpy==1.17.5
 RUN pip install awscli
 RUN pip install boto3
@@ -15,8 +16,8 @@ RUN pip install matplotlib==3.0.3
 RUN pip install markdown==3.1
 
 RUN git clone https://github.com/tensorpack/tensorpack.git /tensorpack
-RUN cd /tensorpack && git fetch origin 9c1b1b7b200a66fe93afd00a47f3f198bb4e1393 
-RUN cd /tensorpack && git reset --hard 9c1b1b7b200a66fe93afd00a47f3f198bb4e1393 
+RUN cd /tensorpack && git fetch origin fb9c4fdf843890cbaf90c9ba50b3ccbb5144ccaf 
+RUN cd /tensorpack && git reset --hard fb9c4fdf843890cbaf90c9ba50b3ccbb5144ccaf 
 RUN pip install -e /tensorpack 
 ### Install Jupyter notebook and lab for viz
 RUN pip install jupyterlab

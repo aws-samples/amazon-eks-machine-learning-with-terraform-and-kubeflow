@@ -15,6 +15,6 @@ RUN pip install matplotlib==3.0.3
 RUN pip install markdown==3.1
 
 RUN git clone https://github.com/tensorpack/tensorpack.git /tensorpack
-RUN cd /tensorpack && git fetch origin 9c1b1b7b200a66fe93afd00a47f3f198bb4e1393 
-RUN cd /tensorpack && git reset --hard 9c1b1b7b200a66fe93afd00a47f3f198bb4e1393 
+RUN cd /tensorpack && git fetch origin fb9c4fdf843890cbaf90c9ba50b3ccbb5144ccaf 
+RUN cd /tensorpack && git reset --hard fb9c4fdf843890cbaf90c9ba50b3ccbb5144ccaf 
 RUN pip install -e /tensorpack 
