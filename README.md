@@ -7,7 +7,7 @@
 
 3. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) so you can launch at least 4 EKS-optimized GPU enabled [Amazon EC2 P3](https://aws.amazon.com/ec2/instance-types/p3/) instances.
 
-4. Create an [AWS Service role for an EC2 instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_terms-and-concepts.html#iam-term-service-role-ec2) and add [AWS managed policy for power user access](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html#jf_developer-power-user) to this IAM Role.
+4. Create an [AWS Service role for an EC2 instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_terms-and-concepts.html#iam-term-service-role-ec2) and add [AWS managed policy for Administrator access](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html#jf_administratorhttps://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html#jf_administrator) to this IAM Role.
 
 5. We need a build environment with [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html) and [Docker](https://www.docker.com/) installed. [Launch a *m5.xlarge* Amazon EC2 instance](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/LaunchingAndUsingInstances.html) from an [AWS Deep Learning AMI](https://aws.amazon.com/machine-learning/amis/) (Ubuntu) using an [EC2 instance profile](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html) containing the Role created in Step 4. All steps described under *Step by step* section below must be executed on this build environment instance.
 
@@ -38,7 +38,7 @@ This option creates an Amazon EKS cluster with one worker node group. This is th
     
     The next command requires an [Amazon EC2 key pair](https://docs.aws.amazon.com/en_pv/AWSEC2/latest/UserGuide/ec2-key-pairs.html). If you have not already created an EC2 key pair, create one before executing the command below:
     
-     ```terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="k8s_version=1.17" -var="key_pair=xxx" ```
+     ```terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="k8s_version=1.18" -var="key_pair=xxx" ```
 
 ### Advanced option
 This option separates the creation of the EKS cluster from the worker node group. You can create the EKS cluster and later add one or more worker node groups to the cluster.
@@ -48,7 +48,7 @@ This option separates the creation of the EKS cluster from the worker node group
 
     ```terraform init```
     
-    ```terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="k8s_version=1.17" ```
+    ```terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="k8s_version=1.18" ```
    
     Customize Terraform variables as appropriate. K8s version can be specified using ```-var="k8s_version=x.xx"```. Save the output of the apply command for next step below.
    
