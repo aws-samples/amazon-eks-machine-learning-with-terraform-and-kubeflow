@@ -33,7 +33,7 @@ variable "cluster_sg" {
 }
 
 variable "subnet_id" {
-  description = "subnet id for ndoe group"
+  description = "subnet id for node group"
   type = string
 }
 
@@ -81,19 +81,19 @@ variable "eks_gpu_ami" {
     description = "See https://docs.aws.amazon.com/eks/latest/userguide/gpu-ami.html. Must match k8s version."
     type = map
     default = {
-	"us-east-1"  = "ami-0730212bffaa1732a",
- 	"us-east-2"  = "ami-095e1b9737cfe76bc",
-	"us-west-2"  = "ami-0ad9a8dc09680cfc2",
-	"ap-south-1"  = "ami-08a65b6849b5d0131",
-	"ap-northeast-1" = "ami-0e4846cf3cb2440e5",
-	"ap-northeast-2" = "ami-0bfd27f77f9bf86b3",
-	"ap-southeast-1" = "ami-024a58dc3e6f0d78b",
-	"ap-southeast-2" = "ami-0b24ff00f0fb4b71f",
-	"eu-central-1" = "ami-08b45c59715f94f5f",
- 	"eu-west-1" =  "ami-03b8e736123fd2b9b",
-	"eu-west-2" = "ami-03a9c642e26334ac0",
- 	"eu-west-3" = "ami-05e2c706ec723b102",
-	"eu-north-1"  = "ami-06f065fbe98f1b3a5"
+	"us-east-1"  = "ami-0179e21ea7e527ed8",
+ 	"us-east-2"  = "ami-01a5c47bddfdb9bd5",
+	"us-west-2"  = "ami-08ebae7136fbcd741",
+	"ap-south-1"  = "ami-0f0b5d169137f6bc4",
+	"ap-northeast-1" = "ami-02ca6fa576d97830d",
+	"ap-northeast-2" = "ami-034c2145072475546",
+	"ap-southeast-1" = "ami-0ce3af9c7b0bac054",
+	"ap-southeast-2" = "ami-03489a904de6f1eb9",
+	"eu-central-1" = "ami-05c1f265f13072095",
+ 	"eu-west-1" =  "ami-0fa5fe8d7e7f79b4d",
+	"eu-west-2" = "ami-09153a6aa68629b45",
+ 	"eu-west-3" = "ami-039efaca7539ffc5d",
+	"eu-north-1"  = "ami-0c472747bb797d8b8"
     }
 }
 

@@ -19,7 +19,7 @@ variable "cluster_name" {
 
 variable "k8s_version" {
   description = "kubernetes version"
-  default = "1.17"
+  default = "1.18"
   type    = string
 }
 
@@ -85,6 +85,7 @@ resource "aws_subnet" "subnet" {
 
   tags = {
     Name = "${var.cluster_name}-subnet-${count.index}",
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   }
 
 }
