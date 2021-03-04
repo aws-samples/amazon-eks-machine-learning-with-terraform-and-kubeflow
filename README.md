@@ -112,12 +112,20 @@ Below, you only need to create Persistent Volume and Persistent Volume Claim for
 
 ### Tensorpack Mask-RCNN
 
-To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, go into ```container/build_tools``` directory, customize AWS region in ```./build_and_push.sh``` and execute the shell script. This script builds and pushes the Tensorpack MaskRCNN container image to Amazon ECR.
+#### Training Image
+To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, go into ```container/build_tools``` directory, customize AWS region in ```./build_and_push.sh```, and execute the shell script. This script builds and pushes the Tensorpack MaskRCNN  *training* image to Amazon ECR. Note the ECR URI output from the script: You will need it in steps below.
+
+#### Testing Image
+To test the trained model, go into ```container-viz/build_tools``` directory, customize AWS region in ```./build_and_push.sh```, and execute the shell script. This script builds and pushes the container *testing* image for testing the model using a Jupyter Lab. Note the ECR URI output from the script: You will need it in steps below.
 
 ### AWS Mask-RCNN
 
+#### Training Image
 To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) model, 
-go into ```container-optimized/build_tools``` directory, customize AWS region in ```./build_and_push.sh``` and execute the shell script. This script builds and pushes the AWS Mask-RCNN container image to Amazon ECR. 
+go into ```container-optimized/build_tools``` directory, customize AWS region in ```./build_and_push.sh``` and execute the shell script. This script builds and pushes the AWS Mask-RCNN *training* image to Amazon ECR. Note the ECR URI output from the script: You will need it in steps below.
+
+#### Testing Image
+To test the trained model, go into ```container-optimized-viz/build_tools``` directory, customize AWS region in ```./build_and_push.sh```, and execute the shell script. This script builds and pushes the image for *testing* the model using a Jupyter Lab. Note the ECR URI output from the script: You will need it in steps below.
 
 ## Stage Data
 
@@ -162,9 +170,9 @@ After installing Helm, initalize Helm as described below:
 
 2. You have three options for training Mask-RCNN model:
 
-    a) To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize ```values.yaml``` in the ```charts/maskrcnn``` directory. At a minimum, set ```image``` to Tensorpack Mask-RCNN image ECR URI you built and uploaded in a previous step. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume claim you created in relevant k8s namespace. 
+    a) To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize ```values.yaml``` in the ```charts/maskrcnn``` directory. At a minimum, set ```image``` to Tensorpack Mask-RCNN *training* image ECR URI you built and pushed in a previous step. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume claim you created in relevant k8s namespace. To test the trained model using a Jupyter Lab notebook, customize ```values.yaml``` in the ```charts/maskrcnn/charts/jupyter``` directory. At a minimum, set ```image``` to Tensorpack Mask-RCNN *testing* image ECR URI you built and pushed in a previous step.
 
-    b) To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, customize ```valuex.yaml``` in ```charts/maskrcnn-optimized``` directory. At a minimum, set ```image``` to the AWS Mask-RCNN ECR image URI you built and uploaded in a previous step. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume claim you created in relevant k8s namespace.  
+    b) To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, customize ```valuex.yaml``` in ```charts/maskrcnn-optimized``` directory. At a minimum, set ```image``` to the AWS Mask-RCNN ECR *training* image URI you built and pushed in a previous step. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the k8s persistent volume claim you created in relevant k8s namespace. To test the trained model using a Jupyter Lab notebook, customize ```values.yaml``` in the ```charts/maskrcnn-optimized/charts/jupyter``` directory. At a minimum, set ```image``` to AWS Mask-RCNN *testing* image ECR URI you built and pushed in a previous step.  
 
     c) *To create a brand new Helm chart for defining a new MPIJOb, copy ```maskrcnn``` folder to a new folder under ```charts```. Update the chart name in ```Chart.yaml```. Update the ```namespace``` global variable  in ```values.yaml``` to specify a new K8s namespace.*
 
@@ -182,8 +190,19 @@ After installing Helm, initalize Helm as described below:
 ## Visualize Tensorboard summaries
 Execute: ```kubectl get services -n kubeflow``` to get Tensorboard service DNS address. Access the Tensorboard DNS service in a browser on port 80 to visualize Tensorboard summaries.
 
+## Test trained model
+After  model training is complete, and ```kubectl get pods -n kubeflow``` command output shows that ```jupyter``` pod is ```Running```, execute ```kubectl logs -f jupyter-xxxxx -n kubeflow``` to display Jupyter pod log. In case you have just enough GPUs needed for training, Jupyter pod will remain ```Pending``` until training is complete, because it needs 1 GPU to run.  
+
+At the beginning of the Jupyter pod log, note the **security token** required to access Jupyter service in a browser. 
+
+Execute ```kubectl get services -n kubeflow``` to get Jupyter service DNS address. To test the trained model using a Jupyter Lab notebook, access the Jupyter service in a browser on port 443 using the security token provided in the pod log. Your URL to access the Jupyter service should look similar to the example below:
+
+  https://xxxxxxxxxxxxxxxxxxxxxxxxx.elb.xx-xxxx-x.amazonaws.com/lab?token=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  
+Accessing Jupyter service in a browser will display a browser warning, because the service endpoint uses a self-signed certificate. Ignore the warning and proceed to access the service. Open the notebook under ```notebook``` folder, and run it it to test the trained model.
+
 ## Purge Helm charts after training
-When training is complete, yoy may purge a release by exeucting ```helm del --purge maskrcnn```. This will destroy all pods used in training, including Tensorboard service pods. However, the training output will be preserved in the EFS or FSx shared file system used for training.
+When training is complete, you may purge a release by exeucting ```helm del --purge maskrcnn```. This will destroy all pods used in training, including Tensorboard and Jupyter service pods. However, the training output will be preserved in the shared file system used for training.
 
 ## Destroy GPU enabled EKS cluster
 
