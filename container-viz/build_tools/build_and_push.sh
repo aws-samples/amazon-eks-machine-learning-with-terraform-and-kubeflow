@@ -49,3 +49,9 @@ docker tag ${image} ${fullname}
 # Get the login command from ECR and execute it directly
 $(aws ecr get-login --region ${region} --no-include-email)
 docker push ${fullname}
+if [ $? -eq 0 ]; then
+	echo "Amazon ECR URI: ${fullname}"
+else
+	echo "Error: Image build and push failed"
+	exit 1
+fi
