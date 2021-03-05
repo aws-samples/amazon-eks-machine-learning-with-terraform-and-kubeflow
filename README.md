@@ -122,7 +122,7 @@ For training image, execute:
 #### Testing Image
 For testing image, execute:
 
-    ./container-viz/build_tools/build_and_push.sh <aws-execute>
+    ./container-viz/build_tools/build_and_push.sh <aws-region>
 
 ### AWS Mask-RCNN
 Below, we build and push the Docker images for [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) model. Note the ECR URI output from executing the scripts: You will need it in steps below.
@@ -159,23 +159,13 @@ You will be attached to the EFS or FSx file system persistent volume. Type ```ex
 
 ## Install Helm
 
-[Helm](https://helm.sh/) is package manager for Kubernetes. It uses a package format named *charts*. A Helm chart is a collection of files that define Kubernetes resources. Install helm according to instructions [here](https://helm.sh/docs/intro/install/).
-
-### For Helm version 2.x only
-After installing Helm, initalize Helm as described below:
-  1. In ```eks-cluster``` folder, execute ```kubectl create -f tiller-rbac-config.yaml```. You should see following two messages:
-  
-          serviceaccount "tiller" created  
-          clusterrolebinding "tiller" created  
-          
-  2. Execute ```helm init --service-account tiller --history-max 200```
+[Helm](https://helm.sh/) is package manager for Kubernetes. It uses a package format named *charts*. A Helm chart is a collection of files that define Kubernetes resources. Install helm version 3.x or later according to instructions [here](https://helm.sh/docs/intro/install/).
 
 ## Install Helm charts to begin model training
 
 1. In the ```charts``` folder, deploy Kubeflow **MPIJob** *CustomResouceDefintion* using *mpijob chart*:
 
         helm install --debug mpijob ./mpijob/  # (Helm version 3.x)
-        helm install --debug --name mpijob ./mpijob/  # (Helm version 2.x)
     
 
 2. You have three options for training Mask-RCNN model:
@@ -189,7 +179,6 @@ After installing Helm, initalize Helm as described below:
 3. In the ```charts``` folder, install the selected Helm chart, for example:
 
           helm install --debug maskrcnn ./maskrcnn/  # (Helm version 3.x)
-          helm install --debug --name maskrcnn ./maskrcnn/  # (Helm version 2.x)
 
 4. Execute: ```kubectl get pods -n kubeflow``` to see the status of the pods
 
