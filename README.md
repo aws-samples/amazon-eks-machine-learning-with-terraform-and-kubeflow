@@ -112,20 +112,30 @@ Below, you only need to create Persistent Volume and Persistent Volume Claim for
 
 ### Tensorpack Mask-RCNN
 
+Below, we build and push the Docker images for [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model. Note the ECR URI output from executing the scripts: You will need it in steps below.
+
 #### Training Image
-To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, go into ```container/build_tools``` directory, customize AWS region in ```./build_and_push.sh```, and execute the shell script. This script builds and pushes the Tensorpack MaskRCNN  *training* image to Amazon ECR. Note the ECR URI output from the script: You will need it in steps below.
+For training image, execute:
+
+    ./container/build_tools/build_and_push.sh <aws-region>
 
 #### Testing Image
-To test the trained model, go into ```container-viz/build_tools``` directory, customize AWS region in ```./build_and_push.sh```, and execute the shell script. This script builds and pushes the container *testing* image for testing the model using a Jupyter Lab. Note the ECR URI output from the script: You will need it in steps below.
+For testing image, execute:
+
+    ./container-viz/build_tools/build_and_push.sh <aws-execute>
 
 ### AWS Mask-RCNN
+Below, we build and push the Docker images for [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) model. Note the ECR URI output from executing the scripts: You will need it in steps below.
 
 #### Training Image
-To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) model, 
-go into ```container-optimized/build_tools``` directory, customize AWS region in ```./build_and_push.sh``` and execute the shell script. This script builds and pushes the AWS Mask-RCNN *training* image to Amazon ECR. Note the ECR URI output from the script: You will need it in steps below.
+For training image, execute:
+
+    ./container-optimized/build_tools/build_and_push.sh <aws-region>
 
 #### Testing Image
-To test the trained model, go into ```container-optimized-viz/build_tools``` directory, customize AWS region in ```./build_and_push.sh```, and execute the shell script. This script builds and pushes the image for *testing* the model using a Jupyter Lab. Note the ECR URI output from the script: You will need it in steps below.
+For testing image, execute:
+
+    ./container-optimized-viz/build_tools/build_and_push.sh <aws-region>
 
 ## Stage Data
 
