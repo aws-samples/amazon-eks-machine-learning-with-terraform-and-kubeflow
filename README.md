@@ -112,20 +112,30 @@ Below, you only need to create Persistent Volume and Persistent Volume Claim for
 
 ### Tensorpack Mask-RCNN
 
+Below, we build and push the Docker images for [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model. Note the ECR URI output from executing the scripts: You will need it in steps below.
+
 #### Training Image
-To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, go into ```container/build_tools``` directory, customize AWS region in ```./build_and_push.sh```, and execute the shell script. This script builds and pushes the Tensorpack MaskRCNN  *training* image to Amazon ECR. Note the ECR URI output from the script: You will need it in steps below.
+For training image, execute:
+
+    ./container/build_tools/build_and_push.sh <aws-region>
 
 #### Testing Image
-To test the trained model, go into ```container-viz/build_tools``` directory, customize AWS region in ```./build_and_push.sh```, and execute the shell script. This script builds and pushes the container *testing* image for testing the model using a Jupyter Lab. Note the ECR URI output from the script: You will need it in steps below.
+For testing image, execute:
+
+    ./container-viz/build_tools/build_and_push.sh <aws-region>
 
 ### AWS Mask-RCNN
+Below, we build and push the Docker images for [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) model. Note the ECR URI output from executing the scripts: You will need it in steps below.
 
 #### Training Image
-To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) model, 
-go into ```container-optimized/build_tools``` directory, customize AWS region in ```./build_and_push.sh``` and execute the shell script. This script builds and pushes the AWS Mask-RCNN *training* image to Amazon ECR. Note the ECR URI output from the script: You will need it in steps below.
+For training image, execute:
+
+    ./container-optimized/build_tools/build_and_push.sh <aws-region>
 
 #### Testing Image
-To test the trained model, go into ```container-optimized-viz/build_tools``` directory, customize AWS region in ```./build_and_push.sh```, and execute the shell script. This script builds and pushes the image for *testing* the model using a Jupyter Lab. Note the ECR URI output from the script: You will need it in steps below.
+For testing image, execute:
+
+    ./container-optimized-viz/build_tools/build_and_push.sh <aws-region>
 
 ## Stage Data
 
@@ -149,23 +159,13 @@ You will be attached to the EFS or FSx file system persistent volume. Type ```ex
 
 ## Install Helm
 
-[Helm](https://helm.sh/) is package manager for Kubernetes. It uses a package format named *charts*. A Helm chart is a collection of files that define Kubernetes resources. Install helm according to instructions [here](https://helm.sh/docs/intro/install/).
-
-### For Helm version 2.x only
-After installing Helm, initalize Helm as described below:
-  1. In ```eks-cluster``` folder, execute ```kubectl create -f tiller-rbac-config.yaml```. You should see following two messages:
-  
-          serviceaccount "tiller" created  
-          clusterrolebinding "tiller" created  
-          
-  2. Execute ```helm init --service-account tiller --history-max 200```
+[Helm](https://helm.sh/) is package manager for Kubernetes. It uses a package format named *charts*. A Helm chart is a collection of files that define Kubernetes resources. Install helm version 3.x or later according to instructions [here](https://helm.sh/docs/intro/install/).
 
 ## Install Helm charts to begin model training
 
 1. In the ```charts``` folder, deploy Kubeflow **MPIJob** *CustomResouceDefintion* using *mpijob chart*:
 
         helm install --debug mpijob ./mpijob/  # (Helm version 3.x)
-        helm install --debug --name mpijob ./mpijob/  # (Helm version 2.x)
     
 
 2. You have three options for training Mask-RCNN model:
@@ -179,7 +179,6 @@ After installing Helm, initalize Helm as described below:
 3. In the ```charts``` folder, install the selected Helm chart, for example:
 
           helm install --debug maskrcnn ./maskrcnn/  # (Helm version 3.x)
-          helm install --debug --name maskrcnn ./maskrcnn/  # (Helm version 2.x)
 
 4. Execute: ```kubectl get pods -n kubeflow``` to see the status of the pods
 
@@ -202,7 +201,7 @@ Execute ```kubectl get services -n kubeflow``` to get Jupyter service DNS addres
 Accessing Jupyter service in a browser will display a browser warning, because the service endpoint uses a self-signed certificate. Ignore the warning and proceed to access the service. Open the notebook under ```notebook``` folder, and run it it to test the trained model.
 
 ## Purge Helm charts after training
-When training is complete, you may purge a release by exeucting ```helm del --purge maskrcnn```. This will destroy all pods used in training, including Tensorboard and Jupyter service pods. However, the training output will be preserved in the shared file system used for training.
+When training is complete, you may delete an installed chart by executing ```helm delete <chart-name>```, for example ```helm delete maskrcnn```. This will destroy all pods used in training and testing, including Tensorboard and Jupyter service pods. However, the logs and trained model will be preserved on the shared file system used for training.
 
 ## Destroy GPU enabled EKS cluster
 
