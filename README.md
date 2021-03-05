@@ -201,7 +201,7 @@ Execute ```kubectl get services -n kubeflow``` to get Jupyter service DNS addres
 Accessing Jupyter service in a browser will display a browser warning, because the service endpoint uses a self-signed certificate. Ignore the warning and proceed to access the service. Open the notebook under ```notebook``` folder, and run it it to test the trained model.
 
 ## Purge Helm charts after training
-When training is complete, you may purge a release by exeucting ```helm del --purge maskrcnn```. This will destroy all pods used in training, including Tensorboard and Jupyter service pods. However, the training output will be preserved in the shared file system used for training.
+When training is complete, you may delete an installed chart by executing ```helm delete <chart-name>```, for example ```helm delete maskrcnn```. This will destroy all pods used in training and testing, including Tensorboard and Jupyter service pods. However, the logs and trained model will be preserved on the shared file system used for training.
 
 ## Destroy GPU enabled EKS cluster
 
