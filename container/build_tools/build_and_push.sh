@@ -9,6 +9,15 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $DIR/set_env.sh
 
+# set region
+region=
+if [ "$#" -eq 1 ]; then
+    region=$1
+else
+    echo "usage: $0 <aws-region>"
+    exit 1
+fi
+
 image=$IMAGE_NAME
 tag=$IMAGE_TAG
 
@@ -19,12 +28,6 @@ if [ $? -ne 0 ]
 then
     exit 255
 fi
-
-
-# Get the region defined in the current configuration (default to us-west-2 if none defined)
-region=$(aws configure get region)
-region=${region:-us-west-2}
-
 
 fullname="${account}.dkr.ecr.${region}.amazonaws.com/${image}:${tag}"
 
@@ -41,13 +44,16 @@ fi
 # Build the docker image locally with the image name and then push it to ECR
 # with the full name.
 
-# Get the login command from ECR and execute it directly
-$(aws ecr get-login --no-include-email --region us-west-2  --registry-ids 763104351884)
+aws ecr get-login-password --region us-west-2 \
+		| docker login --username AWS --password-stdin 763104351884.dkr.ecr.us-west-2.amazonaws.com
+
 docker build  -t ${image} $DIR/..
 docker tag ${image} ${fullname}
 
 # Get the login command from ECR and execute it directly
-$(aws ecr get-login --region ${region} --no-include-email)
+aws ecr get-login-password --region ${region} \
+		| docker login --username AWS --password-stdin ${account}.dkr.ecr.${region}.amazonaws.com
+
 docker push ${fullname}
 if [ $? -eq 0 ]; then
 	echo "Amazon ECR URI: ${fullname}"
