@@ -29,7 +29,7 @@ For this tutorial, we assume the region to be ```us-west-2```. You may need to a
 
 #### Clone git repository
 
-Clone this git repository on the build machine using the following command:
+Clone this git repository on the build machine using the following commands:
 
     cd ~
     git clone https://github.com/aws-samples/amazon-eks-machine-learning-with-terraform-and-kubeflow.git
@@ -57,7 +57,7 @@ There are two options for creating a GPU enabled [Amazon EKS](https://aws.amazon
 
 ### Quick start option
 
-This option creates an Amazon EKS cluster, an EKS managed node group, and [Amazon EFS](https://aws.amazon.com/efs/), and [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) shared file-systems. To create, execute the commands below, specifying  the value of ```key_pair``` as the EC2 key pair you created at top of this page:
+This option creates an Amazon EKS cluster, an EKS managed node group, along with [Amazon EFS](https://aws.amazon.com/efs/), and [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) shared file-systems. To create, execute the commands below, specifying  the value of ```key_pair``` as the EC2 key pair you created at top of this page:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster-and-nodegroup
     terraform init
@@ -70,7 +70,7 @@ The advanced option separates the creation of the EKS cluster from EKS managed n
 
 #### Create EKS cluster
 
-To creates the EKS cluster, execute:
+To creates the EKS cluster, along with [Amazon EFS](https://aws.amazon.com/efs/), and [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) shared file-systems, execute:
         
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster
     terraform init
