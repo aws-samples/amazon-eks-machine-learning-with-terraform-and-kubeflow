@@ -4,18 +4,12 @@ metadata:
   name: tensorpack-efs-gp-bursting
 spec:
   capacity:
-    storage: 1Pi 
+    storage: 1000Gi
+  volumeMode: Filesystem
   accessModes:
     - ReadWriteMany
-  mountOptions:
-    - nfsvers=4.1
-    - rsize=1048576
-    - wsize=1048576
-    - hard
-    - timeo=600
-    - retrans=2
-    - timeo=600
-    - noresvport 
-  nfs:
-    server: <EFS file-system id>.efs.<AWS region>.amazonaws.com 
-    path: "/"
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: efs-sc
+  csi:
+    driver: efs.csi.aws.com
+    volumeHandle: 
