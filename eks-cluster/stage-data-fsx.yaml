@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: stage-data 
+  name: stage-data-fsx 
 data:
   stage-data.sh: |
     aws s3 cp --recursive s3://$S3_BUCKET/$S3_PREFIX $STAGE_DIR
@@ -10,13 +10,13 @@ data:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: stage-data 
+  name: stage-data-fsx 
 spec:
   restartPolicy: Never
   volumes:
-  - name: efs
+  - name: fsx
     persistentVolumeClaim:
-      claimName: tensorpack-efs-gp-bursting # persistent volume claim name 
+      claimName: tensorpack-fsx # persistent volume claim name 
   - name: config
     configMap:
       defaultMode: 420
@@ -24,16 +24,16 @@ spec:
       - key: stage-data.sh
         mode: 365
         path: stage-data.sh
-      name: stage-data 
+      name: stage-data-fsx 
   containers:
-  - name: stage-data
+  - name: stage-data-fsx
     env:
     - name: S3_BUCKET
       value: my-bucket
     - name: S3_PREFIX
       value: mask-rcnn/eks/input 
     - name: STAGE_DIR 
-      value: /efs
+      value: /fsx
     command:
     -  sh 
     - /etc/config/stage-data.sh
@@ -42,5 +42,5 @@ spec:
     volumeMounts:
     - mountPath: /etc/config
       name: config
-    - mountPath: /efs
-      name: efs
+    - mountPath: /fsx
+      name: fsx

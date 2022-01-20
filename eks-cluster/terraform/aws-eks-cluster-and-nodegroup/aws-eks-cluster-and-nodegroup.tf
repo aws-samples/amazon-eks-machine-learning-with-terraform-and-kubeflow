@@ -19,7 +19,7 @@ variable "cluster_name" {
 
 variable "k8s_version" {
   description = "kubernetes version"
-  default = "1.18"
+  default = "1.21"
   type    = string
 }
 
@@ -40,10 +40,16 @@ variable "cidr_vpc" {
  type    = string
 }
 
-variable "cidr_subnet" {
+variable "cidr_private" {
  description = "RFC 1918 CIDR range list for EKS cluster VPC subnets"
  default = ["192.168.64.0/18", "192.168.128.0/18", "192.168.192.0/18"]
- type    = list
+ type    = list 
+}
+
+variable "cidr_public" {
+ description = "RFC 1918 CIDR range list for EKS cluster VPC subnets"
+ default = ["192.168.0.0/24", "192.168.1.0/24", "192.168.2.0/24"]
+ type    = list 
 }
 
 variable "efs_performance_mode" {
@@ -57,14 +63,18 @@ variable "efs_throughput_mode" {
    type = string
 }
 
-
-# Nodegroup variables
+variable "import_path" {
+  description = "fsx for lustre s3 import path"
+  type = string
+  default = ""
+}
 
 variable "nodegroup_name" {
   description = "Node group name in cluster"
   type    = string
   default = "ng1"
 }
+
 
 variable "node_volume_size" {
   description = "EKS cluster worker node EBS volume size in GBs"
@@ -73,7 +83,7 @@ variable "node_volume_size" {
 }
 
 variable "node_instance_type" {
-  description = "EC2 GPU enabled instance type for EKS cluster worker nodes"
+  description = "EC2 GPU enabled instance types for EKS cluster worker nodes"
   default = "p3.16xlarge"
   type = string
 }
@@ -101,32 +111,6 @@ variable "node_group_min" {
     type = string
 }
 
-variable "eks_gpu_ami" {
-    description = "See https://docs.aws.amazon.com/eks/latest/userguide/gpu-ami.html. Must match k8s version."
-    type = map
-    default = {
-	"us-east-1"  = "ami-0179e21ea7e527ed8",
- 	"us-east-2"  = "ami-01a5c47bddfdb9bd5",
-	"us-west-2"  = "ami-08ebae7136fbcd741",
-	"ap-south-1"  = "ami-0f0b5d169137f6bc4",
-	"ap-northeast-1" = "ami-02ca6fa576d97830d",
-	"ap-northeast-2" = "ami-034c2145072475546",
-	"ap-southeast-1" = "ami-0ce3af9c7b0bac054",
-	"ap-southeast-2" = "ami-03489a904de6f1eb9",
-	"eu-central-1" = "ami-05c1f265f13072095",
- 	"eu-west-1" =  "ami-0fa5fe8d7e7f79b4d",
-	"eu-west-2" = "ami-09153a6aa68629b45",
- 	"eu-west-3" = "ami-039efaca7539ffc5d",
-	"eu-north-1"  = "ami-0c472747bb797d8b8"
-    }
-}
-
-variable "associate_public_ip" {
-   description = "associate public IP with node instance"
-   type = string
-   default = "true"
-}
-
 # END variables
 
 provider "aws" {
@@ -134,8 +118,6 @@ provider "aws" {
   shared_credentials_file = var.credentials
   profile                 = var.profile
 }
-
-# Cluster resources
 
 resource "aws_vpc" "vpc" {
   cidr_block = var.cidr_vpc
@@ -148,11 +130,25 @@ resource "aws_vpc" "vpc" {
 
 }
 
-resource "aws_subnet" "subnet" {
+resource "aws_subnet" "private" {
   count = length(var.azs) 
 
   availability_zone = var.azs[count.index]
-  cidr_block        = var.cidr_subnet[count.index]
+  cidr_block        = var.cidr_private[count.index]
+  vpc_id            = aws_vpc.vpc.id
+
+  tags = {
+    Name = "${var.cluster_name}-subnet-${count.index}",
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+  }
+
+}
+
+resource "aws_subnet" "public" {
+  count = length(var.azs) 
+
+  availability_zone = var.azs[count.index]
+  cidr_block        = var.cidr_public[count.index]
   vpc_id            = aws_vpc.vpc.id
 
   tags = {
@@ -170,7 +166,34 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-resource "aws_route_table" "rt" {
+resource "aws_eip" "ip" {
+}
+
+resource "aws_nat_gateway" "ngw" {
+  allocation_id = aws_eip.ip.id 
+  subnet_id     = aws_subnet.public[0].id
+
+  tags = {
+    Name = "${var.cluster_name}-ngw"
+  }
+
+  depends_on = [aws_internet_gateway.igw, aws_subnet.public]
+}
+
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.ngw.id
+  }
+
+  tags = {
+    Name = "${var.cluster_name}-private"
+  }
+}
+
+resource "aws_route_table" "public" {
   vpc_id = aws_vpc.vpc.id
 
   route {
@@ -179,15 +202,23 @@ resource "aws_route_table" "rt" {
   }
 
   tags = {
-    Name = "${var.cluster_name}-rt"
+    Name = "${var.cluster_name}-public"
   }
 }
 
-resource "aws_route_table_association" "rta" {
+
+resource "aws_route_table_association" "private" {
   count = length(var.azs) 
 
-  subnet_id      = aws_subnet.subnet.*.id[count.index]
-  route_table_id = aws_route_table.rt.id
+  subnet_id      = aws_subnet.private.*.id[count.index]
+  route_table_id = aws_route_table.private.id
+}
+
+resource "aws_route_table_association" "public" {
+  count = length(var.azs) 
+
+  subnet_id      = aws_subnet.public.*.id[count.index]
+  route_table_id = aws_route_table.public.id
 }
 
 
@@ -258,6 +289,75 @@ resource "aws_efs_file_system" "fs" {
   }
 }
 
+
+resource "aws_security_group" "efs_sg" {
+  name = "${var.cluster_name}-efs-sg"
+  description = "Security group for efs clients in vpc"
+  vpc_id      = aws_vpc.vpc.id
+
+  egress {
+    from_port   = 2049
+    to_port     = 2049 
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 2049 
+    to_port     = 2049 
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.vpc.cidr_block] 
+  }
+
+  tags = {
+    Name = "${var.cluster_name}-efs-sg"
+  }
+}
+
+resource "aws_efs_mount_target" "target" {
+  count = length(var.azs) 
+  file_system_id = aws_efs_file_system.fs.id
+
+  subnet_id      = aws_subnet.private.*.id[count.index] 
+  security_groups = [aws_security_group.efs_sg.id] 
+}
+
+resource "aws_security_group" "fsx_lustre_sg" {
+  name = "${var.cluster_name}-fsx-lustre-sg"
+  description = "Security group for fsx lustre clients in vpc"
+  vpc_id      = aws_vpc.vpc.id
+
+  egress {
+    from_port   = 988 
+    to_port     = 988 
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 988 
+    to_port     = 988 
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.vpc.cidr_block] 
+  }
+
+  tags = {
+    Name = "${var.cluster_name}-fsx-lustre-sg"
+  }
+}
+
+resource "aws_fsx_lustre_file_system" "fs" {
+  import_path      = var.import_path != "" ? var.import_path: null 
+  storage_capacity = 1200
+  subnet_ids       = [aws_subnet.private[0].id]
+  deployment_type = "SCRATCH_2"
+  security_group_ids = [aws_security_group.fsx_lustre_sg.id] 
+
+  tags = {
+    Name = var.cluster_name
+  }
+}
+
 resource "aws_eks_cluster" "eks_cluster" {
   name            = var.cluster_name
   role_arn        = aws_iam_role.cluster_role.arn
@@ -265,7 +365,7 @@ resource "aws_eks_cluster" "eks_cluster" {
 
   vpc_config {
     security_group_ids = [aws_security_group.cluster_sg.id]
-    subnet_ids         = flatten([aws_subnet.subnet.*.id])
+    subnet_ids         = flatten([aws_subnet.private.*.id])
   }
 
   depends_on = [
@@ -282,12 +382,60 @@ resource "aws_eks_cluster" "eks_cluster" {
     command = "kubectl config unset current-context"
   }
 
+  provisioner "local-exec" {
+    command = "sed -i -e \"s/volumeHandle: .*/volumeHandle: ${aws_efs_file_system.fs.id}/g\" ../../pv-kubeflow-efs-gp-bursting.yaml"
+  }
+
+  provisioner "local-exec" {
+    command = "sed -i -e \"s/volumeHandle: .*/volumeHandle: ${aws_fsx_lustre_file_system.fs.id}/g\" -e \"s/dnsname: .*/dnsname: ${aws_fsx_lustre_file_system.fs.id}.fsx.${var.region}.amazonaws.com/g\" -e \"s/mountname: .*/mountname: ${aws_fsx_lustre_file_system.fs.mount_name}/g\" ../../pv-kubeflow-fsx.yaml"
+  }
+
+
+  provisioner "local-exec" {
+    command = "kubectl create namespace kubeflow"
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl apply -k \"github.com/kubernetes-sigs/aws-efs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.3\""
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl apply -k \"github.com/kubernetes-sigs/aws-fsx-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-0.4\""
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl apply -n kubeflow -f ../../efs-sc.yaml"
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl apply -n kubeflow -f ../../fsx-sc.yaml"
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl apply -n kubeflow -f ../../pv-kubeflow-efs-gp-bursting.yaml"
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl apply -n kubeflow -f ../../pvc-kubeflow-efs-gp-bursting.yaml"
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl apply -n kubeflow -f ../../pv-kubeflow-fsx.yaml"
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl apply -n kubeflow -f ../../pvc-kubeflow-fsx.yaml"
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/master/nvidia-device-plugin.yml"
+  }
 }
 
 # Nodegroup resources
 
 resource "aws_iam_role" "node_role" {
-  name = "${aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}-role"
+  name = "${aws_eks_cluster.eks_cluster.id}-node-role"
 
   assume_role_policy = <<POLICY
 {
@@ -326,152 +474,23 @@ resource "aws_iam_role_policy_attachment" "node_AmazonS3ReadOnlyPolicy" {
   role       = aws_iam_role.node_role.name
 }
 
-resource "aws_iam_instance_profile" "node_profile" {
-  name = "${aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}-profile"
-  role = aws_iam_role.node_role.name
-}
+resource "aws_eks_node_group" "ng" {
+  cluster_name    = var.cluster_name 
+  node_group_name = var.nodegroup_name 
+  node_role_arn   = aws_iam_role.node_role.arn 
+  subnet_ids      = aws_subnet.private.*.id 
+  instance_types  = [var.node_instance_type]
+  disk_size       = var.node_volume_size 
+  ami_type        = "AL2_x86_64_GPU"
 
-resource "aws_security_group" "node_sg" {
-  name = "${aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}-sg"
-  description = "Security group for all nodes in the cluster"
-  vpc_id      = aws_vpc.vpc.id
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+  scaling_config {
+    desired_size = var.node_group_desired 
+    max_size     = var.node_group_max 
+    min_size     = var.node_group_min 
   }
 
-  tags = {
-    Name = "${aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}-sg"
-  }
-}
-
-resource "aws_security_group_rule" "cluster_ingress_workers" {
-  description              = "Allow worker Kubelets and pods to communicate to control plane"
-  from_port                = 0 
-  protocol                 = "-1"
-  security_group_id        = aws_security_group.cluster_sg.id
-  source_security_group_id = aws_security_group.node_sg.id
-  to_port                  = 65535
-  type                     = "ingress"
-}
-
-resource "aws_security_group_rule" "node_ingress_self" {
-  description              = "Allow nodes to communicate with each other"
-  from_port                = 0
-  protocol                 = "-1"
-  security_group_id        = aws_security_group.node_sg.id
-  source_security_group_id = aws_security_group.node_sg.id
-  to_port                  = 65535
-  type                     = "ingress"
-}
-
-resource "aws_security_group_rule" "node_ingress_control" {
-  description              = "Allow worker Kubelets and pods to receive communication from the cluster control plane"
-  from_port                = 0 
-  protocol                 = "-1"
-  security_group_id        = aws_security_group.node_sg.id
-  source_security_group_id = aws_security_group.cluster_sg.id
-  to_port                  = 65535
-  type                     = "ingress"
-}
-
-locals {
-  node-userdata = <<USERDATA
-#!/bin/bash
-set -o xtrace
-/etc/eks/bootstrap.sh --apiserver-endpoint '${aws_eks_cluster.eks_cluster.endpoint}' --b64-cluster-ca '${aws_eks_cluster.eks_cluster.certificate_authority.0.data}' '${aws_eks_cluster.eks_cluster.id}'
-USERDATA
-}
-
-resource "aws_launch_configuration" "eks_gpu" {
-  name                        = "${aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}"
-  associate_public_ip_address = var.associate_public_ip 
-  iam_instance_profile        = aws_iam_instance_profile.node_profile.name
-  image_id                    = lookup(var.eks_gpu_ami, var.region, "us-east-1")
-  instance_type               = var.node_instance_type
-  security_groups             = [aws_security_group.node_sg.id]
-  user_data                   = base64encode(local.node-userdata)
-  
-  key_name = var.key_pair
-  enable_monitoring = true
-  ebs_optimized = true
-  
-  root_block_device {
-  	delete_on_termination = true
-  	volume_size = var.node_volume_size
-  }
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-}
-
-locals {
-  config_map_aws_auth = <<CONFIGMAPAWSAUTH
-
-
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: aws-auth
-  namespace: kube-system
-data:
-  mapRoles: |
-    - rolearn: ${aws_iam_role.node_role.arn}
-      username: system:node:{{EC2PrivateDNSName}}
-      groups:
-        - system:bootstrappers
-        - system:nodes
-CONFIGMAPAWSAUTH
-}
-
-
-resource "aws_autoscaling_group" "node_group" {
-  name                  = "${aws_eks_cluster.eks_cluster.id}-${var.nodegroup_name}"
-  vpc_zone_identifier   = flatten([aws_subnet.subnet.*.id]) 
-
-  health_check_grace_period = "0"
-  desired_capacity   = var.node_group_desired
-  max_size           = var.node_group_max 
-  min_size           = var.node_group_min 
-
-  launch_configuration = aws_launch_configuration.eks_gpu.id
-  tag {
-    key                 = "Name"
-    value               = "${var.cluster_name}-${var.nodegroup_name}-node"
-    propagate_at_launch = true
-  }
-
-  tag {
-    key                 = "kubernetes.io/cluster/${var.cluster_name}"
-    value               = "owned"
-    propagate_at_launch = true
-  }
-
-}
-
-resource "aws_efs_mount_target" "target" {
-  count = length(var.azs) 
-  file_system_id = aws_efs_file_system.fs.id
-
-  subnet_id      = aws_subnet.subnet.*.id[count.index] 
-  security_groups = [aws_security_group.node_sg.id] 
-}
-
-resource "local_file" "aws_auth" {
-  depends_on = [
-    aws_autoscaling_group.node_group
- ]
-
-  content  = local.config_map_aws_auth
-  filename = "/tmp/aws-auth.yaml"
-
-  provisioner "local-exec" {
-    command = "kubectl apply -f /tmp/aws-auth.yaml ; kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/master/nvidia-device-plugin.yml"
+  remote_access {
+    ec2_ssh_key = var.key_pair
   }
 
 }
@@ -481,16 +500,17 @@ locals {
 
   EKS Cluster Summary: 
   	vpc:    ${aws_vpc.vpc.id}
-  	subnets: ${join(",", aws_subnet.subnet.*.id)}
+  	subnets: ${join(",", aws_subnet.private.*.id)}
   	cluster security group: ${aws_security_group.cluster_sg.id}
   	endpoint: ${aws_eks_cluster.eks_cluster.endpoint}
-
-  EKS Cluster NodeGroup Summary: 
-  	node security group: ${aws_security_group.node_sg.id} 
-  	node instance role arn: ${aws_iam_role.node_role.arn}
+  EKS NodeGroup Summary: 
+  	arn: ${aws_eks_node_group.ng.arn} 
   EFS Summary:
   	file system id: ${aws_efs_file_system.fs.id}
   	dns: ${aws_efs_file_system.fs.id}.efs.${var.region}.amazonaws.com
+  FSx Lustre Summary:
+  	file system id: ${aws_fsx_lustre_file_system.fs.id}
+        mount_name: ${aws_fsx_lustre_file_system.fs.mount_name}
 SUMMARY
 }
 
