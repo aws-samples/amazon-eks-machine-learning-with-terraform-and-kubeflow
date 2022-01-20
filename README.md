@@ -47,7 +47,7 @@ For non-Linux, [install and configure kubectl for EKS](https://docs.aws.amazon.c
 
 [Install Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html). Terraform configuration files in this repository are consistent with Terraform v1.1.4 syntax, but may work with other Terraform versions, as well.
 
-### Install Helm
+#### Install Helm
 
 [Helm](https://helm.sh/docs/intro/install/) is package manager for Kubernetes. It uses a package format named *charts*. A Helm chart is a collection of files that define Kubernetes resources. [Install helm](https://helm.sh/docs/intro/install/).
 
