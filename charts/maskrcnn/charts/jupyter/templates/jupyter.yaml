@@ -53,6 +53,7 @@ spec:
         - --port={{ .Values.jupyter.target_port }} 
         - --certfile=/labs-cert.pem 
         - --keyfile=/labs-key.key
+        - "--ServerApp.ssl_options={'ssl_version': 5}"
         image: {{ .Values.jupyter.image }} 
         imagePullPolicy: {{ .Values.jupyter.image_pull_policy }}
         ports:
