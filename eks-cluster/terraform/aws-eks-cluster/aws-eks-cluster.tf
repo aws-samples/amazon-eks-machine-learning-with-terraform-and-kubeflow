@@ -69,6 +69,12 @@ variable "import_path" {
   default = ""
 }
 
+variable "inference_max" {
+  description = "Maximum inference nodes"
+  type = string
+  default = "2"
+}
+
 # END variables
 
 provider "aws" {
@@ -76,6 +82,8 @@ provider "aws" {
   shared_credentials_file = var.credentials
   profile                 = var.profile
 }
+
+data "aws_caller_identity" "current" {}
 
 resource "aws_vpc" "vpc" {
   cidr_block = var.cidr_vpc
@@ -316,10 +324,16 @@ resource "aws_fsx_lustre_file_system" "fs" {
   }
 }
 
+locals {
+  use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.21": var.k8s_version
+  cluster_autoscaler_version=substr(local.use_k8s_version, 0, 4)
+}
+
 resource "aws_eks_cluster" "eks_cluster" {
   name            = var.cluster_name
   role_arn        = aws_iam_role.cluster_role.arn
-  version	  = var.k8s_version
+  version	        = local.use_k8s_version
+
 
   vpc_config {
     security_group_ids = [aws_security_group.cluster_sg.id]
@@ -332,29 +346,115 @@ resource "aws_eks_cluster" "eks_cluster" {
   ]
 
   provisioner "local-exec" {
-    command = "aws --region ${var.region} eks update-kubeconfig --name ${aws_eks_cluster.eks_cluster.name}"
-  }
-
-  provisioner "local-exec" {
     when    = destroy
     command = "kubectl config unset current-context"
   }
 
   provisioner "local-exec" {
-    command = "sed -i -e \"s/volumeHandle: .*/volumeHandle: ${aws_efs_file_system.fs.id}/g\" ../../pv-kubeflow-efs-gp-bursting.yaml"
+    command = "aws --region ${var.region} eks update-kubeconfig --name ${aws_eks_cluster.eks_cluster.name}"
   }
 
   provisioner "local-exec" {
-    command = "sed -i -e \"s/volumeHandle: .*/volumeHandle: ${aws_fsx_lustre_file_system.fs.id}/g\" -e \"s/dnsname: .*/dnsname: ${aws_fsx_lustre_file_system.fs.id}.fsx.${var.region}.amazonaws.com/g\" -e \"s/mountname: .*/mountname: ${aws_fsx_lustre_file_system.fs.mount_name}/g\" ../../pv-kubeflow-fsx.yaml"
+    command = "kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/master/nvidia-device-plugin.yml"
   }
 
+  provisioner "local-exec" {
+    command = "kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl apply -f  https://raw.githubusercontent.com/kubernetes/autoscaler/master/cluster-autoscaler/cloudprovider/aws/examples/cluster-autoscaler-autodiscover.yaml"
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      kubectl -n kube-system patch deployment cluster-autoscaler --patch \
+      '{"spec": { "template": { "metadata":{"annotations":{"cluster-autoscaler.kubernetes.io/safe-to-evict": "false"}}, "spec": { "containers": [{ "image": "k8s.gcr.io/autoscaling/cluster-autoscaler:v${local.cluster_autoscaler_version}.0", "name": "cluster-autoscaler", "resources": { "requests": {"cpu": "100m", "memory": "300Mi"}}, "command": [ "./cluster-autoscaler", "--v=4", "--stderrthreshold=info", "--cloud-provider=aws", "--skip-nodes-with-local-storage=false", "--expander=least-waste", "--node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/${var.cluster_name}", "--balance-similar-node-groups", "--skip-nodes-with-system-pods=false" ]}]}}}}'
+    EOT
+  }
 
   provisioner "local-exec" {
     command = "kubectl create namespace kubeflow"
   }
 
+}
+
+locals {
+  cluster_oidc_path = format("oidc.eks.%s.amazonaws.com/id/%s", "${var.region}", join("", regex("https://([^.]+).+", "${aws_eks_cluster.eks_cluster.endpoint}"))) 
+}
+
+resource "aws_iam_role" "cluster_autoscaler_role" {
+  name = "${aws_eks_cluster.eks_cluster.id}-cluster-autoscaler-role"
+
+  assume_role_policy = jsonencode({
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "Federated": "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${local.cluster_oidc_path}"
+        },
+        "Action": "sts:AssumeRoleWithWebIdentity",
+        "Condition": {
+          "StringEquals": {
+            "${local.cluster_oidc_path}:aud": "sts.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "cluster_autoscaler_policy" {
+   name = "cluster-autoscaler-policy"
+   role = aws_iam_role.cluster_autoscaler_role.id
+
+    policy = jsonencode({
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+            "Action": [
+                "autoscaling:DescribeAutoScalingGroups",
+                "autoscaling:DescribeAutoScalingInstances",
+                "autoscaling:DescribeLaunchConfigurations",
+                "autoscaling:DescribeTags",
+                "autoscaling:SetDesiredCapacity",
+                "autoscaling:TerminateInstanceInAutoScalingGroup",
+                "ec2:DescribeLaunchTemplateVersions"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        }
+      ]
+    })
+}
+
+resource "null_resource" "eks_cluster_autoscaler_role" {
+  
+  triggers = {
+    cluster_autoscaler_role = "${aws_iam_role.cluster_autoscaler_role.arn}"
+  }
+
   provisioner "local-exec" {
-    command = "kubectl apply -k \"github.com/kubernetes-sigs/aws-efs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.3\""
+    command = <<-EOT
+      kubectl patch ServiceAccount cluster-autoscaler -n kube-system --patch \
+      '{"metadata":{"annotations":{"eks.amazonaws.com/role-arn": "${aws_iam_role.cluster_autoscaler_role.arn}"}}}'
+    EOT
+  }
+
+  depends_on = [
+    aws_eks_cluster.eks_cluster
+  ]
+  
+}
+
+resource "null_resource" "fsx_id" {
+  triggers = {
+    fsx_id = "${aws_fsx_lustre_file_system.fs.id}"
+  }
+
+  provisioner "local-exec" {
+    command = "sed -i -e \"s/volumeHandle: .*/volumeHandle: ${aws_fsx_lustre_file_system.fs.id}/g\" -e \"s/dnsname: .*/dnsname: ${aws_fsx_lustre_file_system.fs.id}.fsx.${var.region}.amazonaws.com/g\" -e \"s/mountname: .*/mountname: ${aws_fsx_lustre_file_system.fs.mount_name}/g\" ../../pv-kubeflow-fsx.yaml"
   }
 
   provisioner "local-exec" {
@@ -362,19 +462,7 @@ resource "aws_eks_cluster" "eks_cluster" {
   }
 
   provisioner "local-exec" {
-    command = "kubectl apply -n kubeflow -f ../../efs-sc.yaml"
-  }
-
-  provisioner "local-exec" {
     command = "kubectl apply -n kubeflow -f ../../fsx-sc.yaml"
-  }
-
-  provisioner "local-exec" {
-    command = "kubectl apply -n kubeflow -f ../../pv-kubeflow-efs-gp-bursting.yaml"
-  }
-
-  provisioner "local-exec" {
-    command = "kubectl apply -n kubeflow -f ../../pvc-kubeflow-efs-gp-bursting.yaml"
   }
 
   provisioner "local-exec" {
@@ -385,32 +473,81 @@ resource "aws_eks_cluster" "eks_cluster" {
     command = "kubectl apply -n kubeflow -f ../../pvc-kubeflow-fsx.yaml"
   }
 
-  provisioner "local-exec" {
-    command = "kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/master/nvidia-device-plugin.yml"
-  }
+  depends_on = [
+    aws_eks_cluster.eks_cluster
+  ]
 }
 
-# Nodegroup resources
+resource "null_resource" "efs_id" {
+  triggers = {
+    efs_id = "${aws_efs_file_system.fs.id}"
+  }
+
+  provisioner "local-exec" {
+    command = "sed -i -e \"s/volumeHandle: .*/volumeHandle: ${aws_efs_file_system.fs.id}/g\" ../../pv-kubeflow-efs-gp-bursting.yaml"
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl apply -k \"github.com/kubernetes-sigs/aws-efs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.3\""
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl apply -n kubeflow -f ../../efs-sc.yaml"
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl apply -n kubeflow -f ../../pv-kubeflow-efs-gp-bursting.yaml"
+  }
+
+  provisioner "local-exec" {
+    command = "kubectl apply -n kubeflow -f ../../pvc-kubeflow-efs-gp-bursting.yaml"
+  }
+
+  depends_on = [
+    aws_eks_cluster.eks_cluster
+  ]
+}
 
 resource "aws_iam_role" "node_role" {
   name = "${aws_eks_cluster.eks_cluster.id}-node-role"
 
-  assume_role_policy = <<POLICY
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "ec2.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-POLICY
+  assume_role_policy = jsonencode({
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "ec2.amazonaws.com"
+        },
+        "Action": "sts:AssumeRole"
+      }
+    ]
+  })
 }
 
+resource "aws_iam_role_policy" "node_autoscaler_policy" {
+   name = "node-autoscaler-policy"
+   role = aws_iam_role.node_role.id
+
+    policy = jsonencode({
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+            "Action": [
+                "autoscaling:DescribeAutoScalingGroups",
+                "autoscaling:DescribeAutoScalingInstances",
+                "autoscaling:DescribeLaunchConfigurations",
+                "autoscaling:DescribeTags",
+                "autoscaling:SetDesiredCapacity",
+                "autoscaling:TerminateInstanceInAutoScalingGroup",
+                "ec2:DescribeLaunchTemplateVersions"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        }
+      ]
+    })
+}
 
 resource "aws_iam_role_policy_attachment" "node_AmazonEKSWorkerNodePolicy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
@@ -432,6 +569,58 @@ resource "aws_iam_role_policy_attachment" "node_AmazonS3ReadOnlyPolicy" {
   role       = aws_iam_role.node_role.name
 }
 
+resource "aws_eks_node_group" "system_ng" {
+  cluster_name    = var.cluster_name 
+  node_group_name = "system" 
+  node_role_arn   = aws_iam_role.node_role.arn 
+  subnet_ids      = aws_subnet.private.*.id 
+  instance_types  = ["m5a.large"]
+  disk_size       = 40 
+  ami_type        = "AL2_x86_64"
+
+  scaling_config {
+    desired_size = 2 
+    max_size     = 2 
+    min_size     = 2 
+  }
+
+  depends_on = [
+    aws_eks_cluster.eks_cluster,
+    aws_iam_role.node_role,
+    aws_iam_role_policy_attachment.node_AmazonEKSWorkerNodePolicy,
+    aws_iam_role_policy_attachment.node_AmazonEKS_CNI_Policy,
+    aws_iam_role_policy_attachment.node_AmazonEC2ContainerRegistryReadOnly,
+    aws_iam_role_policy_attachment.node_AmazonS3ReadOnlyPolicy
+  ]
+
+}
+
+resource "aws_eks_node_group" "inference_ng" {
+  cluster_name    = var.cluster_name 
+  node_group_name = "inference" 
+  node_role_arn   = aws_iam_role.node_role.arn 
+  subnet_ids      = aws_subnet.private.*.id 
+  instance_types  = ["g4dn.xlarge"]
+  disk_size       = 100
+  ami_type        = "AL2_x86_64_GPU"
+
+  scaling_config {
+    desired_size = 0 
+    max_size     = var.inference_max
+    min_size     = 0 
+  }
+
+  depends_on = [
+    aws_eks_cluster.eks_cluster,
+    aws_iam_role.node_role,
+    aws_iam_role_policy_attachment.node_AmazonEKSWorkerNodePolicy,
+    aws_iam_role_policy_attachment.node_AmazonEKS_CNI_Policy,
+    aws_iam_role_policy_attachment.node_AmazonEC2ContainerRegistryReadOnly,
+    aws_iam_role_policy_attachment.node_AmazonS3ReadOnlyPolicy
+  ]
+
+}
+
 locals {
   summary = <<SUMMARY
 
@@ -440,12 +629,14 @@ locals {
   	subnets: ${join(",", aws_subnet.private.*.id)}
   	cluster security group: ${aws_security_group.cluster_sg.id}
   	endpoint: ${aws_eks_cluster.eks_cluster.endpoint}
-  Node Group Summary:
-        node role arn: ${aws_iam_role.node_role.arn}
+  EKS NodeGroup Summary:
+    node role: ${aws_iam_role.node_role.arn}
+    system: ${aws_eks_node_group.system_ng.arn} 
+    inference: ${aws_eks_node_group.inference_ng.arn}
   EFS Summary:
   	file system id: ${aws_efs_file_system.fs.id}
   	dns: ${aws_efs_file_system.fs.id}.efs.${var.region}.amazonaws.com
-  FSx Lustre Summary:
+  FSx for Lustre Summary:
   	file system id: ${aws_fsx_lustre_file_system.fs.id}
         mount_name: ${aws_fsx_lustre_file_system.fs.mount_name}
 SUMMARY

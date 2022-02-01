@@ -53,17 +53,18 @@ variable "node_instance_type" {
 variable "key_pair" {
   description = "Name of EC2 key pair used to launch EKS cluster worker node EC2 instances"
   type = string
+  default = ""
 }
 
 variable "node_group_desired" {
     description = "EKS worker node auto-scaling group desired size"
-    default = "2"
+    default = "0"
     type = string
 }
 
 variable "node_group_max" {
     description = "EKS worker node auto-scaling group maximum"
-    default = "2"
+    default = "8"
     type = string
 }
 
@@ -81,7 +82,7 @@ provider "aws" {
   profile                 = var.profile
 }
 
-resource "aws_eks_node_group" "ng" {
+resource "aws_eks_node_group" "training_ng" {
   cluster_name    = var.cluster_name 
   node_group_name = var.nodegroup_name 
   node_role_arn   = var.node_role_arn 
@@ -97,8 +98,21 @@ resource "aws_eks_node_group" "ng" {
   }
 
   remote_access {
-    ec2_ssh_key = var.key_pair
+     ec2_ssh_key = var.key_pair != "" ? var.key_pair : null
   }
   
+}
 
+
+locals {
+  summary = <<SUMMARY
+
+  EKS NodeGroup Summary: 
+  	nodegroup: ${aws_eks_node_group.training_ng.arn} 
+ 
+SUMMARY
+}
+
+output "summary" {
+  value = local.summary
 }
