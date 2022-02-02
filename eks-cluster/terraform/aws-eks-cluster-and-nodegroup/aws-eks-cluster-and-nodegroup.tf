@@ -75,6 +75,12 @@ variable "inference_max" {
   default = "2"
 }
 
+variable "inference_instance_type" {
+  description = "GPU enabled instance types for inference. Must have 1 GPU."
+  default = "g4dn.xlarge,g5.xlarge"
+  type = string
+}
+
 variable "nodegroup_name" {
   description = "Training node group name in cluster"
   type    = string
@@ -89,8 +95,8 @@ variable "node_volume_size" {
 }
 
 variable "node_instance_type" {
-  description = "EC2 GPU enabled instance types for EKS cluster worker nodes"
-  default = "p3.16xlarge"
+  description = "GPU enabled instance types for training. Must have 8 GPUs."
+  default = "g5.48xlarge,p3.16xlarge,p3dn.24xlarge,p4d.24xlarge"
   type = string
 }
 
@@ -642,7 +648,7 @@ resource "aws_eks_node_group" "inference_ng" {
   node_group_name = "inference" 
   node_role_arn   = aws_iam_role.node_role.arn 
   subnet_ids      = aws_subnet.private.*.id 
-  instance_types  = ["g4dn.xlarge"]
+  instance_types  = split(",", var.inference_instance_type)
   disk_size       = 100
   ami_type        = "AL2_x86_64_GPU"
 
@@ -668,7 +674,7 @@ resource "aws_eks_node_group" "training_ng" {
   node_group_name = var.nodegroup_name 
   node_role_arn   = aws_iam_role.node_role.arn 
   subnet_ids      = aws_subnet.private.*.id 
-  instance_types  = [var.node_instance_type]
+  instance_types  = split(",", var.node_instance_type)
   disk_size       = var.node_volume_size 
   ami_type        = "AL2_x86_64_GPU"
 

@@ -45,8 +45,8 @@ variable "node_volume_size" {
 }
 
 variable "node_instance_type" {
-  description = "EC2 GPU enabled instance types for EKS cluster worker nodes"
-  default = "p3.16xlarge"
+  description = "GPU enabled instance types for training. Must have 8 GPUs."
+  default = "g5.48xlarge,p3.16xlarge,p3dn.24xlarge,p4d.24xlarge"
   type = string
 }
 
@@ -87,7 +87,7 @@ resource "aws_eks_node_group" "training_ng" {
   node_group_name = var.nodegroup_name 
   node_role_arn   = var.node_role_arn 
   subnet_ids      = split(",", var.subnet_ids) 
-  instance_types  = [var.node_instance_type]
+  instance_types  = split(",", var.node_instance_type)
   disk_size       = var.node_volume_size 
   ami_type        = "AL2_x86_64_GPU"
 

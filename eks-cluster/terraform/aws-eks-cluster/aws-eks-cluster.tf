@@ -75,6 +75,13 @@ variable "inference_max" {
   default = "2"
 }
 
+variable "inference_instance_type" {
+  description = "GPU enabled instance types for inference. Must have 1 GPU."
+  default = "g4dn.xlarge,g5.xlarge"
+  type = string
+}
+
+
 # END variables
 
 provider "aws" {
@@ -600,7 +607,7 @@ resource "aws_eks_node_group" "inference_ng" {
   node_group_name = "inference" 
   node_role_arn   = aws_iam_role.node_role.arn 
   subnet_ids      = aws_subnet.private.*.id 
-  instance_types  = ["g4dn.xlarge"]
+  instance_types  = split(",", var.inference_instance_type)
   disk_size       = 100
   ami_type        = "AL2_x86_64_GPU"
 
