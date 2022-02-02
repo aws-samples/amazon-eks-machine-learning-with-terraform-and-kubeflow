@@ -3,20 +3,27 @@
 ## Prerequisites
 1. [Create and activate an AWS Account](https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/)
 2. Select your AWS Region. For the tutorial below, we assume the region to be ```us-west-2```
-3. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) for GPU enabled EC2 instances. We recommend service limits be set to at least 4 instances each of [p3.16xlarge, p3dn.24xlarge, p4d.24xlarge](https://aws.amazon.com/ec2/instance-types/p3/) for training, and 2 instances each of [g4dn.xlarge, p3.2xlarge, g5.xlarge](https://aws.amazon.com/ec2/instance-types/g4/) for testing. 
+3. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) for GPU enabled EC2 instances. We recommend service limits be set to at least 4 instances each for [p3.16xlarge, p3dn.24xlarge, p4d.24xlarge, and g5.48xlarge](https://aws.amazon.com/ec2/instance-types/p3/) for training, and 2 instances each for [g4dn.xlarge, and g5.xlarge](https://aws.amazon.com/ec2/instance-types/g4/) for testing. 
 
 ### Build machine
 
 For the *build machine*, we need [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html) and [Docker](https://www.docker.com/) installed. The AWS CLI must be configured for [Adminstrator job function](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html). You may use your laptop for your build machine if it has AWS CLI and Docker installed, or you may launch an EC2 instance for your build machine, as described below.
 
-#### (Optional) EC2 build machine 
-To launch an EC2 instance as your *build machine*, you will need [Adminstrator job function](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html) access to [AWS Management Console](https://aws.amazon.com/console/). In the console, execute following steps:
+#### (Optional) Launch EC2 instance for the build machine 
+To launch an EC2 instance for the *build machine*, you will need [Adminstrator job function](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html) access to [AWS Management Console](https://aws.amazon.com/console/). In the console, execute following steps:
 
 1. Create an [Amazon EC2 key pair](https://docs.aws.amazon.com/en_pv/AWSEC2/latest/UserGuide/ec2-key-pairs.html) in your selected AWS region, if you do not already have one
 2. Create an [AWS Service role for an EC2 instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_terms-and-concepts.html#iam-term-service-role-ec2), and add [AWS managed policy for Administrator access](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html#jf_administratorhttps://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html#jf_administrator) to this IAM Role.
-3. Launch a [m5.xlarge](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/LaunchingAndUsingInstances.html) EC2 instance from an [AWS Deep Learning AMI](https://aws.amazon.com/marketplace/pp/prodview-x5nivojpquy6y) using an [EC2 instance profile](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2_instance-profiles.html) that is based on the IAM Role created in the previous step. 
+3. [Launch](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EC2_GetStarted.html) a [m5.xlarge](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/LaunchingAndUsingInstances.html) instance from [Amazon Linux 2 AMI](https://aws.amazon.com/marketplace/pp/prodview-zc4x2k7vt6rpu) using  the IAM Role created in the previous step. Use 100 GB for ```Root``` volume size. 
+4. After the instance state is ```Running```, [connect to your linux instance](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AccessingInstances.html) as ```ec2-user```. On the linux instance, install the required software tools as described below:
 
-All steps described under *Step by step* section below must be executed on the *build machine*.
+        sudo yum install -y docker git
+        sudo systemctl enable docker.service
+        sudo systemctl start docker.service
+        sudo usermod -aG docker ec2-user
+        exit
+
+Now, reconnect to your linux instance. All steps described under *Step by step* section below must be executed on the *build machine*.
 
 ## Step by step tutorial
 
