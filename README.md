@@ -3,7 +3,7 @@
 ## Prerequisites
 1. [Create and activate an AWS Account](https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/)
 2. Select your AWS Region. For the tutorial below, we assume the region to be ```us-west-2```
-3. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) for GPU enabled EC2 instances. We recommend service limits be set to at least 4 instances each for [p3.16xlarge, p3dn.24xlarge, p4d.24xlarge, and g5.48xlarge](https://aws.amazon.com/ec2/instance-types/p3/) for training, and 2 instances each for [g4dn.xlarge, and g5.xlarge](https://aws.amazon.com/ec2/instance-types/g4/) for testing. 
+3. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) for GPU enabled EC2 instances. We recommend service limits be set to at least 4 instances each for [p3.16xlarge, p3dn.24xlarge](https://aws.amazon.com/ec2/instance-types/p3/), [p4d.24xlarge](https://aws.amazon.com/ec2/instance-types/p4/), and [g5.48xlarge](https://aws.amazon.com/ec2/instance-types/g5/) for training, and 2 instances each for [g4dn.xlarge](https://aws.amazon.com/ec2/instance-types/g4/), and [g5.xlarge](https://aws.amazon.com/ec2/instance-types/g5/) for testing. 
 
 ### Build machine
 
