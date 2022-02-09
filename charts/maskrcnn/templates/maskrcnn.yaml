@@ -8,7 +8,7 @@ preemptionPolicy: PreemptLowerPriority
 globalDefault: false
 description: "This is the priority class for training"
 ---
-apiVersion: kubeflow.org/v1alpha1
+apiVersion: kubeflow.org/v2beta1
 kind: MPIJob
 metadata:
   name: {{ .Values.maskrcnn.name }}
@@ -18,65 +18,114 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
-  gpus: {{ .Values.maskrcnn.gpus }}
-  template:
-    spec:
-      priorityClassName: "training-priority"
-      restartPolicy: Never
-      volumes:
-      - name: {{ .Values.global.shared_fs }} 
-        persistentVolumeClaim:
-            claimName: {{ .Values.global.shared_pvc }}
-      - name: ebs
-        hostPath:
-            path: /ebs
-            type: DirectoryOrCreate
-      containers:
-      - name: {{ .Values.maskrcnn.name }} 
-        env:
-        - name: HOROVOD_CYCLE_TIME
-          value: "{{ .Values.maskrcnn.horovod_cycle_time }}" 
-        - name: HOROVOD_FUSION_THRESHOLD
-          value: "{{ .Values.maskrcnn.horovod_fusion_threshold }}" 
-        - name: NCCL_SOCKET_IFNAME
-          value: "{{ .Values.maskrcnn.nccl_socket_ifname }}" 
-        - name: NCCL_MIN_NRINGS
-          value: "{{ .Values.maskrcnn.nccl_min_rings }}" 
-        - name: NCCL_DEBUG
-          value: "{{ .Values.maskrcnn.nccl_debug }}" 
-        command: 
-        - mpirun
-        args:
-        - --output-filename 
-        - /{{ .Values.global.shared_fs }}/{{ .Release.Name }}-{{ date "2006-01-02-15-04-05" .Release.Time  }}
-        - --allow-run-as-root
-        - --display-map
-        - --tag-output
-        - --timestamp-output
-        - python3
-        - {{ .Values.maskrcnn.train_script }} 
-        - --logdir 
-        - /{{ .Values.global.shared_fs }}/{{ .Release.Name }}-{{ date "2006-01-02-15-04-05" .Release.Time  }}/train_log/maskrcnn
-        - --config  
-        - MODE_MASK={{ .Values.maskrcnn.mode_mask }}
-        - MODE_FPN={{ .Values.maskrcnn.mode_fpn }}
-        - DATA.BASEDIR=/{{ .Values.maskrcnn.data_fs }}/{{ .Values.maskrcnn.data_dir }}
-        - DATA.TRAIN={{ .Values.maskrcnn.data_train }} 
-        - DATA.VAL={{ .Values.maskrcnn.data_val }}
-        - TRAIN.EVAL_PERIOD={{ .Values.maskrcnn.eval_period_in_epochs }}
-        - TRAIN.STEPS_PER_EPOCH={{ .Values.maskrcnn.steps_per_epoch }}
-        - TRAIN.LR_SCHEDULE={{ .Values.maskrcnn.lr_schedule }} 
-        - BACKBONE.WEIGHTS=/{{ .Values.maskrcnn.data_fs }}/{{ .Values.maskrcnn.backbone_weights }}
-        - BACKBONE.NORM={{ .Values.maskrcnn.backbone_norm }}
-        - TRAINER=horovod
-        - {{ .Values.maskrcnn.extra_config }}
-        image: {{ .Values.maskrcnn.image }} 
-        imagePullPolicy: {{ .Values.maskrcnn.image_pull_policy }}
-        volumeMounts:
-        - mountPath: /{{ .Values.global.shared_fs }}
-          name: {{ .Values.global.shared_fs }}
-        - mountPath: /ebs
-          name: ebs
-        resources:
-          limits:
-            nvidia.com/gpu: {{ .Values.maskrcnn.gpus_per_node }}
+  runPolicy:
+    cleanPodPolicy: Running
+  mpiImplementation: OpenMPI
+  mpiReplicaSpecs:
+    Launcher:
+      replicas: 1
+      template:
+        spec:
+          priorityClassName: "training-priority"
+          restartPolicy: OnFailure
+          containers:
+          - name: {{ .Values.maskrcnn.name }} 
+            env:
+            - name: HOROVOD_CYCLE_TIME
+              value: "{{ .Values.maskrcnn.horovod_cycle_time }}" 
+            - name: HOROVOD_FUSION_THRESHOLD
+              value: "{{ .Values.maskrcnn.horovod_fusion_threshold }}" 
+            - name: NCCL_SOCKET_IFNAME
+              value: "{{ .Values.maskrcnn.nccl_socket_ifname }}" 
+            - name: NCCL_MIN_NRINGS
+              value: "{{ .Values.maskrcnn.nccl_min_rings }}" 
+            - name: NCCL_DEBUG
+              value: "{{ .Values.maskrcnn.nccl_debug }}" 
+            command: 
+            - mpirun
+            args:
+            - --output-filename 
+            - /{{ .Values.global.shared_fs }}/{{ .Release.Name }}-{{ date "2006-01-02-15-04-05" .Release.Time  }}
+            - --allow-run-as-root
+            - -np
+            - "{{ .Values.maskrcnn.gpus }}"
+            - -bind-to
+            - none
+            - -map-by
+            - slot
+            - -mca 
+            - btl_tcp_if_exclude 
+            - {{ .Values.maskrcnn.if_exclude }}
+            - -mca 
+            - oob_tcp_if_exclude 
+            - {{ .Values.maskrcnn.if_exclude }}
+            - -x
+            - HOROVOD_CYCLE_TIME
+            - -x
+            - HOROVOD_FUSION_THRESHOLD
+            - -x
+            - NCCL_SOCKET_IFNAME
+            - -x
+            - NCCL_MIN_NRINGS
+            - -x
+            - NCCL_DEBUG
+            - -x
+            - LD_LIBRARY_PATH
+            - -x
+            - PATH
+            - -mca
+            - pml
+            - ob1
+            - -mca
+            - btl
+            - ^openib
+            - --display-map
+            - --tag-output
+            - --timestamp-output
+            - python3
+            - {{ .Values.maskrcnn.train_script }} 
+            - --logdir 
+            - /{{ .Values.global.shared_fs }}/{{ .Release.Name }}-{{ date "2006-01-02-15-04-05" .Release.Time  }}/train_log/maskrcnn
+            - --config  
+            - MODE_MASK={{ .Values.maskrcnn.mode_mask }}
+            - MODE_FPN={{ .Values.maskrcnn.mode_fpn }}
+            - DATA.BASEDIR=/{{ .Values.maskrcnn.data_fs }}/{{ .Values.maskrcnn.data_dir }}
+            - DATA.TRAIN={{ .Values.maskrcnn.data_train }} 
+            - DATA.VAL={{ .Values.maskrcnn.data_val }}
+            - TRAIN.EVAL_PERIOD={{ .Values.maskrcnn.eval_period_in_epochs }}
+            - TRAIN.STEPS_PER_EPOCH={{ .Values.maskrcnn.steps_per_epoch }}
+            - TRAIN.LR_SCHEDULE={{ .Values.maskrcnn.lr_schedule }} 
+            - BACKBONE.WEIGHTS=/{{ .Values.maskrcnn.data_fs }}/{{ .Values.maskrcnn.backbone_weights }}
+            - BACKBONE.NORM={{ .Values.maskrcnn.backbone_norm }}
+            - TRAINER=horovod
+            - {{ .Values.maskrcnn.extra_config }}
+            image: {{ .Values.maskrcnn.image }} 
+            imagePullPolicy: {{ .Values.maskrcnn.image_pull_policy }}
+      
+    Worker:
+      replicas: {{ .Values.maskrcnn.gpu_nodes }}
+      template:
+        spec:
+          priorityClassName: "training-priority"
+          restartPolicy: OnFailure
+          volumes:
+          - name: {{ .Values.global.shared_fs }} 
+            persistentVolumeClaim:
+              claimName: {{ .Values.global.shared_pvc }}
+          - name: ebs
+            hostPath:
+              path: /ebs
+              type: DirectoryOrCreate
+          containers:
+          - name: {{ .Values.maskrcnn.name }}
+            image: {{ .Values.maskrcnn.image }}
+            imagePullPolicy: {{ .Values.maskrcnn.image_pull_policy }}
+            volumeMounts:
+            - mountPath: /{{ .Values.global.shared_fs }}
+              name: {{ .Values.global.shared_fs }}
+            - mountPath: /ebs
+              name: ebs
+            resources:
+              limits:
+                nvidia.com/gpu: {{ .Values.maskrcnn.gpus_per_node }}
+  slotsPerWorker: {{ .Values.maskrcnn.gpus_per_node }}

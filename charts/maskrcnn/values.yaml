@@ -6,6 +6,7 @@ global:
 maskrcnn:
   name: maskrcnn
   gpus: 16
+  gpu_nodes: 2
   gpus_per_node: 8
   image: # ECR image id
   train_script: /tensorpack/examples/FasterRCNN/train.py
@@ -23,7 +24,8 @@ maskrcnn:
   image_pull_policy: Always
   horovod_cycle_time: "0.5"
   horovod_fusion_threshold: "67108864"
-  nccl_socket_ifname: ^lo,docker0 
+  nccl_socket_ifname: ^lo,docker0
+  if_exclude:  lo,docker0
   nccl_min_rings: 8
   nccl_debug: INFO
   extra_config: 'TRAIN.CHECKPOINT_PERIOD=2' 

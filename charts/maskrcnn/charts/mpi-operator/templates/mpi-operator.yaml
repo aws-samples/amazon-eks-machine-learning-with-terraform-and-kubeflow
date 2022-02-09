@@ -1,28 +1,50 @@
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+---
+apiVersion: v1
+kind: ServiceAccount
 metadata:
-  name: {{ .Values.mpioperator.name }}
-  namespace: {{ .Values.global.namespace }}
   labels:
+    app: {{ .Values.mpioperator.name }}
+    app.kubernetes.io/component: mpijob
     app.kubernetes.io/name: {{ .Values.mpioperator.name }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
+  name: {{ .Values.mpioperator.name }}
+  namespace: {{ .Values.global.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: {{ .Values.mpioperator.name }}
+    app.kubernetes.io/component: mpijob
+    app.kubernetes.io/name: {{ .Values.mpioperator.name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  name: {{ .Values.mpioperator.name }}
 rules:
 - apiGroups:
   - ""
   resources:
   - configmaps
-  - serviceaccounts
+  - secrets
+  - services
   verbs:
   - create
   - list
   - watch
+  - update
 - apiGroups:
   - ""
   resources:
   - pods
   verbs:
+  - create
   - get
+  - list
+  - watch
+  - delete
+  - update
+  - patch
 - apiGroups:
   - ""
   resources:
@@ -32,19 +54,18 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - endpoints
+  verbs:
+  - create
+  - get
+  - update
+- apiGroups:
+  - ""
+  resources:
   - events
   verbs:
   - create
   - patch
-- apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
-  - roles
-  - rolebindings
-  verbs:
-  - create
-  - list
-  - watch
 - apiGroups:
   - apps
   resources:
@@ -74,28 +95,29 @@ rules:
   - kubeflow.org
   resources:
   - mpijobs
+  - mpijobs/finalizers
+  - mpijobs/status
   verbs:
   - '*'
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: {{ .Values.mpioperator.name }}
-  namespace: {{ .Values.global.namespace }}
-  labels:
-    app.kubernetes.io/name: {{ .Values.mpioperator.name }} 
-    app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
+- apiGroups:
+  - scheduling.incubator.k8s.io
+  - scheduling.sigs.dev
+  resources:
+  - queues
+  - podgroups
+  verbs:
+  - '*'
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ .Values.mpioperator.name }}
-  namespace: {{ .Values.global.namespace }}
   labels:
+    app: {{ .Values.mpioperator.name }}
+    app.kubernetes.io/component: mpijob
     app.kubernetes.io/name: {{ .Values.mpioperator.name }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
+  name: {{ .Values.mpioperator.name }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -108,28 +130,38 @@ subjects:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.mpioperator.name }}
-  namespace: {{ .Values.global.namespace }}
   labels:
     app: {{ .Values.mpioperator.name }}
+    app.kubernetes.io/component: mpijob
+    app.kubernetes.io/name: {{ .Values.mpioperator.name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  name: {{ .Values.mpioperator.name }}
+  namespace: {{ .Values.global.namespace }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-     app: {{ .Values.mpioperator.name }}
+      app: {{ .Values.mpioperator.name }}
+      app.kubernetes.io/component: mpijob
+      app.kubernetes.io/name: {{ .Values.mpioperator.name }}
   template:
     metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
       labels:
         app: {{ .Values.mpioperator.name }}
+        app.kubernetes.io/component: mpijob
+        app.kubernetes.io/name: {{ .Values.mpioperator.name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
     spec:
       containers:
       - args:
-        - --gpus-per-node
-        - "{{ .Values.mpioperator.gpuspernode }}" 
-        - --kubectl-delivery-image
-        - {{ .Values.mpioperator.deliveryimage }} 
-        image: {{ .Values.mpioperator.image }} 
+        - -alsologtostderr
+        - --lock-namespace
+        - {{ .Values.global.namespace }}
+        image: {{ .Values.mpioperator.image }}
         imagePullPolicy: {{ .Values.mpioperator.pullpolicy }} 
         name: {{ .Values.mpioperator.name }}
-      serviceAccountName: {{ .Values.mpioperator.name }} 
----
+      serviceAccountName: {{ .Values.mpioperator.name }}

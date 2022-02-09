@@ -29,3 +29,7 @@ RUN cd /mask-rcnn-tensorflow && git reset --hard 99dda649eb39874423eeaf0a9e87657
 
 RUN chmod -R +w /mask-rcnn-tensorflow
 RUN pip install -e /mask-rcnn-tensorflow/
+
+RUN echo "UserKnownHostsFile /dev/null" >> /etc/ssh/ssh_config && \
+    sed -i 's/#\(StrictModes \).*/\1no/g' /etc/ssh/sshd_config
+CMD ["/bin/bash"]

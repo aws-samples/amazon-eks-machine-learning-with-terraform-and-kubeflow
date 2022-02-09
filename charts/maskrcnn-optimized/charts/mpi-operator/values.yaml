@@ -1,6 +1,4 @@
 mpioperator:
   name: mpi-operator
-  image: mpioperator/mpi-operator:0.2.0
-  deliveryimage: mpioperator/kubectl-delivery:0.2.0 
+  image: mpioperator/mpi-operator:0.3.0
   pullpolicy: Always
-  gpuspernode: 8

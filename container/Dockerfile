@@ -17,3 +17,7 @@ RUN git clone https://github.com/tensorpack/tensorpack.git /tensorpack
 RUN cd /tensorpack && git fetch origin db541e8ec9edeeb12f8dcc79f3ca835412d282e1 
 RUN cd /tensorpack && git reset --hard db541e8ec9edeeb12f8dcc79f3ca835412d282e1 
 RUN pip install -e /tensorpack 
+
+RUN echo "UserKnownHostsFile /dev/null" >> /etc/ssh/ssh_config && \
+    sed -i 's/#\(StrictModes \).*/\1no/g' /etc/ssh/sshd_config
+CMD ["/bin/bash"]
