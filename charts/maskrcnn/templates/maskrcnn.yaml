@@ -107,7 +107,7 @@ spec:
       template:
         spec:
           priorityClassName: "training-priority"
-          restartPolicy: OnFailure
+          restartPolicy: Never
           volumes:
           - name: {{ .Values.global.shared_fs }} 
             persistentVolumeClaim:
