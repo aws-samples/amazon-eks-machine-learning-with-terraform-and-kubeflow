@@ -1,6 +1,0 @@
-tensorboard:
-  name: tensorboard
-  port: 80
-  target_port: 6006
-  image: 763104351884.dkr.ecr.us-west-2.amazonaws.com/tensorflow-training:1.15.2-cpu-py36-ubuntu18.04
-  image_pull_policy: IfNotPresent

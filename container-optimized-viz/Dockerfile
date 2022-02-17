@@ -37,4 +37,5 @@ RUN pip install jupyter
 RUN apt install unzip
 ADD notebooks /notebooks
 
-RUN openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 -keyout /labs-key.key -out /labs-cert.pem -subj "/CN=mask-rcnn/emailAddress=admin@example.com/C=US/ST=Washington/L=Seattle/O=Amazon/OU=AWS"
+RUN apt install -y nginx
+RUN openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 -keyout /etc/ssl/domain.key -out /etc/ssl/domain.crt -subj "/CN=aws-samples/emailAddress=aws-samples@amazon.com/C=US/ST=Washington/L=Seattle/O=Amazon/OU=AWS"

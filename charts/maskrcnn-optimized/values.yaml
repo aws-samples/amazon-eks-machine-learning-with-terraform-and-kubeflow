@@ -2,13 +2,13 @@ global:
   namespace: kubeflow
   shared_fs: efs 
   shared_pvc: tensorpack-efs-gp-bursting 
-  source_cidr: "0.0.0.0/0"
+  source_cidr: "0.0.0.0/0" # Public IP source CIDR
 maskrcnn:
   name: mask-rcnn-tensorflow
   gpus: 16
   gpu_nodes: 2
   gpus_per_node: 8
-  image: # ECR image URL
+  image:
   train_script: /mask-rcnn-tensorflow/MaskRCNN/train.py
   tp_16: 1
   batch_size_per_gpu: 4
@@ -31,4 +31,5 @@ maskrcnn:
   if_exclude:  lo,docker0
   nccl_min_rings: 8
   nccl_debug: INFO
-  extra_config: 'TRAIN.GRADIENT_CLIP=0.36' 
+  extra_config: 'TRAIN.GRADIENT_CLIP=0.36'
+  backoff_limit: 20

@@ -19,7 +19,7 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   runPolicy:
-    backoffLimit: 20
+    backoffLimit: {{ .Values.maskrcnn.backoff_limit }}
     cleanPodPolicy: Running
   mpiImplementation: OpenMPI
   mpiReplicaSpecs:

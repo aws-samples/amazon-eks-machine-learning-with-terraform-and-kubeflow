@@ -1,6 +1,17 @@
+image:
+image_pull_policy: Always
 jupyter:
   name: jupyter 
   port: 443 
   target_port: 8888
-  image: # ECR image id 
-  image_pull_policy: Always
+tensorboard:
+  name: tensorboard
+  port: 6443
+  target_port: 6443
+  upstream_port: 6006
+nginx:
+  name: nginx
+  ssl_certificate: /etc/ssl/domain.crt
+  ssl_certificate_key: /etc/ssl/domain.key
+  user: tensorboard
+  htpasswd:      # MD5 password hash

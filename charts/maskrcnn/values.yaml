@@ -2,13 +2,13 @@ global:
   namespace: kubeflow
   shared_fs: efs
   shared_pvc: tensorpack-efs-gp-bursting
-  source_cidr: "0.0.0.0/0"
+  source_cidr: "0.0.0.0/0" # Public IP source CIDR
 maskrcnn:
   name: maskrcnn
   gpus: 16
   gpu_nodes: 2
   gpus_per_node: 8
-  image: # ECR image id
+  image:
   train_script: /tensorpack/examples/FasterRCNN/train.py
   data_fs: efs
   data_dir: data
@@ -28,4 +28,5 @@ maskrcnn:
   if_exclude:  lo,docker0
   nccl_min_rings: 8
   nccl_debug: INFO
-  extra_config: 'TRAIN.CHECKPOINT_PERIOD=2' 
+  extra_config: 'TRAIN.CHECKPOINT_PERIOD=2'
+  backoff_limit: 20

@@ -102,36 +102,10 @@ This step creates an EKS managed node group for ```training```. Use the output o
 
 ### Build and Upload Docker Image to Amazon EC2 Container Registry (ECR)
 
-#### Tensorpack Mask-RCNN
-
-Below, we build and push the Docker images for [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model. 
-
-##### Training Image
-For the training container image, replace ```aws-region``` below, and execute:
+Below, we will build and push all the Docker images to Amazon ECR. Replace ```aws-region``` below, and execute:
 
       cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-      ./container/build_tools/build_and_push.sh aws-region
-
-##### Testing Image
-For the testing container image, replace ```aws-region``` below, and execute:
-
-      cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-      ./container-viz/build_tools/build_and_push.sh aws-region
-
-#### AWS Mask-RCNN
-Below, we build and push the Docker images for [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) model. 
-
-##### Training Image
-For the training container image, replace ```aws-region``` below, and execute:
-
-      cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-      ./container-optimized/build_tools/build_and_push.sh aws-region
-
-##### Testing Image
-For the testing container image, replace ```aws-region``` below, and execute:
-
-      cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-      ./container-optimized-viz/build_tools/build_and_push.sh aws-region
+      ./build-ecr-images.sh aws-region
 
 ### Stage COCO 2017 Dataset
 
@@ -150,43 +124,62 @@ To stage data on FSx for Lustre,  customize ```S3_BUCKET``` variable in ```eks-c
 
 Execute ```kubectl get pods -n kubeflow``` to check the status of the two Pods. Once the status of the two Pods is marked ```Completed```, data is successfully staged.
 
-### Install Helm charts to begin model training
+### Install Helm charts for model training
 
-#### Install mpijob
+#### Install mpijob chart
 
 To deploy Kubeflow **MPIJob** *CustomResouceDefintion* using *mpijob chart*, execute:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/charts
     helm install --debug mpijob ./mpijob/
 
-#### Install Mask-RCNN training job
+#### Install Mask-RCNN charts
  
-You have three options for training Mask-RCNN model:
+You have two Helm charts available for training Mask-RCNN models. Both these Helm charts use the same Kubernetes namespace, namely ```kubeflow```. Do not install both Helm charts at the same time.
 
-  a) To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize  ```charts/maskrcnn/valuex.yaml```, as needed.  Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the respective ```persistent-volume-claim```, which is ```tensorpack-efs-gp-bursting``` for ```efs```, and ```tensorpack-fsx``` for ```fsx```. To test the trained model using a Jupyter Lab notebook, customize ```values.yaml``` in the ```charts/maskrcnn/charts/jupyter``` directory. 
+To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize  ```charts/maskrcnn/valuex.yaml```, as described below:
 
-  b) To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, customize  ```charts/maskrcnn-optimized/values.yaml```, as needed.  Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the respective ```persistent-volume-claim```. To test the trained model using a Jupyter Lab notebook, customize ```values.yaml``` in the ```charts/maskrcnn-optimized/charts/jupyter``` directory. 
+1. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the respective ```persistent-volume-claim```, which is ```tensorpack-efs-gp-bursting``` for ```efs```, and ```tensorpack-fsx``` for ```fsx```. 
+2. Set ```global.source_cidr``` to your public source CIDR.
+3. To password protect [TensorBoard](https://www.tensorflow.org/tensorboard), you **must** set ```htpasswd```  in  ```charts/maskrcnn/charts/jupyter/value.yaml``` to a MD5 password hash.
 
-  c) To create a brand new Helm chart for defining a new MPIJOb, copy ```maskrcnn``` folder to a new folder under ```charts```. Update the chart name in ```Chart.yaml```. Update the ```namespace``` global variable  in ```values.yaml``` to specify a new K8s namespace.
-
-Install the selected Helm chart. For example, to install the ```maskrcnn``` chart, execute:
+To install the ```maskrcnn``` chart, execute:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/charts
     helm install --debug maskrcnn ./maskrcnn/
 
-Execute ```kubectl get pods -n kubeflow``` to see the status of the pods. Execute: ```kubectl logs -f maskrcnn-launcher-xxxxx -n kubeflow``` to see live log of training from the launcher (change xxxxx to your specific pod name). Model checkpoints and logs will be placed on the ```shared_fs``` file-system  set in ```values.yaml```, i.e. ```efs``` or ```fsx```.
+To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, customize  ```charts/maskrcnn-optimized/values.yaml```, as described below:
 
-### Visualize Tensorboard summaries
-Execute ```kubectl get services -n kubeflow``` to get Tensorboard service DNS address. Access the Tensorboard DNS service in a browser on port 80 to visualize Tensorboard summaries.
+1. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the respective ```persistent-volume-claim```, which is ```tensorpack-efs-gp-bursting``` for ```efs```, and ```tensorpack-fsx``` for ```fsx```. 
+2. Set ```global.source_cidr``` to your public source CIDR.
+3. To password protect [TensorBoard](https://www.tensorflow.org/tensorboard), you **must** set ```htpasswd```  in  ```charts/maskrcnn-optimized/charts/jupyter/value.yaml``` to a MD5 password hash.
+
+To install the ```maskrcnn-optimized``` chart, execute:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/charts
+    helm install --debug maskrcnn-optimized ./maskrcnn-optimized/
+
+### Monitor training
+
+Execute ```kubectl get pods -n kubeflow``` to see the status of the pods. Execute: ```kubectl logs -f maskrcnn-launcher-xxxxx -n kubeflow``` to see live log of training from the launcher (change xxxxx to your specific pod name). Model checkpoints and logs will be placed on the ```shared_fs``` file-system  set in ```values.yaml```, i.e. ```efs``` or ```fsx```. 
+
+Customize and apply ```eks-cluster/attach-pvc.yaml``` if you need to attach to ```efs``` or ```fsx``` shared file system using a K8s pod.
 
 ### Test trained model
 Execute ```kubectl logs -f jupyter-xxxxx -n kubeflow``` to display Jupyter pod log. At the beginning of the Jupyter pod log, note the **security token** required to access Jupyter service in a browser. 
 
-Execute ```kubectl get services -n kubeflow``` to get Jupyter service DNS address. To test the trained model using a Jupyter Lab notebook, access the Jupyter service in a browser on port 443 using the security token provided in the pod log. Your URL to access the Jupyter service should look similar to the example below:
+Execute ```kubectl get services -n kubeflow``` to get the service DNS address. To test the trained model using a Jupyter notebook, access the service in a browser on port 443 using the service DNS and the security token.  Your URL to access the Jupyter service should look similar to the example below:
 
-  https://xxxxxxxxxxxxxxxxxxxxxxxxx.elb.xx-xxxx-x.amazonaws.com/lab?token=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  https://xxxxxxxxxxxxxxxxxxxxxxxxx.elb.xx-xxxx-x.amazonaws.com?token=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   
-Accessing Jupyter service in a browser will display a browser warning, because the service endpoint uses a self-signed certificate. If you deem it appropriate, it is safe to ignore the warning and proceed to access the service. Open the notebook under ```notebook``` folder, and run it it to test the trained model.
+Because the service endpoint in this tutorial uses a **self-signed certificate**, accessing Jupyter service in a browser will display a browser warning. If you deem it appropriate, proceed to access the service. Open the notebook, and run it it to test the trained model. Note, there may not be any trained model checkpoint available at a given time, while training is in progress.
+
+### Visualize TensorBoard summaries
+To access TensorBoard via web, use the service DNS address noted above. Your URL to access the TensorBoard service should look similar to the example below:
+
+  https://xxxxxxxxxxxxxxxxxxxxxxxxx.elb.xx-xxxx-x.amazonaws.com:6443/
+  
+Accessing TensorBoard service in a browser will display a browser warning, because the service endpoint uses a **self-signed certificate**. If you deem it appropriate, proceed to access the service. When prompted for authentication, use the default username ```tensorboard```, and your password.
 
 ### Delete Helm charts after training
 When training is complete, you may delete an installed chart by executing ```helm delete chart-name```, for example ```helm delete maskrcnn```. This will destroy all pods used in training and testing, including Tensorboard and Jupyter service pods. However, the logs and trained models will be preserved on the shared file system used for training. When you delete all the helm charts, the kubenetes cluster autoscaler may scale down the ```inference``` and ```training``` node groups to zero size.
