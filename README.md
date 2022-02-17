@@ -141,7 +141,8 @@ To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/ma
 
 1. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the respective ```persistent-volume-claim```, which is ```tensorpack-efs-gp-bursting``` for ```efs```, and ```tensorpack-fsx``` for ```fsx```. 
 2. Set ```global.source_cidr``` to your public source CIDR.
-3. To password protect [TensorBoard](https://www.tensorflow.org/tensorboard), you **must** set ```htpasswd```  in  ```charts/maskrcnn/charts/jupyter/value.yaml``` to a MD5 password hash.
+
+To password protect [TensorBoard](https://www.tensorflow.org/tensorboard), you **must** set ```htpasswd```  in  ```charts/maskrcnn/charts/jupyter/value.yaml``` to a quoted MD5 password hash.
 
 To install the ```maskrcnn``` chart, execute:
 
@@ -152,7 +153,8 @@ To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) op
 
 1. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the respective ```persistent-volume-claim```, which is ```tensorpack-efs-gp-bursting``` for ```efs```, and ```tensorpack-fsx``` for ```fsx```. 
 2. Set ```global.source_cidr``` to your public source CIDR.
-3. To password protect [TensorBoard](https://www.tensorflow.org/tensorboard), you **must** set ```htpasswd```  in  ```charts/maskrcnn-optimized/charts/jupyter/value.yaml``` to a MD5 password hash.
+
+To password protect [TensorBoard](https://www.tensorflow.org/tensorboard), you **must** set ```htpasswd```  in  ```charts/maskrcnn-optimized/charts/jupyter/value.yaml``` to a quoted MD5 password hash.
 
 To install the ```maskrcnn-optimized``` chart, execute:
 
