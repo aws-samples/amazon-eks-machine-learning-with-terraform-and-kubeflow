@@ -46,7 +46,7 @@ variable "node_volume_size" {
 
 variable "node_instance_type" {
   description = "GPU enabled instance types for training. Must have 8 GPUs."
-  default = "g5.48xlarge,p3.16xlarge,p3dn.24xlarge,p4d.24xlarge"
+  default = "p3.16xlarge,p3dn.24xlarge,p4d.24xlarge,g5.48xlarge"
   type = string
 }
 
@@ -78,7 +78,7 @@ variable "node_group_min" {
 
 provider "aws" {
   region                  = var.region
-  shared_credentials_file = var.credentials
+  shared_credentials_files = [var.credentials]
   profile                 = var.profile
 }
 

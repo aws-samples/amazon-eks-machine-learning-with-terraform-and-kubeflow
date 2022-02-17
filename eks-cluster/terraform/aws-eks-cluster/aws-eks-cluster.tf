@@ -86,7 +86,7 @@ variable "inference_instance_type" {
 
 provider "aws" {
   region                  = var.region
-  shared_credentials_file = var.credentials
+  shared_credentials_files = [var.credentials]
   profile                 = var.profile
 }
 
@@ -255,6 +255,7 @@ resource "aws_efs_file_system" "fs" {
 
  performance_mode = var.efs_performance_mode
  throughput_mode = var.efs_throughput_mode
+ encrypted = true
 
 
   tags = {
