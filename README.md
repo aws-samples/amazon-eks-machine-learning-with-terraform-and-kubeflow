@@ -168,7 +168,7 @@ Execute ```kubectl get pods -n kubeflow``` to see the status of the pods. Execut
 Customize and apply ```eks-cluster/attach-pvc.yaml``` if you need to attach to ```efs``` or ```fsx``` shared file system using a K8s pod.
 
 ### Test trained model
-Execute ```kubectl logs -f jupyter-xxxxx -n kubeflow``` to display Jupyter pod log. At the beginning of the Jupyter pod log, note the **security token** required to access Jupyter service in a browser. 
+Execute ```kubectl logs -f jupyter-xxxxx -n kubeflow -c jupyter``` to display Jupyter log. At the beginning of the Jupyter log, note the **security token** required to access Jupyter service in a browser. 
 
 Execute ```kubectl get services -n kubeflow``` to get the service DNS address. To test the trained model using a Jupyter notebook, access the service in a browser on port 443 using the service DNS and the security token.  Your URL to access the Jupyter service should look similar to the example below:
 
