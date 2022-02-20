@@ -100,6 +100,20 @@ This step creates an EKS managed node group for ```training```. Use the output o
    
     terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster"  -var="node_role_arn=" -var="nodegroup_name=" -var="subnet_ids="
 
+#### Attach to shared file-systems
+
+The infrastructure created above includes an EFS file-system, and a FSx for Lustre file-system.
+
+Start ```attach-pvc``` container for access to the EFS shared file-system by executing following steps:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster
+    kubectl apply -f attach-pvc.yaml  -n kubeflow
+
+Start ```attach-pvc-fsx``` container for access to the FSx for Lustre shared file-system by executing following steps:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster
+    kubectl apply -f attach-pvc-fsx.yaml  -n kubeflow
+
 ### Build and Upload Docker Image to Amazon EC2 Container Registry (ECR)
 
 Below, we will build and push all the Docker images to Amazon ECR. Replace ```aws-region``` below, and execute:
@@ -165,7 +179,23 @@ To install the ```maskrcnn-optimized``` chart, execute:
 
 Execute ```kubectl get pods -n kubeflow``` to see the status of the pods. Execute: ```kubectl logs -f maskrcnn-launcher-xxxxx -n kubeflow``` to see live log of training from the launcher (change xxxxx to your specific pod name). Model checkpoints and logs will be placed on the ```shared_fs``` file-system  set in ```values.yaml```, i.e. ```efs``` or ```fsx```. 
 
-Customize and apply ```eks-cluster/attach-pvc.yaml``` if you need to attach to ```efs``` or ```fsx``` shared file system using a K8s pod.
+### Training logs
+
+If you configured your ```shared_fs``` file-system to be ```efs```, you can access your training logs by going inside the ```attach-pvc``` container as follows:
+
+    kubectl exec --tty --stdin -n kubeflow attach-pvc bash
+    cd /efs
+    ls -ltr maskrcnn-*
+
+Type ```exit``` to exit from the ```attach-pvc``` container. 
+
+If you configured your ```shared_fs``` file-system to be ```fsx```, you can access your training by going inside the ```attach-pvc-fsx``` container as follows :
+
+    kubectl exec --tty --stdin -n kubeflow attach-pvc-fsx bash
+    cd /fsx
+    ls -ltr maskrcnn-*
+
+Type ```exit``` to exit from the ```attach-pvc-fsx``` container. 
 
 ### Test trained model
 Execute ```kubectl logs -f jupyter-xxxxx -n kubeflow -c jupyter``` to display Jupyter log. At the beginning of the Jupyter log, note the **security token** required to access Jupyter service in a browser. 

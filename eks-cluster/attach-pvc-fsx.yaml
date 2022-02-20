@@ -1,19 +1,19 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: attach-pvc
+  name: attach-pvc-fsx
 spec:
   containers:
-  - name: attach-pvc
+  - name: attach-pvc-fsx
     image: ubuntu:latest
     command: ["/bin/bash"]
     securityContext:
       privileged: true
     args: ["-c", "while true; do echo $(date -u) >> /data/out.txt; sleep 3600; done"]
     volumeMounts:
-    - name:  efs 
-      mountPath: /efs
+    - name:  fsx 
+      mountPath: /fsx
   volumes:
-  - name:  efs
+  - name:  fsx
     persistentVolumeClaim:
-      claimName: tensorpack-efs-gp-bursting # k8s persistent-volume-claim name
+      claimName: tensorpack-fsx # k8s persistent-volume-claim name
