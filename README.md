@@ -177,9 +177,15 @@ To install the ```maskrcnn-optimized``` chart, execute:
 
 ### Monitor training
 
-Execute ```kubectl get pods -n kubeflow``` to see the status of the pods. Execute: ```kubectl logs -f maskrcnn-launcher-xxxxx -n kubeflow``` to see live log of training from the launcher (change xxxxx to your specific pod name). Model checkpoints and logs will be placed on the ```shared_fs``` file-system  set in ```values.yaml```, i.e. ```efs``` or ```fsx```. 
+Note, this solution uses [EKS autoscaling](https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html) to automatically scale-up (from zero nodes) and scale-down (to zero nodes) the size of the [EKS managed nodegroup](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) used for training. So, if currently your training node group has zero nodes, it may take several minutes for the GPU nodes to be ```Ready``` and for the training pods to reach ```Running``` state. During this time, the ```maskrcnn-launcher-xxxxx``` pod may crash and restart automatically several times, and that is nominal behavior. Once the ```maskrcnn-launcher-xxxxx``` is in ```Running``` state, replace ```xxxxx``` with your launcher pod suffix below and execute:
+
+    kubectl logs -f maskrcnn-launcher-xxxxx -n kubeflow
+
+This will show the live training log from the launcher pod. 
 
 ### Training logs
+
+Model checkpoints and all training logs are also available on the ```shared_fs``` file-system  set in ```values.yaml```, i.e. ```efs``` or ```fsx```. 
 
 If you configured your ```shared_fs``` file-system to be ```efs```, you can access your training logs by going inside the ```attach-pvc``` container as follows:
 
