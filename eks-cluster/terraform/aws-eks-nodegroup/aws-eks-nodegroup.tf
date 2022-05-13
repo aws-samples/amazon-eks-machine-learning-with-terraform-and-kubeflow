@@ -46,7 +46,7 @@ variable "node_volume_size" {
 
 variable "node_instance_type" {
   description = "GPU enabled instance types for training. Must have 8 GPUs."
-  default = "p3.16xlarge,p3dn.24xlarge,p4d.24xlarge,g5.48xlarge"
+  default = "g5.48xlarge,p3dn.24xlarge,p4d.24xlarge"
   type = string
 }
 
@@ -74,6 +74,12 @@ variable "node_group_min" {
     type = string
 }
 
+variable "capacity_type" {
+  description = "ON_DEMAND or SPOT capacity"
+  default = "ON_DEMAND"
+  type = string
+}
+
 # END variables
 
 provider "aws" {
@@ -90,6 +96,7 @@ resource "aws_eks_node_group" "training_ng" {
   instance_types  = split(",", var.node_instance_type)
   disk_size       = var.node_volume_size 
   ami_type        = "AL2_x86_64_GPU"
+  capacity_type = var.capacity_type
 
   scaling_config {
     desired_size = var.node_group_desired 
