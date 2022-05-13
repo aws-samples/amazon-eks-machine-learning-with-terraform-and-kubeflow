@@ -1,7 +1,7 @@
 global:
   namespace: kubeflow
-  shared_fs: efs
-  shared_pvc: tensorpack-efs-gp-bursting
+  shared_fs: fsx
+  shared_pvc: tensorpack-fsx # tensorpack-efs-gp-bursting
   source_cidr: "0.0.0.0/0" # Public IP source CIDR
 maskrcnn:
   name: maskrcnn
@@ -10,8 +10,8 @@ maskrcnn:
   gpus_per_node: 8
   image:
   train_script: /tensorpack/examples/FasterRCNN/train.py
-  data_fs: efs
-  data_dir: data
+  data_fs: fsx # efs
+  data_dir: mask-rcnn/eks/input/data
   steps_per_epoch: 7500  # Must be equal to 120000/gpus 
   lr_schedule: "[240000,320000,360000]"
   eval_period_in_epochs: 1
@@ -20,13 +20,14 @@ maskrcnn:
   mode_fpn: 'True'
   mode_mask: 'True'
   backbone_norm: FreezeBN
-  backbone_weights: data/pretrained-models/ImageNet-R50-AlignPadding.npz
+  backbone_weights: mask-rcnn/eks/input/data/pretrained-models/ImageNet-R50-AlignPadding.npz
   image_pull_policy: Always
   horovod_cycle_time: "0.5"
   horovod_fusion_threshold: "67108864"
   nccl_socket_ifname: ^lo,docker0
   if_exclude:  lo,docker0
-  nccl_min_rings: 8
+  tf_device_min_sys_mem_mb: 1024
   nccl_debug: INFO
-  extra_config: 'TRAIN.CHECKPOINT_PERIOD=2'
-  backoff_limit: 20
+  nccl_buffsize: "4194304"
+  extra_config: 'TRAIN.CHECKPOINT_PERIOD=2' 
+  backoff_limit: 2000

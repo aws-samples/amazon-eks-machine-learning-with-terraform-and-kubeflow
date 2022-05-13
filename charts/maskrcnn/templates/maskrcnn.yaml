@@ -38,10 +38,14 @@ spec:
               value: "{{ .Values.maskrcnn.horovod_fusion_threshold }}" 
             - name: NCCL_SOCKET_IFNAME
               value: "{{ .Values.maskrcnn.nccl_socket_ifname }}" 
-            - name: NCCL_MIN_NRINGS
-              value: "{{ .Values.maskrcnn.nccl_min_rings }}" 
             - name: NCCL_DEBUG
               value: "{{ .Values.maskrcnn.nccl_debug }}" 
+            - name: NCCL_BUFFSIZE
+              value: "{{ .Values.maskrcnn.nccl_buffsize }}" 
+            - name: TF_DEVICE_MIN_SYS_MEMORY_IN_MB 
+              value: "{{ .Values.maskrcnn.tf_device_min_sys_mem_mb }}" 
+            - name: TF_CPP_MIN_LOG_LEVEL
+              value: "2"
             command: 
             - mpirun
             args:
@@ -60,6 +64,9 @@ spec:
             - -mca 
             - oob_tcp_if_exclude 
             - {{ .Values.maskrcnn.if_exclude }}
+            - -mca
+            - plm_rsh_no_tree_spawn
+            - "1"
             - -x
             - HOROVOD_CYCLE_TIME
             - -x
@@ -67,9 +74,13 @@ spec:
             - -x
             - NCCL_SOCKET_IFNAME
             - -x
-            - NCCL_MIN_NRINGS
-            - -x
             - NCCL_DEBUG
+            - -x
+            - NCCL_BUFFSIZE
+            - -x
+            - TF_DEVICE_MIN_SYS_MEMORY_IN_MB
+            - -x
+            - TF_CPP_MIN_LOG_LEVEL
             - -x
             - LD_LIBRARY_PATH
             - -x
@@ -117,6 +128,10 @@ spec:
             hostPath:
               path: /ebs
               type: DirectoryOrCreate
+          - name: shm
+            hostPath:
+              path: /dev/shm
+              type: Directory
           containers:
           - name: {{ .Values.maskrcnn.name }}
             image: {{ .Values.maskrcnn.image }}
@@ -126,6 +141,8 @@ spec:
               name: {{ .Values.global.shared_fs }}
             - mountPath: /ebs
               name: ebs
+            - mountPath: /dev/shm
+              name: shm
             resources:
               limits:
                 nvidia.com/gpu: {{ .Values.maskrcnn.gpus_per_node }}
