@@ -33,7 +33,7 @@ spec:
     - name: S3_PREFIX
       value: mask-rcnn/eks/input 
     - name: STAGE_DIR 
-      value: /fsx
+      value: /fsx/mask-rcnn/eks/input
     command:
     -  sh 
     - /etc/config/stage-data.sh
