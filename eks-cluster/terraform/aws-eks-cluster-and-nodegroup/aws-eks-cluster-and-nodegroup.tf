@@ -19,7 +19,7 @@ variable "cluster_name" {
 
 variable "k8s_version" {
   description = "kubernetes version"
-  default = "1.21"
+  default = "1.23"
   type    = string
 }
 
@@ -381,7 +381,7 @@ resource "aws_fsx_lustre_file_system" "fs" {
 }
 
 locals {
-  use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.21": var.k8s_version
+  use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.23": var.k8s_version
   cluster_autoscaler_version=substr(local.use_k8s_version, 0, 4)
 }
 
@@ -513,7 +513,7 @@ resource "null_resource" "fsx_id" {
   }
 
   provisioner "local-exec" {
-    command = "kubectl apply -k \"github.com/kubernetes-sigs/aws-fsx-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-0.4\""
+    command = "kubectl apply -k \"github.com/kubernetes-sigs/aws-fsx-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-0.8\""
   }
 
   provisioner "local-exec" {
@@ -543,7 +543,7 @@ resource "null_resource" "efs_id" {
   }
 
   provisioner "local-exec" {
-    command = "kubectl apply -k \"github.com/kubernetes-sigs/aws-efs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.3\""
+    command = "kubectl apply -k \"github.com/kubernetes-sigs/aws-efs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.4\""
   }
 
   provisioner "local-exec" {
