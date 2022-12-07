@@ -1,12 +1,8 @@
-FROM 763104351884.dkr.ecr.us-west-2.amazonaws.com/tensorflow-training:2.8.0-gpu-py39-cu112-ubuntu20.04-e3
+FROM 763104351884.dkr.ecr.us-west-2.amazonaws.com/tensorflow-training:2.10.0-gpu-py39-cu112-ubuntu20.04-ec2
 
 ARG CUDA=11.4
 ARG CUDA_DASH=11-4
 ARG CUDNN=8.2.4.15-1
-
-RUN apt-key del 7fa2af80
-RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/3bf863cc.pub
-RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu2004/x86_64/7fa2af80.pub
 
 RUN apt-get update && \
    apt-get install -y --no-install-recommends \
