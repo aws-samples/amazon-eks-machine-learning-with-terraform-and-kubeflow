@@ -156,7 +156,17 @@ To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/ma
 1. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the respective ```persistent-volume-claim```, which is ```tensorpack-efs-gp-bursting``` for ```efs```, and ```tensorpack-fsx``` for ```fsx```. 
 2. Use [AWS check ip](http://checkip.amazonaws.com/) to get the public IP of your web browser client. Use this public IP to set ```global.source_cidr``` as a  ```/32``` CIDR. This will restrict Internet access to [Jupyter](https://jupyter.org/) notebook and [TensorBoard](https://www.tensorflow.org/tensorboard) services to your public IP. 
 
-To password protect [TensorBoard](https://www.tensorflow.org/tensorboard), you **must** set ```htpasswd```  in  ```charts/maskrcnn/charts/jupyter/value.yaml``` to a quoted MD5 password hash.
+To password protect [TensorBoard](https://www.tensorflow.org/tensorboard), generate the password hash for your password using the command below:
+
+    htpasswd -c .htpasswd tensorboard
+   
+Copy the generated password for `tensorboard` from `.htpasswd` file and set it as a quoted MD5 hash in ```charts/maskrcnn/charts/jupyter/value.yaml``` file, as shown in the example below:
+
+    htpasswd: "your-generated-password-hash" # MD5 password hash
+
+Finally, clean the generated password hash:
+
+    rm .htpasswd
 
 To install the ```maskrcnn``` chart, execute:
 
