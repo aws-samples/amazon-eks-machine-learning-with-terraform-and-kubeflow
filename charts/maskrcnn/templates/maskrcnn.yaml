@@ -32,10 +32,8 @@ spec:
           containers:
           - name: {{ .Values.maskrcnn.name }} 
             env:
-            - name: HOROVOD_CYCLE_TIME
-              value: "{{ .Values.maskrcnn.horovod_cycle_time }}" 
-            - name: HOROVOD_FUSION_THRESHOLD
-              value: "{{ .Values.maskrcnn.horovod_fusion_threshold }}" 
+            - name: HOROVOD_AUTOTUNE
+              value: "1" 
             - name: NCCL_SOCKET_IFNAME
               value: "{{ .Values.maskrcnn.nccl_socket_ifname }}" 
             - name: NCCL_DEBUG
@@ -68,9 +66,7 @@ spec:
             - plm_rsh_no_tree_spawn
             - "1"
             - -x
-            - HOROVOD_CYCLE_TIME
-            - -x
-            - HOROVOD_FUSION_THRESHOLD
+            - HOROVOD_AUTOTUNE
             - -x
             - NCCL_SOCKET_IFNAME
             - -x
