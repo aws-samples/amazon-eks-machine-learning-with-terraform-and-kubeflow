@@ -19,7 +19,7 @@ variable "cluster_name" {
 
 variable "k8s_version" {
   description = "kubernetes version"
-  default = "1.23"
+  default = "1.24"
   type    = string
 }
 
@@ -333,7 +333,7 @@ resource "aws_fsx_lustre_file_system" "fs" {
 }
 
 locals {
-  use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.23": var.k8s_version
+  use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.24": var.k8s_version
   cluster_autoscaler_version=substr(local.use_k8s_version, 0, 4)
 }
 
