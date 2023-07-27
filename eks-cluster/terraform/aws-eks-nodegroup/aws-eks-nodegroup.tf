@@ -46,7 +46,7 @@ variable "node_volume_size" {
 
 variable "node_instance_type" {
   description = "GPU enabled instance types for training. Must have 8 GPUs."
-  default = "g5.48xlarge,p3dn.24xlarge,p4d.24xlarge"
+  default = "p3dn.24xlarge"
   type = string
 }
 

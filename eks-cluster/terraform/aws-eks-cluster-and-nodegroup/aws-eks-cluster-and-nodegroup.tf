@@ -19,7 +19,7 @@ variable "cluster_name" {
 
 variable "k8s_version" {
   description = "kubernetes version"
-  default = "1.24"
+  default = "1.27"
   type    = string
 }
 
@@ -96,7 +96,7 @@ variable "node_volume_size" {
 
 variable "node_instance_type" {
   description = "GPU enabled instance types for training. Must have 8 GPUs."
-  default = "g5.48xlarge,p3dn.24xlarge,p4d.24xlarge"
+  default = "p3dn.24xlarge"
   type = string
 }
 
@@ -381,7 +381,7 @@ resource "aws_fsx_lustre_file_system" "fs" {
 }
 
 locals {
-  use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.24": var.k8s_version
+  use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.27": var.k8s_version
   cluster_autoscaler_version=substr(local.use_k8s_version, 0, 4)
 }
 
@@ -424,7 +424,7 @@ resource "aws_eks_cluster" "eks_cluster" {
   provisioner "local-exec" {
     command = <<-EOT
       kubectl -n kube-system patch deployment cluster-autoscaler --patch \
-      '{"spec": { "template": { "metadata":{"annotations":{"cluster-autoscaler.kubernetes.io/safe-to-evict": "false"}}, "spec": { "containers": [{ "image": "k8s.gcr.io/autoscaling/cluster-autoscaler:v${local.cluster_autoscaler_version}.0", "name": "cluster-autoscaler", "resources": { "requests": {"cpu": "100m", "memory": "300Mi"}}, "command": [ "./cluster-autoscaler", "--v=4", "--stderrthreshold=info", "--cloud-provider=aws", "--skip-nodes-with-local-storage=false", "--expander=least-waste", "--node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/${var.cluster_name}", "--balance-similar-node-groups", "--skip-nodes-with-system-pods=false" ]}]}}}}'
+      '{"spec": { "template": { "metadata":{"annotations":{"cluster-autoscaler.kubernetes.io/safe-to-evict": "false"}}, "spec": { "containers": [{ "image": "registry.k8s.io/autoscaling/cluster-autoscaler:v${local.cluster_autoscaler_version}.0", "name": "cluster-autoscaler", "resources": { "requests": {"cpu": "100m", "memory": "300Mi"}}, "command": [ "./cluster-autoscaler", "--v=4", "--stderrthreshold=info", "--cloud-provider=aws", "--skip-nodes-with-local-storage=false", "--expander=least-waste", "--node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/${var.cluster_name}", "--balance-similar-node-groups", "--skip-nodes-with-system-pods=false" ]}]}}}}'
     EOT
   }
 
