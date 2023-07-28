@@ -32,22 +32,23 @@ spec:
           containers:
           - name: {{ .Values.maskrcnn.name }} 
             env:
-            - name: HOROVOD_CYCLE_TIME
-              value: "{{ .Values.maskrcnn.horovod_cycle_time }}" 
-            - name: HOROVOD_FUSION_THRESHOLD
-              value: "{{ .Values.maskrcnn.horovod_fusion_threshold }}" 
+            - name: HOROVOD_AUTOTUNE
+              value: "1" 
             - name: NCCL_SOCKET_IFNAME
               value: "{{ .Values.maskrcnn.nccl_socket_ifname }}" 
-            - name: NCCL_MIN_NRINGS
-              value: "{{ .Values.maskrcnn.nccl_min_rings }}" 
             - name: NCCL_DEBUG
               value: "{{ .Values.maskrcnn.nccl_debug }}" 
-            - name: TENSORPACK_FP16 
-              value: "{{ .Values.maskrcnn.tp_16 }}" 
+            - name: NCCL_BUFFSIZE
+              value: "{{ .Values.maskrcnn.nccl_buffsize }}" 
+            - name: TF_DEVICE_MIN_SYS_MEMORY_IN_MB 
+              value: "{{ .Values.maskrcnn.tf_device_min_sys_mem_mb }}" 
+            - name: TF_CPP_MIN_LOG_LEVEL
+              value: "2"
             command: 
             - mpirun
             workingDir: {{ .Values.maskrcnn.working_dir }}
             args:
+            - --verbose
             - --output-filename 
             - /{{ .Values.global.shared_fs }}/{{ .Release.Name }}-{{ date "2006-01-02-15-04-05" .Release.Time  }}
             - --allow-run-as-root
@@ -63,18 +64,21 @@ spec:
             - -mca 
             - oob_tcp_if_exclude 
             - {{ .Values.maskrcnn.if_exclude }}
+            - -mca
+            - plm_rsh_no_tree_spawn
+            - "1"
             - -x
-            - HOROVOD_CYCLE_TIME
-            - -x
-            - HOROVOD_FUSION_THRESHOLD
+            - HOROVOD_AUTOTUNE
             - -x
             - NCCL_SOCKET_IFNAME
             - -x
-            - NCCL_MIN_NRINGS
-            - -x
             - NCCL_DEBUG
             - -x
-            - TENSORPACK_FP16
+            - NCCL_BUFFSIZE
+            - -x
+            - TF_DEVICE_MIN_SYS_MEMORY_IN_MB
+            - -x
+            - TF_CPP_MIN_LOG_LEVEL
             - -x
             - LD_LIBRARY_PATH
             - -x
@@ -92,7 +96,6 @@ spec:
             - {{ .Values.maskrcnn.train_script }} 
             - --logdir 
             - /{{ .Values.global.shared_fs }}/{{ .Release.Name }}-{{ date "2006-01-02-15-04-05" .Release.Time  }}/train_log/maskrcnn
-            - --fp16
             - --images_per_epoch
             - "{{ .Values.maskrcnn.images_per_epoch }}"
             - --config  

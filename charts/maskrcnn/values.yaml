@@ -26,7 +26,7 @@ maskrcnn:
   horovod_fusion_threshold: "67108864"
   nccl_socket_ifname: ^lo,docker0
   if_exclude:  lo,docker0
-  tf_device_min_sys_mem_mb: 1024
+  tf_device_min_sys_mem_mb: 4096 
   nccl_debug: INFO
   nccl_buffsize: "4194304"
   extra_config: 'TRAIN.CHECKPOINT_PERIOD=2' 

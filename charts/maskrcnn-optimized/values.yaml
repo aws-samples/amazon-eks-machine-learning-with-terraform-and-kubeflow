@@ -1,7 +1,7 @@
 global:
   namespace: kubeflow
-  shared_fs: efs 
-  shared_pvc: tensorpack-efs-gp-bursting 
+  shared_fs: fsx #efs
+  shared_pvc: tensorpack-fsx # tensorpack-efs-gp-bursting
   source_cidr: "0.0.0.0/0" # Public IP source CIDR
 maskrcnn:
   name: mask-rcnn-tensorflow
@@ -10,10 +10,9 @@ maskrcnn:
   gpus_per_node: 8
   image:
   train_script: /mask-rcnn-tensorflow/MaskRCNN/train.py
-  tp_16: 1
   batch_size_per_gpu: 4
-  data_fs: efs
-  data_dir: data
+  data_fs: fsx #ef6
+  data_dir: mask-rcnn/eks/input/data #data
   working_dir:  /mask-rcnn-tensorflow
   images_per_epoch: 120000 
   lr_epoch_schedule: "[(16, 0.1), (20, 0.01), (24, None)]"
@@ -23,13 +22,12 @@ maskrcnn:
   mode_fpn: 'True'
   mode_mask: 'True'
   backbone_norm: FreezeBN
-  backbone_weights: data/pretrained-models/ImageNet-R50-AlignPadding.npz
+  backbone_weights: mask-rcnn/eks/input/data/pretrained-models/ImageNet-R50-AlignPadding.npz
   image_pull_policy: Always 
-  horovod_cycle_time: "0.5"
-  horovod_fusion_threshold: "67108864"
+  extra_config: 'TRAIN.GRADIENT_CLIP=0.36'
   nccl_socket_ifname: ^lo,docker0
   if_exclude:  lo,docker0
-  nccl_min_rings: 8
+  tf_device_min_sys_mem_mb: 4096 
   nccl_debug: INFO
-  extra_config: 'TRAIN.GRADIENT_CLIP=0.36'
-  backoff_limit: 20
+  nccl_buffsize: "4194304"
+  backoff_limit: 2000 

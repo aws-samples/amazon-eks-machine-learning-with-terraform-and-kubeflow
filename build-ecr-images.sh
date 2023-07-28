@@ -11,4 +11,3 @@ fi
 
 ./container/build_tools/build_and_push.sh $region
 ./container-optimized/build_tools/build_and_push.sh $region
-./container-optimized-viz/build_tools/build_and_push.sh $region
