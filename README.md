@@ -187,7 +187,7 @@ To install the ```maskrcnn-optimized``` chart, execute:
 
 ### Monitor training
 
-Note, this solution uses [EKS autoscaling](https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html) to automatically scale-up (from zero nodes) and scale-down (to zero nodes) the size of the [EKS managed nodegroup](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) used for training. So, if currently your training node group has zero nodes, it may take several minutes for the GPU nodes to be ```Ready``` and for the training pods to reach ```Running``` state. During this time, the ```maskrcnn-launcher-xxxxx``` pod may crash and restart automatically several times, and that is nominal behavior. Once the ```maskrcnn-launcher-xxxxx``` is in ```Running``` state, replace ```xxxxx``` with your launcher pod suffix below and execute:
+Note, this solution uses [EKS autoscaling](https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html) to automatically scale-up (from zero nodes) and scale-down (to zero nodes) the size of the [EKS managed nodegroup](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) used for training. So, if currently your training node group has zero nodes, it may take several minutes (or longer, if GPU capacity is transiently unavailable) for the GPU nodes to be ```Ready``` and for the training pods to reach ```Running``` state. During this time, the ```maskrcnn-launcher-xxxxx``` pod may crash and restart automatically several times, and that is nominal behavior. Once the ```maskrcnn-launcher-xxxxx``` is in ```Running``` state, replace ```xxxxx``` with your launcher pod suffix below and execute:
 
     kubectl logs -f maskrcnn-launcher-xxxxx -n kubeflow
 
