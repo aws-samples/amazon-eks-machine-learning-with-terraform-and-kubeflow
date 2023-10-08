@@ -14,7 +14,7 @@ To launch an EC2 instance for the *build machine*, you will need [Adminstrator j
 
 1. Create an [Amazon EC2 key pair](https://docs.aws.amazon.com/en_pv/AWSEC2/latest/UserGuide/ec2-key-pairs.html) in your selected AWS region, if you do not already have one
 2. Create an [AWS Service role for an EC2 instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_terms-and-concepts.html#iam-term-service-role-ec2), and add [AWS managed policy for Administrator access](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html#jf_administratorhttps://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html#jf_administrator) to this IAM Role.
-3. [Launch](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EC2_GetStarted.html) a [m5.xlarge](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/LaunchingAndUsingInstances.html) instance from [Amazon Linux 2 AMI](https://aws.amazon.com/marketplace/pp/prodview-zc4x2k7vt6rpu) using  the IAM Role created in the previous step. Use 100 GB for ```Root``` volume size. 
+3. [Launch](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EC2_GetStarted.html) a [m5.xlarge](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/LaunchingAndUsingInstances.html) instance from [Amazon Linux 2 AMI](https://aws.amazon.com/marketplace/pp/prodview-zc4x2k7vt6rpu) using  the IAM Role created in the previous step. Use 200 GB for ```Root``` volume size. 
 4. After the instance state is ```Running```, [connect to your linux instance](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AccessingInstances.html) as ```ec2-user```. On the linux instance, install the required software tools as described below:
 
         sudo yum install -y docker git
@@ -30,10 +30,12 @@ Now, reconnect to your linux instance. All steps described under *Step by step* 
 While the solution described in this tutorial is general, and can be used to train and test any type of deep learning network (DNN) model, we will make the tutorial concrete by focusing on distributed TensorFlow training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN), and [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) models.  The high-level outline of solution is as follows:
 
   1. Setup build environment on the *build machine*
-  2. Use [Terraform](https://learn.hashicorp.com/terraform) to create infrastructure
-  3. Stage training data on EFS, or FSx for Lustre shared file-system
-  4. Use [Helm charts](https://helm.sh/docs/developing_charts/) to launch training jobs in the EKS cluster 
-  5. Use [Jupyter](https://jupyter.org/) notebook to test the trained model
+  2. Upload [COCO 2017 dataset](https://cocodataset.org/#download) to your [Amazon S3](https://aws.amazon.com/s3/) bucket
+  3. Use [Terraform](https://learn.hashicorp.com/terraform) to create infrastructure
+  4. (Optional) Stage training data on [Amazon EFS](https://aws.amazon.com/efs/) file-system, if you plan to use EFS
+  5. Build and Upload Docker Images to [Amazon EC2 Container Registry](https://aws.amazon.com/ecr/) (ECR)
+  6. Use [Helm charts](https://helm.sh/docs/developing_charts/) to launch training jobs in the EKS cluster 
+  7. Use [Jupyter](https://jupyter.org/) notebook to test the trained model
   
 For this tutorial, we assume the region to be ```us-west-2```. You may need to adjust the commands below if you use a different AWS Region.
 
@@ -63,7 +65,13 @@ For non-Linux, [install and configure kubectl for EKS](https://docs.aws.amazon.c
 
 [Helm](https://helm.sh/docs/intro/install/) is package manager for Kubernetes. It uses a package format named *charts*. A Helm chart is a collection of files that define Kubernetes resources. [Install helm](https://helm.sh/docs/intro/install/).
 
-### Use Terraform to create infrastructre
+### Upload COCO 2017 dataset to Amazon S3 bucket
+
+To download COCO 2017 dataset to your build environment instance, and upload it to your Amazon S3 bucket, customize [prepare-s3-bucket.sh](eks-cluster/prepare-s3-bucket.sh) script to specify your S3 bucket in ```S3_BUCKET``` variable, and run following command:
+
+    ./eks-cluster/prepare-s3-bucket.sh
+
+### Use Terraform to create infrastructure
 
 We recommend the [quick start option](#quick-start-option) for first-time walk-through.
 
@@ -73,8 +81,10 @@ This option creates an [Amazon EKS](https://aws.amazon.com/eks/) cluster, three 
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster-and-nodegroup
     terraform init
-    
-    terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]'
+
+Substitute `S3_BUCKET` with your S3 bucket name, and run following command:
+
+    terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET"
 
 #### Advanced option
 
@@ -86,8 +96,10 @@ To create the EKS cluster, two managed node groups (```system```, ```inference``
         
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster
     terraform init
-    
-    terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]'
+
+Substitute `S3_BUCKET` with your S3 bucket name and run the following command:
+
+    terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET"
    
    Save the output of the this command for creating the EKS managed node group.
    
@@ -114,29 +126,21 @@ Start ```attach-pvc-fsx``` container for access to the FSx for Lustre shared fil
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster
     kubectl apply -f attach-pvc-fsx.yaml  -n kubeflow
 
-### Build and Upload Docker Image to Amazon EC2 Container Registry (ECR)
+### (Optional) Stage Data on EFS
+The data is automatically imported from the ```S3_BUCKET``` to the FSx for Lustre file-system. 
+
+However, if you want to use the EFS file-system, we need to stage the COCO 2017 data on EFS. To stage the data, customize ```S3_BUCKET``` variable in [stage-data.yaml](eks-cluster/stage-data.yaml), and run following command:
+
+    kubectl apply -f stage-data.yaml -n kubeflow
+
+Execute ```kubectl get pods -n kubeflow``` to check the status of the staging Pod. Once the status of the Pod is marked ```Completed```, data is successfully staged on EFS.
+
+### Build and Upload Docker Images to Amazon EC2 Container Registry (ECR)
 
 Below, we will build and push all the Docker images to Amazon ECR. Replace ```aws-region``` below, and execute:
 
       cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
       ./build-ecr-images.sh aws-region
-
-### Stage COCO 2017 Dataset
-
-To download COCO 2017 dataset to your build environment instance and upload it to Amazon S3 bucket, customize ```eks-cluster/prepare-s3-bucket.sh``` script to specify your S3 bucket in ```S3_BUCKET``` variable, and execute ```eks-cluster/prepare-s3-bucket.sh ``` 
- 
-Next, we stage the data on EFS and FSx file-systems, so you have the option to use either one in training.
-
-#### Stage Data on EFS, and FSx for Lustre
-To stage data on EFS,  customize ```S3_BUCKET``` variable in ```eks-cluster/stage-data.yaml``` and execute:
-
-    kubectl apply -f stage-data.yaml -n kubeflow
-  
-To stage data on FSx for Lustre,  customize ```S3_BUCKET``` variable in ```eks-cluster/stage-data-fsx.yaml``` and execute:
-
-    kubectl apply -f stage-data-fsx.yaml -n kubeflow
-
-Execute ```kubectl get pods -n kubeflow``` to check the status of the two Pods. Once the status of the two Pods is marked ```Completed```, data is successfully staged.
 
 ### Install Helm charts for model training
 
@@ -151,7 +155,7 @@ To deploy Kubeflow **MPIJob** *CustomResouceDefintion* using *mpijob chart*, exe
  
 You have two Helm charts available for training Mask-RCNN models. Both these Helm charts use the same Kubernetes namespace, namely ```kubeflow```. Do not install both Helm charts at the same time.
 
-To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize  ```charts/maskrcnn/valuex.yaml```, as described below:
+To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize  [values.yaml](charts/maskrcnn/values.yaml), as described below:
 
 1. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the respective ```persistent-volume-claim```, which is ```tensorpack-efs-gp-bursting``` for ```efs```, and ```tensorpack-fsx``` for ```fsx```. 
 2. Use [AWS check ip](http://checkip.amazonaws.com/) to get the public IP of your web browser client. Use this public IP to set ```global.source_cidr``` as a  ```/32``` CIDR. This will restrict Internet access to [Jupyter](https://jupyter.org/) notebook and [TensorBoard](https://www.tensorflow.org/tensorboard) services to your public IP. 
@@ -173,7 +177,7 @@ To install the ```maskrcnn``` chart, execute:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/charts
     helm install --debug maskrcnn ./maskrcnn/
 
-To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, customize  ```charts/maskrcnn-optimized/values.yaml```, as described below:
+To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, customize  [maskrcnn-optimized/values.yaml](charts/maskrcnn-optimized/values.yaml), as described below:
 
 1. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the respective ```persistent-volume-claim```, which is ```tensorpack-efs-gp-bursting``` for ```efs```, and ```tensorpack-fsx``` for ```fsx```. 
 2. Set ```global.source_cidr``` to your public source CIDR.
