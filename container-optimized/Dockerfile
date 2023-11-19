@@ -1,4 +1,4 @@
-FROM public.ecr.aws/lts/ubuntu:20.04_stable
+FROM public.ecr.aws/lts/ubuntu:22.04_stable
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DEBCONF_NONINTERACTIVE_SEEN=true
@@ -14,9 +14,9 @@ RUN apt-get -y install gnupg2
 RUN apt-get -y install git tar
 RUN apt-get -y install protobuf-compiler
 
-ARG CUDA=11.4
-ARG CUDA_DASH=11-4
-ARG CUDNN=8.2.2.26
+ARG CUDA=11.8
+ARG CUDA_DASH=11-8
+ARG CUDNN=8.9.5.30
 
 RUN apt-get update
 RUN apt-get -y install \
@@ -33,16 +33,16 @@ RUN apt-get -y install \
    libcupti-dev \
    libcudnn8=${CUDNN}-1+cuda${CUDA} \
    libcudnn8-dev=${CUDNN}-1+cuda${CUDA} \
-   cuda-compat-11-8
+   cuda-compat-12-2
 
-RUN apt-get -y install libnccl2=2.11.4-1+cuda11.4 libnccl-dev=2.11.4-1+cuda11.4
+RUN apt-get -y install libnccl2=2.16.5-1+cuda11.8 libnccl-dev=2.16.5-1+cuda11.8
 
 RUN apt-get -y install python3-minimal
 RUN apt-get -y install -y python3-pip
 
-RUN pip3 install nvidia-cudnn-cu11==8.9.2.26
+RUN pip3 install nvidia-cudnn-cu11==8.9.5.30
 
-RUN pip3 install tensorflow==2.11.1 tensorflow-io==0.31.0
+RUN pip3 install tensorflow==2.12.0 tensorflow-io==0.32.0
 
 RUN apt-get -y install cmake
 RUN apt-get -y install python3-setuptools
@@ -54,29 +54,29 @@ RUN apt-get -y install tzdata
 RUN apt-get -y install python3-opencv
 RUN apt-get -y install python3-tk 
 
-RUN HOROVOD_WITH_MPI=1 HOROVOD_WITH_TENSORFLOW=1 HOROVOD_GPU_OPERATIONS=NCCL pip3 install -v horovod==0.27.0
-RUN pip3 install ujson==5.7.0
-RUN pip3 install opencv-python==4.7.0.72
-RUN pip3 install Cython==0.29.33
-RUN pip3 install pycocotools==2.0.6
-RUN pip3 install matplotlib==3.7.1
-RUN pip3 install markdown==3.4.3
-RUN pip3 install pybind11==2.10.0
-RUN pip3 install scikit-image==0.19.3
-RUN pip3 install numba==0.56.4
-RUN pip3 install mpi4py==3.1.4
+RUN HOROVOD_WITH_MPI=1 HOROVOD_WITH_TENSORFLOW=1 HOROVOD_GPU_OPERATIONS=NCCL pip3 install -v horovod==0.28.1
+RUN pip3 install ujson==5.8.0
+RUN pip3 install opencv-python==4.8.1.78
+RUN pip3 install Cython==3.0.5
+RUN pip3 install pycocotools==2.0.7
+RUN pip3 install matplotlib==3.8.1
+RUN pip3 install markdown==3.5.1
+RUN pip3 install pybind11==2.11.1
+RUN pip3 install scikit-image==0.22.0
+RUN pip3 install numba==0.58.1
+RUN pip3 install mpi4py==3.1.5
 RUN pip3 install tensorboard_plugin_profile
 RUN pip3 install tk==0.1.0
 
 RUN git clone https://github.com/aws-samples/mask-rcnn-tensorflow.git
-RUN cd /mask-rcnn-tensorflow && git fetch origin 59168dc01b022e9039ce66c75178b149922458e2 
-RUN cd /mask-rcnn-tensorflow && git reset --hard 59168dc01b022e9039ce66c75178b149922458e2 
+RUN cd /mask-rcnn-tensorflow && git fetch origin 59168dc01b022e9039ce66c75178b149922458e2
+RUN cd /mask-rcnn-tensorflow && git reset --hard 59168dc01b022e9039ce66c75178b149922458e2
 RUN chmod -R +w /mask-rcnn-tensorflow
 RUN pip3 install -e /mask-rcnn-tensorflow/
 
 ### Install Jupyter
-RUN pip3 install jupyterlab==3.6.1
-RUN pip3 install notebook==6.5.2
+RUN pip3 install jupyterlab==4.0.8
+RUN pip3 install notebook==7.0.6
 
 ADD notebooks /notebooks
 
@@ -101,12 +101,10 @@ RUN echo "UserKnownHostsFile /dev/null" >> /etc/ssh/ssh_config && \
 
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
-ENV NV_CUDA_COMPAT_PACKAGE=cuda-compat-11-8
+ENV NV_CUDA_COMPAT_PACKAGE=cuda-compat-12-2
 ENV NVIDIA_REQUIRE_CUDA=cuda>=11.0
 ENV CUDA_VERSION=${CUDA}.0
-ENV TF_AUTOTUNE_THRESHOLD=2
-ENV TF_NEED_CUDA=1
-ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/local/cuda/lib64:/usr/local/lib/python3.8/dist-packages/nvidia/cudnn/lib:/usr/lib/x86_64-linux-gnu/openmpi/lib
+ENV LD_LIBRARY_PATH=/usr/local/lib:/usr/local/cuda/lib64:/usr/local/lib/python3.10/dist-packages/nvidia/cudnn/lib:/usr/lib/x86_64-linux-gnu/openmpi/lib
 ENV PATH=/usr/local/cuda/bin:$PATH
 
 CMD ["/bin/bash"]

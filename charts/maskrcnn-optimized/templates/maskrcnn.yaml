@@ -33,17 +33,27 @@ spec:
           - name: {{ .Values.maskrcnn.name }} 
             env:
             - name: HOROVOD_AUTOTUNE
-              value: "1" 
+              value: "{{ .Values.maskrcnn.horovod_autotune }}"
+            - name: HOROVOD_LOG_LEVEL
+              value: "{{ .Values.maskrcnn.horovod_log_level }}"
             - name: NCCL_SOCKET_IFNAME
               value: "{{ .Values.maskrcnn.nccl_socket_ifname }}" 
             - name: NCCL_DEBUG
               value: "{{ .Values.maskrcnn.nccl_debug }}" 
-            - name: NCCL_BUFFSIZE
-              value: "{{ .Values.maskrcnn.nccl_buffsize }}" 
             - name: TF_DEVICE_MIN_SYS_MEMORY_IN_MB 
               value: "{{ .Values.maskrcnn.tf_device_min_sys_mem_mb }}" 
-            - name: TF_CPP_MIN_LOG_LEVEL
-              value: "2"
+            - name: TF_CPP_MIN_LOG_LEVEL 
+              value: "2" 
+            - name: TF_GPU_ALLOCATOR
+              value: "cuda_malloc_async" 
+            - name: TF_AUTOTUNE_THRESHOLD
+              value: "1" 
+            - name: TF_ENABLE_AUTO_MIXED_PRECISION 
+              value: "{{ .Values.maskrcnn.tf_enable_auto_mixed_precision }}" 
+            - name: TF_ENABLE_CUBLAS_TENSOR_OP_MATH_FP32 
+              value: "{{ .Values.maskrcnn.tf_enable_auto_mixed_precision }}" 
+            - name: TF_ENABLE_CUDNN_TENSOR_OP_MATH_FP32 
+              value: "{{ .Values.maskrcnn.tf_enable_auto_mixed_precision }}" 
             command: 
             - mpirun
             workingDir: {{ .Values.maskrcnn.working_dir }}
@@ -70,15 +80,31 @@ spec:
             - -x
             - HOROVOD_AUTOTUNE
             - -x
+            - HOROVOD_HIERARCHICAL_ALLREDUCE=0 
+            - -x
+            - HOROVOD_HIERARCHICAL_ALLGATHER=0 
+            - -x
+            - HOROVOD_TORUS_ALLREDUCE=0 
+            - -x
+            - HOROVOD_LOG_LEVEL
+            - -x
             - NCCL_SOCKET_IFNAME
             - -x
             - NCCL_DEBUG
             - -x
-            - NCCL_BUFFSIZE
-            - -x
             - TF_DEVICE_MIN_SYS_MEMORY_IN_MB
             - -x
-            - TF_CPP_MIN_LOG_LEVEL
+            - TF_CPP_MIN_LOG_LEVEL 
+            - -x
+            - TF_GPU_ALLOCATOR 
+            - -x
+            - TF_AUTOTUNE_THRESHOLD
+            - -x
+            - TF_ENABLE_AUTO_MIXED_PRECISION
+            - -x
+            - TF_ENABLE_CUBLAS_TENSOR_OP_MATH_FP32 
+            - -x
+            - TF_ENABLE_CUDNN_TENSOR_OP_MATH_FP32 
             - -x
             - LD_LIBRARY_PATH
             - -x
@@ -107,8 +133,10 @@ spec:
             - TRAIN.BATCH_SIZE_PER_GPU={{ .Values.maskrcnn.batch_size_per_gpu }}
             - TRAIN.EVAL_PERIOD={{ .Values.maskrcnn.eval_period_in_epochs }}
             - TRAIN.LR_EPOCH_SCHEDULE={{ .Values.maskrcnn.lr_epoch_schedule }} 
+            - TRAIN.BASE_LR={{ .Values.maskrcnn.base_lr }}
             - BACKBONE.WEIGHTS=/{{ .Values.maskrcnn.data_fs }}/{{ .Values.maskrcnn.backbone_weights }}
             - BACKBONE.NORM={{ .Values.maskrcnn.backbone_norm }}
+            - PREPROC.PREDEFINED_PADDING=True
             - TRAINER=horovod
             - {{ .Values.maskrcnn.extra_config }}
             image: {{ .Values.maskrcnn.image }} 

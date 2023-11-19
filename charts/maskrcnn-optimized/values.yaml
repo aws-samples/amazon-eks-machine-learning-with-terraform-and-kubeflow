@@ -16,6 +16,7 @@ maskrcnn:
   working_dir:  /mask-rcnn-tensorflow
   images_per_epoch: 120000 
   lr_epoch_schedule: "[(16, 0.1), (20, 0.01), (24, None)]"
+  base_lr: 0.0015625 # for a total batch size of 1, adjusted automatically to actual total batch size
   eval_period_in_epochs: 1 
   data_train: "[\"train2017\"]"
   data_val: "(\"val2017\")" 
@@ -27,7 +28,9 @@ maskrcnn:
   extra_config: 'TRAIN.GRADIENT_CLIP=0.36'
   nccl_socket_ifname: ^lo,docker0
   if_exclude:  lo,docker0
-  tf_device_min_sys_mem_mb: 4096 
+  tf_device_min_sys_mem_mb: 4096
+  tf_enable_auto_mixed_precision: 0
   nccl_debug: INFO
-  nccl_buffsize: "4194304"
-  backoff_limit: 2000 
+  horovod_autotune: 1
+  horovod_log_level: INFO
+  backoff_limit: 2000
