@@ -157,8 +157,9 @@ You have two Helm charts available for training Mask-RCNN models. Both these Hel
 
 To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize  [values.yaml](charts/maskrcnn/values.yaml), as described below:
 
-1. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the respective ```persistent-volume-claim```, which is ```tensorpack-efs-gp-bursting``` for ```efs```, and ```tensorpack-fsx``` for ```fsx```. 
+1. Set ```shared_fs``` and ```data_fs``` to  ```fsx``` (default) or ```efs``` (see [Stage Data on EFS](#optional-stage-data-on-efs)). Set ```shared_pvc``` to the corresponding ```persistent-volume-claim```: ```tensorpack-fsx``` for `fsx` (default), and `tensorpack-efs-gp-bursting` for `efs`. 
 2. Use [AWS check ip](http://checkip.amazonaws.com/) to get the public IP of your web browser client. Use this public IP to set ```global.source_cidr``` as a  ```/32``` CIDR. This will restrict Internet access to [Jupyter](https://jupyter.org/) notebook and [TensorBoard](https://www.tensorflow.org/tensorboard) services to your public IP. 
+3. Set `tf_device_min_sys_mem_mb` to `2560`, if `node_instance_type` in your EKS cluster training node group is `p3.16xlarge`.
 
 To password protect [TensorBoard](https://www.tensorflow.org/tensorboard), generate the password hash for your password using the command below:
 
@@ -179,8 +180,9 @@ To install the ```maskrcnn``` chart, execute:
 
 To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, customize  [maskrcnn-optimized/values.yaml](charts/maskrcnn-optimized/values.yaml), as described below:
 
-1. Set ```shared_fs``` and ```data_fs``` to ```efs```, or ```fsx```, as applicable. Set ```shared_pvc``` to the name of the respective ```persistent-volume-claim```, which is ```tensorpack-efs-gp-bursting``` for ```efs```, and ```tensorpack-fsx``` for ```fsx```. 
-2. Set ```global.source_cidr``` to your public source CIDR.
+1. Set ```shared_fs``` and ```data_fs``` to  ```fsx``` (default) or ```efs``` (see [Stage Data on EFS](#optional-stage-data-on-efs)). Set ```shared_pvc``` to the corresponding ```persistent-volume-claim```: ```tensorpack-fsx``` for `fsx` (default), and `tensorpack-efs-gp-bursting` for `efs`. 
+2. Use [AWS check ip](http://checkip.amazonaws.com/) to get the public IP of your web browser client. Use this public IP to set ```global.source_cidr``` as a  ```/32``` CIDR. This will restrict Internet access to [Jupyter](https://jupyter.org/) notebook and [TensorBoard](https://www.tensorflow.org/tensorboard) services to your public IP.
+3. Set `tf_device_min_sys_mem_mb: 2560`, and `batch_size_per_gpu: 2`, if `node_instance_type` in your EKS cluster training node group is `p3.16xlarge`.
 
 To password protect [TensorBoard](https://www.tensorflow.org/tensorboard), you **must** set ```htpasswd```  in  ```charts/maskrcnn-optimized/charts/jupyter/value.yaml``` to a quoted MD5 password hash.
 
