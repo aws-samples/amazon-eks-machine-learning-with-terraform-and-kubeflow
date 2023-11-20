@@ -112,19 +112,21 @@ This step creates an EKS managed node group for ```training```. Use the output o
    
     terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster"  -var="node_role_arn=" -var="nodegroup_name=" -var="subnet_ids="
 
-#### Attach to shared file-systems
+#### Attach to FSx for Lustre
 
-The infrastructure created above includes an EFS file-system, and a FSx for Lustre file-system.
-
-Start ```attach-pvc``` container for access to the EFS shared file-system by executing following steps:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster
-    kubectl apply -f attach-pvc.yaml  -n kubeflow
-
-Start ```attach-pvc-fsx``` container for access to the FSx for Lustre shared file-system by executing following steps:
+Start ```attach-pvc-fsx``` pod for access to the training logs stored on the FSx for Lustre file-system:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster
     kubectl apply -f attach-pvc-fsx.yaml  -n kubeflow
+
+To check you training logs on the FSx for Lustre file-system, you can connect to the `attach-pvc-fsx` pod:
+
+    kubectl exec -it -n kubeflow attach-pvc-fsx -- /bin/bash
+    cd fsx
+
+Delete the ```attach-pvc-fsx``` pod when not being used:
+
+    kubectl delete -f attach-pvc-fsx.yaml  -n kubeflow
 
 ### (Optional) Stage Data on EFS
 The data is automatically imported from the ```S3_BUCKET``` to the FSx for Lustre file-system. 
@@ -134,6 +136,20 @@ However, if you want to use the EFS file-system, we need to stage the COCO 2017 
     kubectl apply -f stage-data.yaml -n kubeflow
 
 Execute ```kubectl get pods -n kubeflow``` to check the status of the staging Pod. Once the status of the Pod is marked ```Completed```, data is successfully staged on EFS.
+
+Start ```attach-pvc``` pod for access to the training logs stored on the EFS file-system:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster
+    kubectl apply -f attach-pvc.yaml  -n kubeflow
+
+To check you training logs on the EFS file-system, you can connect to the `attach-pvc` pod:
+
+    kubectl exec -it -n kubeflow attach-pvc -- /bin/bash
+    cd efs
+
+Delete the ```attach-pvc``` pod when not being used:
+
+    kubectl delete -f attach-pvc.yaml  -n kubeflow
 
 ### Build and Upload Docker Images to Amazon EC2 Container Registry (ECR)
 
