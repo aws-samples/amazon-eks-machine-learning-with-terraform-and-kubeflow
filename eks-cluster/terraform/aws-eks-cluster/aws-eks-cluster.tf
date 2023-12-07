@@ -113,6 +113,22 @@ provider "helm" {
   }
 }
 
+provider "kubectl" {
+  host                   = aws_eks_cluster.eks_cluster.endpoint
+  cluster_ca_certificate = base64decode(aws_eks_cluster.eks_cluster.certificate_authority[0].data)
+  load_config_file       = false
+
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws-iam-authenticator"
+    args = [
+      "token",
+      "-i",
+      aws_eks_cluster.eks_cluster.id,
+    ]
+  }
+}
+
 provider "kubernetes" {
   config_path    = "~/.kube/config"
 }
@@ -407,9 +423,9 @@ resource "aws_eks_cluster" "eks_cluster" {
   provisioner "local-exec" {
     command = "kubectl apply -k \"github.com/kubernetes-sigs/aws-efs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.7\""
   }
-  
+
   provisioner "local-exec" {
-    command = "kubectl create namespace kubeflow"
+    command = "kubectl create namespace ${var.kubeflow_namespace}"
   }
 
 }
