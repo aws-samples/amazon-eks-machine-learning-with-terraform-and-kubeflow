@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: tensorpack-efs-gp-bursting
+  name: pv-efs
 spec:
   capacity:
     storage: 1000Gi

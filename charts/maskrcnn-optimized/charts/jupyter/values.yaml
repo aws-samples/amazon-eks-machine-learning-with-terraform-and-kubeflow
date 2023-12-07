@@ -4,6 +4,7 @@ jupyter:
   name: jupyter 
   port: 443 
   target_port: 8888
+  gpu_instance_type: g5.xlarge
 tensorboard:
   name: tensorboard
   port: 6443

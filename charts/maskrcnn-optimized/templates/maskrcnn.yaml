@@ -1,13 +1,4 @@
 ---
-apiVersion: scheduling.k8s.io/v1
-kind: PriorityClass
-metadata:
-  name: training-priority
-value: 1000
-preemptionPolicy: PreemptLowerPriority 
-globalDefault: false
-description: "This is the priority class for training"
----
 apiVersion: kubeflow.org/v2beta1
 kind: MPIJob
 metadata:
@@ -26,8 +17,10 @@ spec:
     Launcher:
       replicas: 1
       template:
+        metadata:
+          annotations:
+            karpenter.sh/do-not-disrupt: "true"
         spec:
-          priorityClassName: "training-priority"
           restartPolicy: OnFailure
           containers:
           - name: {{ .Values.maskrcnn.name }} 
@@ -145,8 +138,10 @@ spec:
     Worker:
       replicas: {{ .Values.maskrcnn.gpu_nodes }}
       template:
+        metadata:
+          annotations:
+            karpenter.sh/do-not-disrupt: "true"
         spec:
-          priorityClassName: "training-priority"
           restartPolicy: Never
           volumes:
           - name: {{ .Values.global.shared_fs }} 
@@ -156,6 +151,12 @@ spec:
             hostPath:
               path: /ebs
               type: DirectoryOrCreate
+          tolerations:
+          - key: "nvidia.com/gpu"
+            operator: "Exists"
+            effect: "NoSchedule"
+          nodeSelector:
+            node.kubernetes.io/instance-type: {{ .Values.maskrcnn.gpu_instance_type }}
           containers:
           - name: {{ .Values.maskrcnn.name }}
             image: {{ .Values.maskrcnn.image }}
@@ -167,6 +168,8 @@ spec:
             - mountPath: /ebs
               name: ebs
             resources:
+              requests:
+                nvidia.com/gpu: {{ .Values.maskrcnn.gpus_per_node }}
               limits:
                 nvidia.com/gpu: {{ .Values.maskrcnn.gpus_per_node }}
   slotsPerWorker: {{ .Values.maskrcnn.gpus_per_node }}

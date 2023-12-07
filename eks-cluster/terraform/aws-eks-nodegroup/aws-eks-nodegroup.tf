@@ -45,7 +45,7 @@ variable "node_volume_size" {
 }
 
 variable "node_instance_type" {
-  description = "GPU enabled instance types for training. Must have 8 GPUs."
+  description = "GPU enabled instance types for training."
   default = "p3dn.24xlarge"
   type = string
 }
@@ -106,6 +106,12 @@ resource "aws_eks_node_group" "training_ng" {
 
   remote_access {
      ec2_ssh_key = var.key_pair != "" ? var.key_pair : null
+  }
+
+  taint {
+    key = "nvidia.com/gpu"
+    value = "true"
+    effect = "NO_SCHEDULE"
   }
   
 }

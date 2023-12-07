@@ -39,9 +39,9 @@ IMAGE=<aws-account-id>.dkr.ecr.<aws-region>.amazonaws.com/tf_tp_hvd_eks:tf1.12-h
 
 # Customize node selector for ec2 instance type
 NODE_SELECTOR='beta.kubernetes.io/instance-type=p3.16xlarge'
-#VOLUMES='[{ "name": "efs", "persistentVolumeClaim": { "claimName": "tensorpack-efs-gp-bursting" }}, { "name": "ebs", "hostPath": { "path": "/local/faster-rcnn" , "type": "DirectoryOrCreate"}}]'
+#VOLUMES='[{ "name": "efs", "persistentVolumeClaim": { "claimName": "pv-efs" }}, { "name": "ebs", "hostPath": { "path": "/local/faster-rcnn" , "type": "DirectoryOrCreate"}}]'
 #VOLUME_MOUNTS='[{ "name": "efs", "mountPath": "/efs"}, { "name": "ebs", "mountPath": "/ebs"}]'
-VOLUMES='[{ "name": "efs", "persistentVolumeClaim": { "claimName": "tensorpack-efs-gp-bursting" }}]'
+VOLUMES='[{ "name": "efs", "persistentVolumeClaim": { "claimName": "pv-efs" }}]'
 VOLUME_MOUNTS='[{ "name": "efs", "mountPath": "/efs"}]'
 
 # Customize number of workers

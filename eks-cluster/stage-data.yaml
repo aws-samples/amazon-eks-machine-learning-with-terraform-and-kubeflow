@@ -16,7 +16,7 @@ spec:
   volumes:
   - name: efs
     persistentVolumeClaim:
-      claimName: tensorpack-efs-gp-bursting # persistent volume claim name 
+      claimName: pv-efs # persistent volume claim name 
   - name: config
     configMap:
       defaultMode: 420

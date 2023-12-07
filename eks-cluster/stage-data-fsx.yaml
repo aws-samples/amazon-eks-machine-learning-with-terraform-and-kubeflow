@@ -16,7 +16,7 @@ spec:
   volumes:
   - name: fsx
     persistentVolumeClaim:
-      claimName: tensorpack-fsx # persistent volume claim name 
+      claimName: pv-fsx # persistent volume claim name 
   - name: config
     configMap:
       defaultMode: 420

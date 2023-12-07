@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: tensorpack-efs-gp-bursting 
+  name: pv-efs 
 spec:
   accessModes:
     - ReadWriteMany

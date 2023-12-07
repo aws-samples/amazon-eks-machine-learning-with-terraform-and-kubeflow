@@ -1,17 +1,18 @@
 global:
   namespace: kubeflow
   shared_fs: fsx #efs
-  shared_pvc: tensorpack-fsx # tensorpack-efs-gp-bursting
+  shared_pvc: pv-fsx # pv-efs
   source_cidr: "0.0.0.0/0" # Public IP source CIDR
 maskrcnn:
   name: mask-rcnn-tensorflow
   gpus: 16
   gpu_nodes: 2
   gpus_per_node: 8
+  gpu_instance_type: p3dn.24xlarge
   image:
   train_script: /mask-rcnn-tensorflow/MaskRCNN/train.py
   batch_size_per_gpu: 4
-  data_fs: fsx #ef6
+  data_fs: fsx #efs
   data_dir: mask-rcnn/eks/input/data #data
   working_dir:  /mask-rcnn-tensorflow
   images_per_epoch: 120000 

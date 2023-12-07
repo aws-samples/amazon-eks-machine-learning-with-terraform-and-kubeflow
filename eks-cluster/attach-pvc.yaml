@@ -16,4 +16,4 @@ spec:
   volumes:
   - name:  efs
     persistentVolumeClaim:
-      claimName: tensorpack-efs-gp-bursting # k8s persistent-volume-claim name
+      claimName: pv-efs # k8s persistent-volume-claim name

@@ -16,4 +16,4 @@ spec:
   volumes:
   - name:  fsx
     persistentVolumeClaim:
-      claimName: tensorpack-fsx # k8s persistent-volume-claim name
+      claimName: pv-fsx # k8s persistent-volume-claim name
