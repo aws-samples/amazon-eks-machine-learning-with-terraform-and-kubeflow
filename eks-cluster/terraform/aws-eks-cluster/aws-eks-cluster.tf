@@ -409,7 +409,7 @@ resource "aws_eks_cluster" "eks_cluster" {
   }
 
   provisioner "local-exec" {
-    command = "kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/master/nvidia-device-plugin.yml"
+    command = "kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/main/nvidia-device-plugin.yml"
   }
 
   provisioner "local-exec" {
