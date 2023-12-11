@@ -318,33 +318,6 @@ resource "aws_iam_role_policy_attachment" "cluster_AmazonEKSServicePolicy" {
   role       = aws_iam_role.cluster_role.name
 }
 
-resource "aws_security_group" "cluster_sg" {
-  name = "${var.cluster_name}-cluster-sg"
-  description = "Cluster communication with worker nodes"
-  vpc_id      = aws_vpc.vpc.id
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.cluster_name}-cluster-sg"
-  }
-}
-
-resource "aws_security_group_rule" "cluster_ingress_self" {
-  description              = "Allow cluster control plabe to communicate with each other"
-  from_port                = 0
-  protocol                 = "-1"
-  security_group_id        = aws_security_group.cluster_sg.id
-  source_security_group_id = aws_security_group.cluster_sg.id
-  to_port                  = 65535
-  type                     = "ingress"
-}
-
 resource "aws_efs_file_system" "fs" {
 
  performance_mode = var.efs_performance_mode
@@ -437,7 +410,6 @@ resource "aws_eks_cluster" "eks_cluster" {
   version	        = local.use_k8s_version
 
   vpc_config {
-    security_group_ids = [aws_security_group.cluster_sg.id]
     subnet_ids         = flatten([aws_subnet.private.*.id])
   }
 
@@ -877,7 +849,7 @@ locals {
   EKS Cluster Summary: 
   	vpc:    ${aws_vpc.vpc.id}
   	subnets: ${join(",", aws_subnet.private.*.id)}
-  	cluster security group: ${aws_security_group.cluster_sg.id}
+  	cluster security group: ${aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id}
   	endpoint: ${aws_eks_cluster.eks_cluster.endpoint}
   EKS NodeGroup Summary: 
     node role: ${aws_iam_role.node_role.arn}
