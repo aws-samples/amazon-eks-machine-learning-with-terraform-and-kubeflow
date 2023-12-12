@@ -2,7 +2,7 @@ global:
   namespace: kubeflow
   shared_fs: fsx
   shared_pvc: pv-fsx # pv-efs
-  source_cidr: "0.0.0.0/0" # Public IP source CIDR
+  source_cidr:  # Public IP source CIDR
 maskrcnn:
   name: maskrcnn
   gpus: 16
