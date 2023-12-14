@@ -763,16 +763,20 @@ resource "aws_eks_node_group" "inference_ng" {
 
 }
 
-module "load_balancer_controller" {
+module "eks_blueprints_addons" {
   depends_on = [
     aws_eks_node_group.system_ng
   ]
 
-  source = "git::https://github.com/DNXLabs/terraform-aws-eks-lb-controller.git"
+  source = "aws-ia/eks-blueprints-addons/aws"
+  version = "~> 1.12" #ensure to update this to the latest/desired version
 
-  cluster_identity_oidc_issuer     = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
-  cluster_identity_oidc_issuer_arn = aws_iam_openid_connect_provider.eks_oidc_provider.arn
-  cluster_name                     = aws_eks_cluster.eks_cluster.id
+  cluster_name      = aws_eks_cluster.eks_cluster.id
+  cluster_endpoint  = aws_eks_cluster.eks_cluster.endpoint
+  cluster_version   = aws_eks_cluster.eks_cluster.version
+  oidc_provider_arn = aws_iam_openid_connect_provider.eks_oidc_provider.arn
+
+  enable_aws_load_balancer_controller    = true
 }
 
 
