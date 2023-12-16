@@ -1,11 +1,24 @@
-# Distributed TensorFlow training using Kubeflow on Amazon EKS
+# Distributed training using Kubeflow on Amazon EKS
 
 ## Prerequisites
 1. [Create and activate an AWS Account](https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/)
 2. Select your AWS Region. For the tutorial below, we assume the region to be ```us-west-2```
-3. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) for GPU enabled EC2 instances. We recommend service limits be set to at least 4 instances each for [p3.16xlarge, p3dn.24xlarge](https://aws.amazon.com/ec2/instance-types/p3/), [p4d.24xlarge](https://aws.amazon.com/ec2/instance-types/p4/), and [g5.48xlarge](https://aws.amazon.com/ec2/instance-types/g5/) for training, and 2 instances each for [g4dn.xlarge](https://aws.amazon.com/ec2/instance-types/g4/), and [g5.xlarge](https://aws.amazon.com/ec2/instance-types/g5/) for testing. 
+3. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) for EC2 instances. For this tutorial, ensure your EC2 service limits in your selected AWS Region are set to at least 2 each for [p3.16xlarge, p3dn.24xlarge](https://aws.amazon.com/ec2/instance-types/p3/), and 2 for [g5.xlarge](https://aws.amazon.com/ec2/instance-types/g5/).
 
-### Build machine
+## Step by step tutorial
+
+While the solution described in this tutorial is general, and can be adapted to train and test any type of deep learning neural network (DNN) model, we will make the tutorial concrete by focusing on distributed TensorFlow training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN), and [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) models.  The high-level outline of the solution is as follows:
+
+  1. Setup the build machine
+  2. Upload [COCO 2017 training dataset](https://cocodataset.org/#download) to your [Amazon S3](https://aws.amazon.com/s3/) bucket
+  3. Use [Terraform](https://learn.hashicorp.com/terraform) to create the required AWS infrastructure
+  4. Build and Upload Docker Images to [Amazon EC2 Container Registry](https://aws.amazon.com/ecr/) (ECR)
+  5. Use [Helm charts](https://helm.sh/docs/developing_charts/) to launch training jobs in the EKS cluster 
+  6. Use [Jupyter](https://jupyter.org/) notebook to test the trained model
+  
+For this tutorial, we assume the region to be ```us-west-2```. You may need to adjust the commands below if you use a different AWS Region.
+
+### Setup the build machine
 
 For the *build machine*, we need [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html) and [Docker](https://www.docker.com/) installed. The AWS CLI must be configured for [Adminstrator job function](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html). You may use your laptop for your build machine if it has AWS CLI and Docker installed, or you may launch an EC2 instance for your build machine, as described below.
 
@@ -23,23 +36,7 @@ To launch an EC2 instance for the *build machine*, you will need [Adminstrator j
         sudo usermod -aG docker ec2-user
         exit
 
-Now, reconnect to your linux instance. All steps described under *Step by step* section below must be executed on the *build machine*.
-
-## Step by step tutorial
-
-While the solution described in this tutorial is general, and can be used to train and test any type of deep learning network (DNN) model, we will make the tutorial concrete by focusing on distributed TensorFlow training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN), and [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) models.  The high-level outline of solution is as follows:
-
-  1. Setup build environment on the *build machine*
-  2. Upload [COCO 2017 dataset](https://cocodataset.org/#download) to your [Amazon S3](https://aws.amazon.com/s3/) bucket
-  3. Use [Terraform](https://learn.hashicorp.com/terraform) to create infrastructure
-  4. (Optional) Stage training data on [Amazon EFS](https://aws.amazon.com/efs/) file-system, if you plan to use EFS
-  5. Build and Upload Docker Images to [Amazon EC2 Container Registry](https://aws.amazon.com/ecr/) (ECR)
-  6. Use [Helm charts](https://helm.sh/docs/developing_charts/) to launch training jobs in the EKS cluster 
-  7. Use [Jupyter](https://jupyter.org/) notebook to test the trained model
-  
-For this tutorial, we assume the region to be ```us-west-2```. You may need to adjust the commands below if you use a different AWS Region.
-
-### Setup build environment on build machine
+Now, reconnect to your linux instance. 
 
 #### Clone git repository
 
@@ -73,83 +70,20 @@ To download COCO 2017 dataset to your build environment instance, and upload it 
 
 ### Use Terraform to create infrastructure
 
-We recommend the [quick start option](#quick-start-option) for first-time walk-through.
+We use Terraform to create:
 
-#### Quick start option
+1. An [Amazon EKS](https://aws.amazon.com/eks/) cluster with [Cluster Autoscaler](https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html) 
+2. A [managed node group](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) (```system```) for running `kube-system` pods
+3. A distinct [managed node group](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) for each of following instance types: `p3.16xlarge`, `p3dn.24xlarge`, and `g5.xlarge`
+4. [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) file-system
+5. [Amazon EFS](https://aws.amazon.com/efs/) file-system
 
-This option creates an [Amazon EKS](https://aws.amazon.com/eks/) cluster, three [managed node groups](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) (```system```, ```inference```, ```training```), [Amazon EFS](https://aws.amazon.com/efs/) and [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) shared file-systems. The ```system``` node group size is fixed, and it runs the pods in the ```kube-system``` namespace. The EKS cluster uses [Cluster Autoscaler](https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html) to automatically scale the ```inference``` and ```training``` node groups up and down as needed. To complete quick-start, execute the commands below:
+Set `region` to your selected AWS Region, set `cluster_name` to a unique EKS cluster name, set `azs` to your Availability Zones, replace `S3_BUCKET` with your S3 bucket name, and execute the commands below:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster-and-nodegroup
     terraform init
 
-Substitute `S3_BUCKET` with your S3 bucket name, and run following command:
-
     terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET"
-
-#### Advanced option
-
-The advanced option separates the creation of the EKS cluster from EKS managed node group for ```training```. 
-
-##### Create EKS cluster
-
-To create the EKS cluster, two managed node groups (```system```, ```inference```), [Amazon EFS](https://aws.amazon.com/efs/) and [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) shared file-systems, execute:
-        
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster
-    terraform init
-
-Substitute `S3_BUCKET` with your S3 bucket name and run the following command:
-
-    terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET"
-   
-   Save the output of the this command for creating the EKS managed node group.
-   
-##### Create EKS managed node group
-
-This step creates an EKS managed node group for ```training```. Use the output of previous command for specifying ```node_role_arn```,  and ```subnet_ids``` below. Specify a unique value for ```nodegroup_name``` variable. To create the node group, execute:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-nodegroup
-    terraform init
-   
-    terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster"  -var="node_role_arn=" -var="nodegroup_name=" -var="subnet_ids="
-
-#### Attach to FSx for Lustre
-
-Start ```attach-pvc-fsx``` pod for access to the training logs stored on the FSx for Lustre file-system:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster
-    kubectl apply -f attach-pvc-fsx.yaml  -n kubeflow
-
-To check you training logs on the FSx for Lustre file-system, you can connect to the `attach-pvc-fsx` pod:
-
-    kubectl exec -it -n kubeflow attach-pvc-fsx -- /bin/bash
-    cd fsx
-
-Delete the ```attach-pvc-fsx``` pod when not being used:
-
-    kubectl delete -f attach-pvc-fsx.yaml  -n kubeflow
-
-### (Optional) Stage Data on EFS
-The data is automatically imported from the ```S3_BUCKET``` to the FSx for Lustre file-system. 
-
-However, if you want to use the EFS file-system, we need to stage the COCO 2017 data on EFS. To stage the data, customize ```S3_BUCKET``` variable in [stage-data.yaml](eks-cluster/stage-data.yaml), and run following command:
-
-    kubectl apply -f stage-data.yaml -n kubeflow
-
-Execute ```kubectl get pods -n kubeflow``` to check the status of the staging Pod. Once the status of the Pod is marked ```Completed```, data is successfully staged on EFS.
-
-Start ```attach-pvc``` pod for access to the training logs stored on the EFS file-system:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster
-    kubectl apply -f attach-pvc.yaml  -n kubeflow
-
-To check you training logs on the EFS file-system, you can connect to the `attach-pvc` pod:
-
-    kubectl exec -it -n kubeflow attach-pvc -- /bin/bash
-    cd efs
-
-Delete the ```attach-pvc``` pod when not being used:
-
-    kubectl delete -f attach-pvc.yaml  -n kubeflow
 
 ### Build and Upload Docker Images to Amazon EC2 Container Registry (ECR)
 
@@ -175,7 +109,7 @@ To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/ma
 
 1. Set ```shared_fs``` and ```data_fs``` to  ```fsx``` (default) or ```efs``` (see [Stage Data on EFS](#optional-stage-data-on-efs)). Set ```shared_pvc``` to the corresponding ```persistent-volume-claim```: ```pv-fsx``` for `fsx` (default), and `pv-efs` for `efs`. 
 2. Use [AWS check ip](http://checkip.amazonaws.com/) to get the public IP of your web browser client. Use this public IP to set ```global.source_cidr``` as a  ```/32``` CIDR. This will restrict Internet access to [Jupyter](https://jupyter.org/) notebook and [TensorBoard](https://www.tensorflow.org/tensorboard) services to your public IP. 
-3. Set `tf_device_min_sys_mem_mb` to `2560`, if `node_instance_type` in your EKS cluster training node group is `p3.16xlarge`.
+3. Set `tf_device_min_sys_mem_mb` to `2560`, if `gpu_instance_type` is set to `p3.16xlarge`.
 
 To password protect [TensorBoard](https://www.tensorflow.org/tensorboard), generate the password hash for your password using the command below:
 
@@ -198,7 +132,7 @@ To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) op
 
 1. Set ```shared_fs``` and ```data_fs``` to  ```fsx``` (default) or ```efs``` (see [Stage Data on EFS](#optional-stage-data-on-efs)). Set ```shared_pvc``` to the corresponding ```persistent-volume-claim```: ```pv-fsx``` for `fsx` (default), and `pv-efs` for `efs`. 
 2. Use [AWS check ip](http://checkip.amazonaws.com/) to get the public IP of your web browser client. Use this public IP to set ```global.source_cidr``` as a  ```/32``` CIDR. This will restrict Internet access to [Jupyter](https://jupyter.org/) notebook and [TensorBoard](https://www.tensorflow.org/tensorboard) services to your public IP.
-3. Set `tf_device_min_sys_mem_mb: 2560`, and `batch_size_per_gpu: 2`, if `node_instance_type` in your EKS cluster training node group is `p3.16xlarge`.
+3. Set `tf_device_min_sys_mem_mb: 2560`, and `batch_size_per_gpu: 2`, if `gpu_instance_type` is set to `p3.16xlarge`.
 
 To password protect [TensorBoard](https://www.tensorflow.org/tensorboard), you **must** set ```htpasswd```  in  ```charts/maskrcnn-optimized/charts/jupyter/value.yaml``` to a quoted MD5 password hash.
 
@@ -217,23 +151,23 @@ This will show the live training log from the launcher pod.
 
 ### Training logs
 
-Model checkpoints and all training logs are also available on the ```shared_fs``` file-system  set in ```values.yaml```, i.e. ```efs``` or ```fsx```. 
+Model checkpoints and all training logs are also available on the ```shared_fs``` file-system  set in ```values.yaml```, i.e. ```fsx``` (default), or `efs`.  For ```fsx``` (default), access your training logs as follows:
 
-If you configured your ```shared_fs``` file-system to be ```efs```, you can access your training logs by going inside the ```attach-pvc``` container as follows:
-
-    kubectl exec --tty --stdin -n kubeflow attach-pvc bash
-    cd /efs
-    ls -ltr maskrcnn-*
-
-Type ```exit``` to exit from the ```attach-pvc``` container. 
-
-If you configured your ```shared_fs``` file-system to be ```fsx```, you can access your training by going inside the ```attach-pvc-fsx``` container as follows :
-
-    kubectl exec --tty --stdin -n kubeflow attach-pvc-fsx bash
+    kubectl apply -f eks-cluster/attach-pvc-fsx.yaml -n kubeflow
+    kubectl exec -it -n kubeflow attach-pvc-fsx -- /bin/bash
     cd /fsx
     ls -ltr maskrcnn-*
 
 Type ```exit``` to exit from the ```attach-pvc-fsx``` container. 
+
+For ```efs```,  access your training logs as follows:
+
+    kubectl apply -f eks-cluster/attach-pvc.yaml  -n kubeflow
+    kubectl exec -it -n kubeflow attach-pvc -- /bin/bash
+    cd /efs
+    ls -ltr maskrcnn-*
+
+Type ```exit``` to exit from the ```attach-pvc``` container. 
 
 ### Test trained model
 Execute ```kubectl logs -f jupyter-xxxxx -n kubeflow -c jupyter``` to display Jupyter log. At the beginning of the Jupyter log, note the **security token** required to access Jupyter service in a browser. 
@@ -252,29 +186,19 @@ To access TensorBoard via web, use the service DNS address noted above. Your URL
 Accessing TensorBoard service in a browser will display a browser warning, because the service endpoint uses a **self-signed certificate**. If you deem it appropriate, proceed to access the service. When prompted for authentication, use the default username ```tensorboard```, and your password.
 
 ### Delete Helm charts after training
-When training is complete, you may delete an installed chart by executing ```helm delete chart-name```, for example ```helm delete maskrcnn```. This will destroy all pods used in training and testing, including Tensorboard and Jupyter service pods. However, the logs and trained models will be preserved on the shared file system used for training. When you delete all the helm charts, the kubenetes cluster autoscaler may scale down the ```inference``` and ```training``` node groups to zero size.
+When training is complete, you may delete an installed chart by executing ```helm delete chart-name```, for example ```helm delete maskrcnn```. This will destroy all pods used in training and testing, including Tensorboard and Jupyter service pods. However, the logs and trained models will be preserved on the shared file system used for training. When you delete all the helm charts, the kubernetes Cluster Autoscaler will scale down the ```inference``` and ```training``` node groups to zero size.
 
-### Use Terraform to destroy infastructure
+### (Optional) Stage Data on EFS
+The COCO 2017 training data used in the tutorial is **automatically imported** from the ```S3_BUCKET``` to the FSx for Lustre file-system. However, if you want to use the EFS file-system as the source for your training data, you need to customize ```S3_BUCKET``` variable in [stage-data.yaml](eks-cluster/stage-data.yaml), and run following command:
 
-When you are done with this tutorial, you can destory all the infrastructure, including the shared EFS, and FSx for Lustre file-systems. If you want to preserve the data on the shared file-systems, you may want to first upload it to [Amazon S3](https://aws.amazon.com/s3/).
+    kubectl apply -f stage-data.yaml -n kubeflow
 
-#### Quick start option
+Execute ```kubectl get pods -n kubeflow``` to check the status of the staging Pod. Once the status of the Pod is marked ```Completed```, data is successfully staged on EFS.
 
-If you used the quick start option above, execute following commands:
+### Use Terraform to destroy infrastructure
+
+If you want to preserve the training output stored on the shared `fsx` or `efs` file-systems, you must upload it to your [Amazon S3](https://aws.amazon.com/s3/). To destroy all the infrastructure created in this tutorial, execute following commands:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster-and-nodegroup
 
     terraform destroy -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]'
-
-#### Advanced option
-If you used the advanced option above, execute following commands:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-nodegroup
-   
-    terraform destroy -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster"  -var="node_role_arn=" -var="nodegroup_name=" -var="subnet_ids="
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster
-    
-    terraform destroy -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]'
-
-

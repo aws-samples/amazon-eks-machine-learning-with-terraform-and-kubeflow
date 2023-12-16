@@ -69,59 +69,34 @@ variable "import_path" {
   default = ""
 }
 
-variable "inference_max" {
-  description = "Maximum inference nodes"
-  type = string
-  default = "2"
-}
-
-variable "inference_instance_type" {
-  description = "GPU enabled instance types for inference."
-  default = "g5.xlarge"
-  type = string
-}
-
-variable "nodegroup_name" {
-  description = "Training node group name in cluster"
-  type    = string
-  default = "training"
-}
-
-
-variable "node_volume_size" {
-  description = "EKS cluster worker node EBS volume size in GBs"
-  default="200"
-  type=string
-}
-
-variable "node_instance_type" {
-  description = "GPU enabled instance types for training."
-  default = "p3dn.24xlarge"
-  type = string
-}
-
 variable "key_pair" {
   description = "Name of EC2 key pair used to launch EKS cluster worker node EC2 instances"
   type = string
-  default=""
+  default = ""
+}
+
+variable "node_volume_size" {
+  description = "Node disk size in GB"
+  type = number
+  default = 200
 }
 
 variable "node_group_desired" {
-    description = "EKS worker node auto-scaling group desired size"
-    default = "0"
-    type = string
+    description = "Node group desired size"
+    default = 0
+    type = number
 }
 
 variable "node_group_max" {
-    description = "EKS worker node auto-scaling group maximum"
-    default = "8"
-    type = string
+    description = "Node group maximum size"
+    default = 32
+    type = number
 }
 
 variable "node_group_min" {
-    description = "EKS worker node auto-scaling group minimum"
-    default = "0" 
-    type = string
+    description = "Node group minimum size"
+    default = 0
+    type = number
 }
 
 variable "capacity_type" {
@@ -136,6 +111,46 @@ variable "kubeflow_namespace" {
   type = string
 }
 
+variable "efa_enabled" {
+  description = "Map of EFA enabled instance type to number of network interfaces"
+  type = map(number)
+  default = {
+    "p4d.24xlarge" = 4
+    "p4de.24xlarge" = 4
+    "p5.48xlarge" = 32
+    "trn1.32xlarge" = 8
+    "trn1n.32xlarge" = 8
+  }
+}
+
+variable "node_instances" {
+  description = "List of instance types for node groups"
+  type = list(string)
+  default = ["g5.xlarge", "p3.16xlarge", "p3dn.24xlarge"]
+}
+
+variable "neuron_instances" {
+  description = "Neuron instances"
+  type = list(string)
+  default = [
+    "inf2.xlarge",
+    "inf2.8xlarge",
+    "inf2.24xlarge",
+    "inf2.48xlarge",
+    "trn1.32xlarge",
+    "trn1n.32xlarge"
+  ]
+}
+
+variable "custom_taints" {
+  description = "List of custom taints applied to node groups"
+  type = list(object({
+    key = string
+    value = string
+    effect = string
+  }))
+  default = []
+}
 
 # END variables
 
@@ -163,12 +178,8 @@ provider "kubectl" {
 
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
-    command     = "aws-iam-authenticator"
-    args = [
-      "token",
-      "-i",
-      aws_eks_cluster.eks_cluster.id,
-    ]
+    args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.eks_cluster.id]
+    command     = "aws"
   }
 }
 
@@ -193,7 +204,6 @@ provider "kubernetes" {
     command     = "aws"
   }
 }
-
 
 data "aws_caller_identity" "current" {}
 
@@ -257,7 +267,6 @@ resource "aws_nat_gateway" "ngw" {
     Name = "${var.cluster_name}-ngw"
   }
 
-  depends_on = [aws_internet_gateway.igw, aws_subnet.public]
 }
 
 resource "aws_route_table" "private" {
@@ -285,7 +294,6 @@ resource "aws_route_table" "public" {
     Name = "${var.cluster_name}-public"
   }
 }
-
 
 resource "aws_route_table_association" "private" {
   count = length(var.azs) 
@@ -421,15 +429,11 @@ resource "aws_eks_cluster" "eks_cluster" {
   name            = var.cluster_name
   role_arn        = aws_iam_role.cluster_role.arn
   version	        = local.use_k8s_version
+  enabled_cluster_log_types = [ "api", "audit" ]
 
   vpc_config {
     subnet_ids         = flatten([aws_subnet.private.*.id])
   }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.cluster_AmazonEKSClusterPolicy,
-    aws_iam_role_policy_attachment.cluster_AmazonEKSServicePolicy,
-  ]
 
   provisioner "local-exec" {
     when    = destroy
@@ -445,7 +449,14 @@ resource "aws_eks_cluster" "eks_cluster" {
   }
 
   provisioner "local-exec" {
-    command = "kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml"
+    command = "kubectl apply -f https://raw.githubusercontent.com/aws-samples/aws-efa-eks/main/manifest/efa-k8s-device-plugin.yml"
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      kubectl -n kube-system patch DaemonSet aws-efa-k8s-device-plugin-daemonset --patch \
+      '{"spec": { "template": {  "spec": { "tolerations": [{ "key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}, { "key": "aws.amazon.com/neuron", "operator": "Exists", "effect": "NoSchedule"} ]}}}}'
+    EOT
   }
 
   provisioner "local-exec" {
@@ -461,25 +472,7 @@ resource "aws_eks_cluster" "eks_cluster" {
   }
 }
 
-data "tls_certificate" "this" {
-  url = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
-}
-
-resource "aws_iam_openid_connect_provider" "eks_oidc_provider" {
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [data.tls_certificate.this.certificates[0].sha1_fingerprint]
-  url             = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
-
-  depends_on = [
-    aws_eks_cluster.eks_cluster
-  ]
-  
-}
-
 module "eks_blueprints_addons" {
-  depends_on = [
-    aws_eks_node_group.system_ng
-  ]
 
   source = "aws-ia/eks-blueprints-addons/aws"
   version = "~> 1.12" #ensure to update this to the latest/desired version
@@ -490,6 +483,169 @@ module "eks_blueprints_addons" {
   oidc_provider_arn = aws_iam_openid_connect_provider.eks_oidc_provider.arn
 
   enable_aws_load_balancer_controller    = true
+  enable_metrics_server                  = true
+}
+
+resource "kubectl_manifest" "neuron_device_rbac_cr" {
+
+  yaml_body = <<YAML
+  kind: ClusterRole
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: neuron-device-plugin
+  rules:
+  - apiGroups:
+    - ""
+    resources:
+    - nodes
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - ""
+    resources:
+    - events
+    verbs:
+    - create
+    - patch
+  - apiGroups:
+    - ""
+    resources:
+    - pods
+    verbs:
+    - update
+    - patch
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - ""
+    resources:
+    - nodes/status
+    verbs:
+    - patch
+    - update
+  YAML
+
+}
+
+resource "kubectl_manifest" "neuron_device_rbac_sa" {
+
+  yaml_body = <<YAML
+  apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: neuron-device-plugin
+    namespace: kube-system
+  YAML
+
+}
+
+resource "kubectl_manifest" "neuron_device_rbac_crb" {
+
+  yaml_body = <<YAML
+  kind: ClusterRoleBinding
+  apiVersion: rbac.authorization.k8s.io/v1
+  metadata:
+    name: neuron-device-plugin
+    namespace: kube-system
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: neuron-device-plugin
+  subjects:
+  - kind: ServiceAccount
+    name: neuron-device-plugin
+    namespace: kube-system
+  YAML
+
+}
+
+resource "kubectl_manifest" "neuron_device_plugin" {
+
+  yaml_body = <<YAML
+  apiVersion: apps/v1
+  kind: DaemonSet
+  metadata:
+    name: neuron-device-plugin-daemonset
+    namespace: kube-system
+  spec:
+    selector:
+      matchLabels:
+        name:  neuron-device-plugin-ds
+    updateStrategy:
+      type: RollingUpdate
+    template:
+      metadata:
+        labels:
+          name: neuron-device-plugin-ds
+      spec:
+        serviceAccount: neuron-device-plugin
+        tolerations:
+        - key: CriticalAddonsOnly
+          operator: Exists
+        - key: aws.amazon.com/neuron
+          operator: Exists
+          effect: NoSchedule
+        priorityClassName: "system-node-critical"
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
+                    - key: "node.kubernetes.io/instance-type"
+                      operator: In
+                      values:
+                        - inf2.xlarge
+                        - inf2.4xlarge
+                        - inf2.8xlarge
+                        - inf2.24xlarge
+                        - inf2.48xlarge
+                        - trn1.2xlarge
+                        - trn1.32xlarge
+                        - trn1n.32xlarge
+        containers:
+          #Device Plugin containers are available both in us-east and us-west ecr
+          #repos
+        - image: public.ecr.aws/neuron/neuron-device-plugin:2.18.3.0
+          imagePullPolicy: Always
+          name: neuron-device-plugin
+          env:
+          - name: KUBECONFIG
+            value: /etc/kubernetes/kubelet.conf
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: device-plugin
+              mountPath: /var/lib/kubelet/device-plugins
+            - name: infa-map
+              mountPath: /run
+        volumes:
+          - name: device-plugin
+            hostPath:
+              path: /var/lib/kubelet/device-plugins
+          - name: infa-map
+            hostPath:
+              path: /run
+  YAML
+}
+
+data "tls_certificate" "this" {
+  url = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
+}
+
+resource "aws_iam_openid_connect_provider" "eks_oidc_provider" {
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = [data.tls_certificate.this.certificates[0].sha1_fingerprint]
+  url             = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
+  
 }
 
 locals {
@@ -505,7 +661,7 @@ resource "aws_iam_role" "cluster_autoscaler_role" {
       {
         "Effect": "Allow",
         "Principal": {
-          "Federated": "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${local.cluster_oidc_path}"
+          "Federated": "${aws_iam_openid_connect_provider.eks_oidc_provider.arn}"
         },
         "Action": "sts:AssumeRoleWithWebIdentity",
         "Condition": {
@@ -566,17 +722,9 @@ resource "null_resource" "eks_cluster_autoscaler_role" {
     EOT
   }
 
-  depends_on = [
-    aws_iam_openid_connect_provider.eks_oidc_provider
-  ]
-  
 }
 
 resource "kubectl_manifest" "fsx_sc" {
-
-  depends_on = [
-    aws_eks_cluster.eks_cluster
-  ]
 
   yaml_body = <<YAML
   kind: StorageClass
@@ -642,10 +790,6 @@ resource "kubectl_manifest" "pvc_fsx" {
 
 
 resource "kubectl_manifest" "efs_sc" {
-
-  depends_on = [
-    aws_eks_cluster.eks_cluster
-  ]
 
   yaml_body = <<YAML
   kind: StorageClass
@@ -766,7 +910,7 @@ resource "aws_iam_role_policy_attachment" "node_AmazonS3ReadOnlyPolicy" {
 }
 
 resource "aws_eks_node_group" "system_ng" {
-  cluster_name    = var.cluster_name 
+  cluster_name    = aws_eks_cluster.eks_cluster.id
   node_group_name = "system" 
   node_role_arn   = aws_iam_role.node_role.arn 
   subnet_ids      = aws_subnet.private.*.id 
@@ -780,58 +924,71 @@ resource "aws_eks_node_group" "system_ng" {
     min_size     = 2 
   }
 
-  depends_on = [
-    aws_eks_cluster.eks_cluster,
-    aws_iam_role.node_role,
-    aws_iam_role_policy_attachment.node_AmazonEKSWorkerNodePolicy,
-    aws_iam_role_policy_attachment.node_AmazonEKS_CNI_Policy,
-    aws_iam_role_policy_attachment.node_AmazonEC2ContainerRegistryReadOnly,
-    aws_iam_role_policy_attachment.node_AmazonS3ReadOnlyPolicy
-  ]
+  dynamic "remote_access" {
+    for_each = var.key_pair != "" ? [1] : []
+    content {
+      ec2_ssh_key = var.key_pair
+    }
+  }
 
 }
 
-resource "aws_eks_node_group" "inference_ng" {
-  cluster_name    = var.cluster_name 
-  node_group_name = "inference" 
-  node_role_arn   = aws_iam_role.node_role.arn 
-  subnet_ids      = aws_subnet.private.*.id 
-  instance_types  = split(",", var.inference_instance_type)
-  disk_size       = 100
-  ami_type        = "AL2_x86_64_GPU"
+resource "aws_launch_template" "this" {
 
-  scaling_config {
-    desired_size = 0 
-    max_size     = var.inference_max
-    min_size     = 0 
+  count = length(var.node_instances)
+
+  instance_type = var.node_instances[count.index]
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+    instance_metadata_tags      = "enabled"
   }
 
-  taint {
-    key = "nvidia.com/gpu"
-    value = "true"
-    effect = "NO_SCHEDULE"
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size = var.node_volume_size
+      volume_type = "gp3"
+      iops =  3000
+      encrypted = true
+      delete_on_termination = true
+      throughput = 125
+    }
   }
 
-  depends_on = [
-    aws_eks_cluster.eks_cluster,
-    aws_iam_role.node_role,
-    aws_iam_role_policy_attachment.node_AmazonEKSWorkerNodePolicy,
-    aws_iam_role_policy_attachment.node_AmazonEKS_CNI_Policy,
-    aws_iam_role_policy_attachment.node_AmazonEC2ContainerRegistryReadOnly,
-    aws_iam_role_policy_attachment.node_AmazonS3ReadOnlyPolicy
-  ]
+  dynamic "network_interfaces" {
+    for_each = range(0, lookup(var.efa_enabled, var.node_instances[count.index], 0), 1)
+    iterator = nic
+    content {
+      device_index          = nic.value != 0 ? 1 : nic.value
+      delete_on_termination = true
+      associate_public_ip_address = false
+      interface_type = "efa"
+      network_card_index = nic.value
+    }
+  }
 
+  key_name = var.key_pair != "" ? var.key_pair : null
+  
+  user_data = filebase64("../../user-data.txt")
 }
 
-resource "aws_eks_node_group" "training_ng" {
-  cluster_name    = var.cluster_name 
-  node_group_name = var.nodegroup_name 
-  node_role_arn   = aws_iam_role.node_role.arn 
-  subnet_ids      = aws_subnet.private.*.id 
-  instance_types  = split(",", var.node_instance_type)
-  disk_size       = var.node_volume_size 
+resource "aws_eks_node_group" "this" {
+  count = length(var.node_instances)
+
+  cluster_name    = var.cluster_name
+  node_group_name = "nodegroup-${count.index}"
+  node_role_arn   = aws_iam_role.node_role.arn
+  subnet_ids      = aws_subnet.private.*.id
   ami_type        = "AL2_x86_64_GPU"
   capacity_type = var.capacity_type
+
+ launch_template {
+    id = aws_launch_template.this[count.index].id
+    version = aws_launch_template.this[count.index].latest_version
+  }
 
   scaling_config {
     desired_size = var.node_group_desired 
@@ -839,49 +996,80 @@ resource "aws_eks_node_group" "training_ng" {
     min_size     = var.node_group_min 
   }
 
-  remote_access {
-    ec2_ssh_key = var.key_pair != "" ? var.key_pair : null
+  taint {
+    key = "fsx.csi.aws.com/agent-not-ready"
+    effect = "NO_EXECUTE"
   }
 
   taint {
-    key = "nvidia.com/gpu"
+    key = contains(var.neuron_instances, var.node_instances[count.index]) ? "aws.amazon.com/neuron" : "nvidia.com/gpu"
     value = "true"
     effect = "NO_SCHEDULE"
   }
 
-  depends_on = [
-    aws_eks_cluster.eks_cluster,
-    aws_iam_role.node_role,
-    aws_iam_role_policy_attachment.node_AmazonEKSWorkerNodePolicy,
-    aws_iam_role_policy_attachment.node_AmazonEKS_CNI_Policy,
-    aws_iam_role_policy_attachment.node_AmazonEC2ContainerRegistryReadOnly,
-    aws_iam_role_policy_attachment.node_AmazonS3ReadOnlyPolicy
-  ]
+  dynamic "taint" {
+    for_each = var.custom_taints
+
+    content {
+      key = taint.value.key
+      value = taint.value.value
+      effect = taint.value.effect
+    }
+  }
 
 }
 
-locals {
-  summary = <<SUMMARY
-
-  EKS Cluster Summary: 
-  	vpc:    ${aws_vpc.vpc.id}
-  	subnets: ${join(",", aws_subnet.private.*.id)}
-  	cluster security group: ${aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id}
-  	endpoint: ${aws_eks_cluster.eks_cluster.endpoint}
-  EKS NodeGroup Summary: 
-    node role: ${aws_iam_role.node_role.arn}
-    system: ${aws_eks_node_group.system_ng.arn} 
-    inference: ${aws_eks_node_group.inference_ng.arn} 
-    training: ${aws_eks_node_group.training_ng.arn} 
-  EFS Summary:
-  	file system id: ${aws_efs_file_system.fs.id}
-  	dns: ${aws_efs_file_system.fs.id}.efs.${var.region}.amazonaws.com
-  FSx for Lustre Summary:
-  	file system id: ${aws_fsx_lustre_file_system.fs.id}
-        mount_name: ${aws_fsx_lustre_file_system.fs.mount_name}
-SUMMARY
+output "cluster_vpc" {
+  description = "Cluster VPC ID"
+  value = aws_vpc.vpc.id
 }
 
-output "summary" {
-  value = local.summary
+output "cluster_subnets" {
+  description = "Cluster Subnet Ids"
+  value = aws_subnet.private.*.id
+}
+
+output "cluster_id" {
+  description = "Cluster Id"
+  value = aws_eks_cluster.eks_cluster.id
+}
+
+output "cluster_version" {
+  description = "Cluster version"
+  value = aws_eks_cluster.eks_cluster.version
+}
+
+output "cluster_endpoint" {
+  description = "Cluster Endpoint"
+  value = aws_eks_cluster.eks_cluster.endpoint
+}
+
+output "cluster_oidc_arn" {
+  description = "Cluster OIDC ARN"
+  value = aws_iam_openid_connect_provider.eks_oidc_provider.arn
+}
+
+output "node_role_arn" {
+  description = "Managed node group IAM role ARN"
+  value = aws_iam_role.node_role.arn
+}
+
+output "efs_id" {
+  description = "EFS file-system id"
+  value = aws_efs_file_system.fs.id
+}
+
+output "efs_dns" {
+  description = "EFS file-system DNS"
+  value = "${aws_efs_file_system.fs.id}.efs.${var.region}.amazonaws.com"
+}
+
+output "fsx_id" {
+  description = "FSx for Lustre file-system id"
+  value = aws_fsx_lustre_file_system.fs.id
+}
+
+output "fsx_mount_name" {
+  description = "FSx for Lustre file-system mount name"
+  value = aws_fsx_lustre_file_system.fs.mount_name
 }
