@@ -1,23 +1,31 @@
 # Distributed training using Kubeflow on Amazon EKS
 
+This is a tutorial on how to do [Kubeflow MPI Training](https://www.kubeflow.org/docs/components/training/mpi/) on [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/whitepapers/latest/overview-deployment-options/amazon-elastic-kubernetes-service.html). From a conceptual standpoint, the solution described in this tutorial is broadly applicable to any type of deep learning distributed training, and follows following outline:
+
+1. Create required infrastructure using [Terraform](https://www.terraform.io/), with auto scaling via [Karpenter](https://karpenter.sh/), and [Cluster Autoscaler](https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html)
+2. Prepare and stage the training data on [Amazon S3](https://aws.amazon.com/s3/)
+3. Automatically serve Amazon S3 data using [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) file-system
+3. Launch training job using [Helm Charts](https://helm.sh/docs/topics/charts/)
+4. Test trained model using [Jupyter Lab](https://jupyter.org/) notebook deployed as a [Kubernetes Service](https://kubernetes.io/docs/concepts/services-networking/service/)
+
+To make the above conceptual outline concrete, we provide a [Step by step tutorial](#step-by-step-tutorial).
+
 ## Prerequisites
 1. [Create and activate an AWS Account](https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/)
 2. Select your AWS Region. For the tutorial below, we assume the region to be ```us-west-2```
-3. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) for EC2 instances. For this tutorial, ensure your EC2 service limits in your selected AWS Region are set to at least 2 each for [p3.16xlarge, p3dn.24xlarge](https://aws.amazon.com/ec2/instance-types/p3/), and 2 for [g5.xlarge](https://aws.amazon.com/ec2/instance-types/g5/).
+3. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) for required EC2 instances. Ensure your EC2 service limits in your selected AWS Region are set to at least 2 each for [p3.16xlarge, p3dn.24xlarge](https://aws.amazon.com/ec2/instance-types/p3/), and 2 for [g5.xlarge](https://aws.amazon.com/ec2/instance-types/g5/). If you use other EC2 instance types, ensure your EC2 service limit accordingly.
 
 ## Step by step tutorial
 
-While the solution described in this tutorial is general, and can be adapted to train and test any type of deep learning neural network (DNN) model, we will make the tutorial concrete by focusing on distributed TensorFlow training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN), and [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) models.  The high-level outline of the solution is as follows:
+We make the tutorial concrete by focusing on distributed TensorFlow training for [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN), and [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) models.  This tutorial has following steps:
 
   1. Setup the build machine
   2. Upload [COCO 2017 training dataset](https://cocodataset.org/#download) to your [Amazon S3](https://aws.amazon.com/s3/) bucket
-  3. Use [Terraform](https://learn.hashicorp.com/terraform) to create the required AWS infrastructure
+  3. Use [Terraform](https://learn.hashicorp.com/terraform) to create the required infrastructure
   4. Build and Upload Docker Images to [Amazon EC2 Container Registry](https://aws.amazon.com/ecr/) (ECR)
   5. Use [Helm charts](https://helm.sh/docs/developing_charts/) to launch training jobs in the EKS cluster 
   6. Use [Jupyter](https://jupyter.org/) notebook to test the trained model
   
-For this tutorial, we assume the region to be ```us-west-2```. You may need to adjust the commands below if you use a different AWS Region.
-
 ### Setup the build machine
 
 For the *build machine*, we need [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html) and [Docker](https://www.docker.com/) installed. The AWS CLI must be configured for [Adminstrator job function](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html). You may use your laptop for your build machine if it has AWS CLI and Docker installed, or you may launch an EC2 instance for your build machine, as described below.
@@ -72,11 +80,10 @@ To download COCO 2017 dataset to your build environment instance, and upload it 
 
 We use Terraform to create:
 
-1. An [Amazon EKS](https://aws.amazon.com/eks/) cluster with [Cluster Autoscaler](https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html) 
-2. A [managed node group](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) (```system```) for running `kube-system` pods
-3. A distinct [managed node group](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) for each of following instance types: `p3.16xlarge`, `p3dn.24xlarge`, and `g5.xlarge`
-4. [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) file-system
-5. [Amazon EFS](https://aws.amazon.com/efs/) file-system
+1. An [Amazon EKS](https://aws.amazon.com/eks/) cluster with [Cluster Autoscaler](https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html), and [Karpenter](https://karpenter.sh/)
+2. A [managed node group](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) for running all pods that do not require a machine learning accelerator
+3. [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) file-system
+4. [Amazon EFS](https://aws.amazon.com/efs/) file-system
 
 Set `region` to your selected AWS Region, set `cluster_name` to a unique EKS cluster name, set `azs` to your Availability Zones, replace `S3_BUCKET` with your S3 bucket name, and execute the commands below:
 
@@ -84,6 +91,8 @@ Set `region` to your selected AWS Region, set `cluster_name` to a unique EKS clu
     terraform init
 
     terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET"
+
+[Cluster Autoscaler](https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html) manages the auto scaling of the non-accelerator nodes, and [Karpenter](https://karpenter.sh/) manages the just-in-time provisioning of the accelerator nodes.
 
 ### Build and Upload Docker Images to Amazon EC2 Container Registry (ECR)
 

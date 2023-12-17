@@ -124,7 +124,7 @@ variable "efa_enabled" {
 }
 
 variable "node_instances" {
-  description = "List of instance types for node groups"
+  description = "List of instance types for Cluster Autoscaler node groups. Ignored if karpenter_enabled=true."
   type = list(string)
   default = ["g5.xlarge", "p3.16xlarge", "p3dn.24xlarge"]
 }
@@ -143,13 +143,43 @@ variable "neuron_instances" {
 }
 
 variable "custom_taints" {
-  description = "List of custom taints applied to node groups"
+  description = "List of custom taints applied to node groups.  Ignored if karpenter_enabled=true"
   type = list(object({
     key = string
     value = string
     effect = string
   }))
   default = []
+}
+
+variable "karpenter_enabled" {
+  description = "Karpenter enabled"
+  type = bool
+  default = true
+}
+
+variable "karpenter_namespace" {
+  description = "Karpenter name space"
+  type = string
+  default = "karpenter"
+}
+
+variable "karpenter_version" {
+  description = "Karpenter version"
+  type = string
+  default = "v0.33.0"
+}
+
+variable "karpenter_capacity_type" {
+  description = "Karpenter capacity type: 'on-demand' or 'spot'"
+  type = string
+  default = "on-demand"
+}
+
+variable "karpenter_consolidate_after" {
+  description = "Karpenter consolidate-after delay"
+  type = string
+  default = "600s"
 }
 
 # END variables
@@ -228,7 +258,8 @@ resource "aws_subnet" "private" {
   tags = {
     Name = "${var.cluster_name}-subnet-${count.index}",
     "kubernetes.io/cluster/${var.cluster_name}" = "shared",
-    "kubernetes.io/role/internal-elb": "1"
+    "kubernetes.io/role/internal-elb": "1",
+    "karpenter.sh/discovery" = "${var.cluster_name}"
   }
 
 }
@@ -935,7 +966,7 @@ resource "aws_eks_node_group" "system_ng" {
 
 resource "aws_launch_template" "this" {
 
-  count = length(var.node_instances)
+  count = var.karpenter_enabled ? 0 : length(var.node_instances)
 
   instance_type = var.node_instances[count.index]
 
@@ -976,7 +1007,7 @@ resource "aws_launch_template" "this" {
 }
 
 resource "aws_eks_node_group" "this" {
-  count = length(var.node_instances)
+  count = var.karpenter_enabled ? 0 : length(var.node_instances)
 
   cluster_name    = var.cluster_name
   node_group_name = "nodegroup-${count.index}"
@@ -1017,6 +1048,370 @@ resource "aws_eks_node_group" "this" {
     }
   }
 
+}
+
+
+module "karpenter" {
+  count = var.karpenter_enabled ? 1 : 0
+
+  source = "terraform-aws-modules/eks/aws//modules/karpenter"
+
+  cluster_name = aws_eks_cluster.eks_cluster.id
+
+  irsa_oidc_provider_arn          = aws_iam_openid_connect_provider.eks_oidc_provider.arn
+  irsa_namespace_service_accounts = ["${var.karpenter_namespace}:karpenter"]
+
+  create_iam_role = true
+  iam_role_attach_cni_policy = true
+  iam_role_additional_policies = {
+    s3_policy = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+  }
+  irsa_tag_key = "karpenter.sh/managed-by"
+
+}
+
+resource "aws_iam_policy" "karpenter" {
+  count = var.karpenter_enabled ? 1 : 0
+
+  name        = "karpenter-iam-policy"
+  
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "iam:GetInstanceProfile",
+      "Effect": "Allow",
+      "Resource": "*"
+    },
+    {
+      "Action": "iam:CreateInstanceProfile",
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestTag/kubernetes.io/cluster/${aws_eks_cluster.eks_cluster.id}": "owned",
+          "aws:RequestTag/topology.kubernetes.io/region": "${var.region}"
+        },
+        "StringLike": {
+          "aws:RequestTag/karpenter.k8s.aws/ec2nodeclass": "*"
+        }
+      },
+      "Effect": "Allow",
+      "Resource": "*"
+    },
+    {
+      "Action": [
+        "iam:AddRoleToInstanceProfile",
+        "iam:RemoveRoleFromInstanceProfile",
+        "iam:DeleteInstanceProfile"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/kubernetes.io/cluster/${aws_eks_cluster.eks_cluster.id}": "owned",
+          "aws:ResourceTag/topology.kubernetes.io/region": "${var.region}"
+        },
+        "StringLike": {
+          "aws:ResourceTag/karpenter.k8s.aws/ec2nodeclass": "*"
+        }
+      },
+      "Effect": "Allow",
+      "Resource": "*"
+    },
+    {
+      "Action": "iam:TagInstanceProfile",
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/kubernetes.io/cluster/${aws_eks_cluster.eks_cluster.id}": "owned",
+          "aws:ResourceTag/topology.kubernetes.io/region": "${var.region}",
+          "aws:RequestTag/kubernetes.io/cluster/${aws_eks_cluster.eks_cluster.id}": "owned",
+          "aws:RequestTag/topology.kubernetes.io/region": "${var.region}"
+        },
+        "StringLike": {
+          "aws:ResourceTag/karpenter.k8s.aws/ec2nodeclass": "*",
+          "aws:RequestTag/karpenter.k8s.aws/ec2nodeclass": "*"
+        }
+      },
+      "Effect": "Allow",
+      "Resource": "*"
+    }
+  ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy_attachment" "karpenter_policy_attach" {
+  count = var.karpenter_enabled ? 1 : 0
+
+  role       = "${module.karpenter[0].irsa_name}"
+  policy_arn = "${aws_iam_policy.karpenter[0].arn}"
+  
+}
+
+resource "kubectl_manifest" "aws_auth" {
+
+  count = var.karpenter_enabled ? 1 : 0
+
+  yaml_body = <<YAML
+  apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: aws-auth
+    namespace: kube-system
+  data:
+    mapRoles: |
+      - rolearn: "${aws_iam_role.node_role.arn}"
+        username: system:node:{{EC2PrivateDNSName}}
+        groups:
+          - system:bootstrappers
+          - system:nodes
+      - rolearn: "${module.karpenter[0].role_arn}"
+        username: system:node:{{EC2PrivateDNSName}}
+        groups:
+          - system:bootstrappers
+          - system:nodes
+  
+  YAML
+}
+
+resource "helm_release" "karpenter" {
+  count = var.karpenter_enabled ? 1 : 0
+  
+  name       = "karpenter"
+  chart      = "karpenter"
+  cleanup_on_fail = true
+  create_namespace = true
+  repository  = "oci://public.ecr.aws/karpenter/"
+  version    = var.karpenter_version
+  namespace  = var.karpenter_namespace
+  timeout = 300
+  wait = true
+
+  set {
+    name  = "settings.clusterName"
+    value = aws_eks_cluster.eks_cluster.id
+  }
+
+  set {
+    name  = "controller.resources.requests.cpu"
+    value = "1"
+  }
+
+  set {
+    name  = "controller.resources.requests.memory"
+    value = "2Gi"
+  }
+
+  set {
+    name  = "controller.resources.limits.cpu"
+    value = "1"
+  }
+
+  set {
+    name  = "controller.resources.limits.memory"
+    value = "2Gi"
+  }
+
+
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = module.karpenter[0].irsa_arn
+  }
+
+  set {
+    name  = "settings.interruptionQueue"
+    value = module.karpenter[0].queue_name
+  }
+
+}
+
+resource "kubectl_manifest" "ec2_node_class" {
+
+  count = var.karpenter_enabled ? 1 : 0
+  depends_on = [helm_release.karpenter]
+
+  yaml_body = <<YAML
+  apiVersion: karpenter.k8s.aws/v1beta1
+  kind: EC2NodeClass
+  metadata:
+    name: default
+    namespace: "${var.karpenter_namespace}"
+  spec:
+    amiFamily: AL2                
+    subnetSelectorTerms:          
+      - tags:
+          karpenter.sh/discovery: "${aws_eks_cluster.eks_cluster.id}"
+    securityGroupSelectorTerms:   
+      - tags:
+          "kubernetes.io/cluster/${aws_eks_cluster.eks_cluster.id}": "owned"
+    
+    role: "${module.karpenter[0].role_name}"
+
+    tags:                  
+      name: "${aws_eks_cluster.eks_cluster.id}-karpenter"
+    
+    metadataOptions:
+      httpEndpoint: enabled
+      httpProtocolIPv6: disabled
+      httpPutResponseHopLimit: 2
+      httpTokens: required
+
+    blockDeviceMappings:
+      - deviceName: /dev/xvda
+        ebs:
+          volumeSize: 200Gi
+          volumeType: gp3
+          iops: 10000
+          encrypted: false
+          deleteOnTermination: true
+          throughput: 125
+    userData: |
+      #!/bin/bash
+      # update routes if more than one ENI
+      TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` 
+      ALL_MACS=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/)
+
+      MAC_ARRAY=($ALL_MACS)
+      if [[ "$${#MAC_ARRAY[@]}" -gt 1 ]]; then
+        TABLE_ID=1001
+        PREF_ID=32765
+        for MAC in "$${MAC_ARRAY[@]}"; do
+          TRIMMED_MAC=$(echo $MAC | sed 's:/*$::')
+          IF_NAME=$(ip -o link show | grep -F "link/ether $TRIMMED_MAC" | awk -F'[ :]+' '{print $2}')
+
+          IF_IP=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/$TRIMMED_MAC/local-ipv4s | head -1)
+          
+          CIDR=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/$TRIMMED_MAC/subnet-ipv4-cidr-block)
+
+          network=$(echo $CIDR | cut -d/ -f1)
+          router=$(($(echo $network | cut -d. -f4) + 1))
+          GATEWAY_IP="$(echo $network | cut -d. -f1-3).$router"
+
+          ip route replace default via $GATEWAY_IP dev $IF_NAME table $TABLE_ID
+          ip route replace $CIDR dev $IF_NAME proto kernel scope link src $IF_IP table $TABLE_ID
+          ip rule add from $IF_IP lookup $TABLE_ID pref $PREF_ID
+
+          ((TABLE_ID = TABLE_ID + 1))
+          ((PREF_ID = PREF_ID - 1))
+        done
+      fi
+  YAML
+}
+
+resource "kubectl_manifest" "node_pool_cuda" {
+
+  count = var.karpenter_enabled ? 1 : 0
+  depends_on = [helm_release.karpenter]
+
+  yaml_body = <<YAML
+  apiVersion: karpenter.sh/v1beta1
+  kind: NodePool
+  metadata:
+    name: cuda
+    namespace: "${var.karpenter_namespace}"
+  spec:
+    disruption:
+      consolidationPolicy: WhenEmpty
+      consolidateAfter: ${var.karpenter_consolidate_after}
+    template:
+      spec:
+        nodeClassRef:
+          name: default
+        requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: kubernetes.io/os
+          operator: In
+          values: ["linux"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: [ ${var.karpenter_capacity_type} ]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: 
+            - "g4dn.xlarge"
+            - "g4dn.2xlarge"
+            - "g4dn.4xlarge"
+            - "g4dn.8xlarge"
+            - "g4dn.12xlarge"
+            - "g4dn.16xlarge"
+            - "g5.xlarge"
+            - "g5.2xlarge"
+            - "g5.4xlarge"
+            - "g5.8xlarge"
+            - "g5.12xlarge"
+            - "g5.16xlarge"
+            - "g5.24xlarge"
+            - "g5.48xlarge"
+            - "p3.2xlarge"
+            - "p3.8xlarge"
+            - "p3.16xlarge"
+            - "p3dn.24xlarge"
+            - "p4d.24xlarge"
+            - "p4de.24xlarge"
+            - "p5.48xlarge"
+        taints:
+        - key: nvidia.com/gpu
+          value: "true"
+          effect: NoSchedule
+        startupTaints:
+        - key: fsx.csi.aws.com/agent-not-ready
+          effect: NoExecute
+        
+    limits:
+      nvidia.com/gpu: 1024
+  YAML
+}
+
+resource "kubectl_manifest" "node_pool_neuron" {
+
+  count = var.karpenter_enabled ? 1 : 0
+  depends_on = [helm_release.karpenter]
+
+  yaml_body = <<YAML
+  apiVersion: karpenter.sh/v1beta1
+  kind: NodePool
+  metadata:
+    name: neuron
+    namespace: "${var.karpenter_namespace}"
+  spec:
+    disruption:
+      consolidationPolicy: WhenEmpty
+      consolidateAfter: 600s
+    template:
+      spec:
+        nodeClassRef:
+          name: default
+        requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: kubernetes.io/os
+          operator: In
+          values: ["linux"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: [ ${var.karpenter_capacity_type} ]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: 
+            - "inf2.xlarge"
+            - "inf2.8xlarge"
+            - "inf2.24xlarge"
+            - "inf2.48xlarge"
+            - "trn1.2xlarge"
+            - "trn1.32xlarge"
+            - "trn1n.32xlarge"
+        taints:
+        - key: aws.amazon.com/neuron
+          value: "true"
+          effect: NoSchedule
+        startupTaints:
+        - key: fsx.csi.aws.com/agent-not-ready
+          effect: NoExecute
+        
+    limits:
+      aws.amazon.com/neuron: 1024
+  YAML
 }
 
 output "cluster_vpc" {
