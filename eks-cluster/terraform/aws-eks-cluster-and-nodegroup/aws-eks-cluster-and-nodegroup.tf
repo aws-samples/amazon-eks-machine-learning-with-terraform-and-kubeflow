@@ -124,9 +124,27 @@ variable "efa_enabled" {
 }
 
 variable "node_instances" {
-  description = "List of instance types for Cluster Autoscaler node groups. Ignored if karpenter_enabled=true."
+  description = "List of instance types for accelerator node groups. Ignored if karpenter_enabled=true."
   type = list(string)
   default = ["g5.xlarge", "p3.16xlarge", "p3dn.24xlarge"]
+}
+
+variable "system_instances" {
+  description = "List of instance types for system nodes."
+  type = list(string)
+  default = [
+    "m7a.large", 
+    "m7a.xlarge", 
+    "m7a.2xlarge", 
+    "m7a.4xlarge", 
+    "m7a.8xlarge"
+  ]
+}
+
+variable "system_volume_size" {
+  description = "System node volume size in GB"
+  type = number
+  default = 200
 }
 
 variable "neuron_instances" {
@@ -945,8 +963,8 @@ resource "aws_eks_node_group" "system_ng" {
   node_group_name = "system" 
   node_role_arn   = aws_iam_role.node_role.arn 
   subnet_ids      = aws_subnet.private.*.id 
-  instance_types  = ["m7a.large", "c7a.large"]
-  disk_size       = 40 
+  instance_types  = var.system_instances
+  disk_size       = var.system_volume_size
   ami_type        = "AL2_x86_64"
 
   scaling_config {
