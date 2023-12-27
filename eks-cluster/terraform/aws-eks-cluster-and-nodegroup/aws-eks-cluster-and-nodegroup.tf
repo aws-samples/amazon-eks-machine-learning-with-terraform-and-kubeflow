@@ -179,7 +179,7 @@ variable "karpenter_enabled" {
 variable "karpenter_namespace" {
   description = "Karpenter name space"
   type = string
-  default = "karpenter"
+  default = "kube-system"
 }
 
 variable "karpenter_version" {
@@ -198,6 +198,11 @@ variable "karpenter_consolidate_after" {
   description = "Karpenter consolidate-after delay"
   type = string
   default = "600s"
+}
+variable "nvidia_plugin_version" {
+  description = "NVIDIA Device Plugin Version"
+  type = string
+  default = "v0.14.3"
 }
 
 # END variables
@@ -471,7 +476,6 @@ resource "aws_fsx_lustre_file_system" "fs" {
 
 locals {
   use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.28": var.k8s_version
-  cluster_autoscaler_version=substr(local.use_k8s_version, 0, 4)
 }
 
 resource "aws_eks_cluster" "eks_cluster" {
@@ -493,32 +497,81 @@ resource "aws_eks_cluster" "eks_cluster" {
     command = "aws --region ${var.region} eks update-kubeconfig --name ${aws_eks_cluster.eks_cluster.name}"
   }
 
-  provisioner "local-exec" {
-    command = "kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/main/nvidia-device-plugin.yml"
-  }
+}
 
-  provisioner "local-exec" {
-    command = "kubectl apply -f https://raw.githubusercontent.com/aws-samples/aws-efa-eks/main/manifest/efa-k8s-device-plugin.yml"
-  }
 
-  provisioner "local-exec" {
-    command = <<-EOT
-      kubectl -n kube-system patch DaemonSet aws-efa-k8s-device-plugin-daemonset --patch \
-      '{"spec": { "template": {  "spec": { "tolerations": [{ "key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}, { "key": "aws.amazon.com/neuron", "operator": "Exists", "effect": "NoSchedule"} ]}}}}'
-    EOT
-  }
+resource "kubectl_manifest" "nvidia-device-plugin" {
 
-  provisioner "local-exec" {
-    command = "kubectl apply -k \"github.com/kubernetes-sigs/aws-fsx-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.1\""
-  }
+  yaml_body = <<YAML
+  apiVersion: apps/v1
+  kind: DaemonSet
+  metadata:
+    name: nvidia-device-plugin-daemonset
+    namespace: kube-system
+  spec:
+    selector:
+      matchLabels:
+        name: nvidia-device-plugin-ds
+    updateStrategy:
+      type: RollingUpdate
+    template:
+      metadata:
+        labels:
+          name: nvidia-device-plugin-ds
+      spec:
+        tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+        priorityClassName: "system-node-critical"
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
+                  - key: "node.kubernetes.io/instance-type"
+                    operator: In
+                    values:
+                    - g4dn.xlarge
+                    - g4dn.2xlarge
+                    - g4dn.4xlarge
+                    - g4dn.8xlarge
+                    - g4dn.12xlarge
+                    - g4dn.16xlarge
+                    - g5.xlarge
+                    - g5.2xlarge
+                    - g5.4xlarge
+                    - g5.8xlarge
+                    - g5.12xlarge
+                    - g5.16xlarge
+                    - g5.24xlarge
+                    - g5.48xlarge
+                    - p3.2xlarge
+                    - p3.8xlarge
+                    - p3.16xlarge
+                    - p3dn.24xlarge
+                    - p4d.24xlarge
+                    - p4de.24xlarge
+                    - p5.48xlarge
+        containers:
+        - image: nvcr.io/nvidia/k8s-device-plugin:${var.nvidia_plugin_version}
+          name: nvidia-device-plugin-ctr
+          env:
+            - name: FAIL_ON_INIT_ERROR
+              value: "false"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+          - name: device-plugin
+            mountPath: /var/lib/kubelet/device-plugins
+        volumes:
+        - name: device-plugin
+          hostPath:
+            path: /var/lib/kubelet/device-plugins
 
-  provisioner "local-exec" {
-    command = "kubectl apply -k \"github.com/kubernetes-sigs/aws-efs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.7\""
-  }
-
-  provisioner "local-exec" {
-    command = "kubectl create namespace ${var.kubeflow_namespace}"
-  }
+  YAML
 }
 
 module "eks_blueprints_addons" {
@@ -533,6 +586,127 @@ module "eks_blueprints_addons" {
 
   enable_aws_load_balancer_controller    = true
   enable_metrics_server                  = true
+  enable_aws_efs_csi_driver              = true
+  enable_aws_fsx_csi_driver              = true
+
+  aws_load_balancer_controller = {
+    namespace     = "kube-system"
+    chart_version = "v1.6.2"
+  }
+
+  aws_efs_csi_driver = {
+    namespace     = "kube-system"
+    chart_version = "2.5.2"
+  }
+
+  aws_fsx_csi_driver = {
+    namespace     = "kube-system"
+    chart_version = "1.8.0"
+  }
+
+}
+
+resource "helm_release" "cluster-autoscaler" {
+  name       = "cluster-autoscaler"
+  repository = "https://kubernetes.github.io/autoscaler"
+  chart      = "cluster-autoscaler"
+  version    = "9.34.1"
+  namespace  = "kube-system"
+
+  set {
+    name  = "cloudProvider"
+    value = "aws"
+  }
+
+  set {
+    name  = "awsRegion"
+    value = var.region
+  }
+
+  set {
+    name  = "autoDiscovery.clusterName"
+    value = aws_eks_cluster.eks_cluster.id
+  }
+
+  set {
+    name  = "extraArgs.skip-nodes-with-system-pods"
+    value = "false"
+  }
+
+  set {
+    name  = "extraArgs.skip-nodes-with-local-storage"
+    value = "false"
+  }
+
+  set {
+    name  = "extraArgs.expander"
+    value = "least-waste"
+  }
+
+  set {
+    name  = "extraArgs.balance-similar-node-groups"
+    value = "true"
+  }
+
+  set {
+    name  = "podAnnotations.cluster-autoscaler\\.kubernetes\\.io/safe-to-evict"
+    value = "\"false\""
+  }
+
+}
+
+resource "helm_release" "aws-efa-k8s-device-plugin" {
+  name       = "aws-efa-k8s-device-plugin"
+  repository = "https://aws.github.io/eks-charts"
+  chart      = "aws-efa-k8s-device-plugin"
+  version    = "v0.4.2"
+  namespace  = "kube-system"
+
+  set {
+    name  = "tolerations[0].key"
+    value = "nvidia.com/gpu"
+  }
+
+  set {
+    name  = "tolerations[0].operator"
+    value = "Exists"
+  }
+
+  set {
+    name  = "tolerations[0].effect"
+    value = "NoSchedule"
+  }
+
+  set {
+    name  = "tolerations[1].key"
+    value = "aws.amazon.com/neuron"
+  }
+
+  set {
+    name  = "tolerations[1].operator"
+    value = "Exists"
+  }
+
+  set {
+    name  = "tolerations[1].effect"
+    value = "NoSchedule"
+  }
+
+  set {
+    name  = "tolerations[2].key"
+    value = "aws.amazon.com/efa"
+  }
+
+  set {
+    name  = "tolerations[2].operator"
+    value = "Exists"
+  }
+
+  set {
+    name  = "tolerations[2].effect"
+    value = "NoSchedule"
+  }
+
 }
 
 resource "kubectl_manifest" "neuron_device_rbac_cr" {
@@ -686,6 +860,12 @@ resource "kubectl_manifest" "neuron_device_plugin" {
   YAML
 }
 
+resource "kubernetes_namespace" "kubeflow" {
+  metadata {
+    name = "kubeflow"
+  }
+}
+
 data "tls_certificate" "this" {
   url = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
 }
@@ -695,82 +875,6 @@ resource "aws_iam_openid_connect_provider" "eks_oidc_provider" {
   thumbprint_list = [data.tls_certificate.this.certificates[0].sha1_fingerprint]
   url             = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
   
-}
-
-locals {
-  cluster_oidc_path = format("oidc.eks.%s.amazonaws.com/id/%s", "${var.region}", join("", regex("https://([^.]+).+", "${aws_eks_cluster.eks_cluster.endpoint}"))) 
-}
-
-resource "aws_iam_role" "cluster_autoscaler_role" {
-  name = "${aws_eks_cluster.eks_cluster.id}-cluster-autoscaler-role"
-
-  assume_role_policy = jsonencode({
-    "Version": "2012-10-17",
-    "Statement": [
-      {
-        "Effect": "Allow",
-        "Principal": {
-          "Federated": "${aws_iam_openid_connect_provider.eks_oidc_provider.arn}"
-        },
-        "Action": "sts:AssumeRoleWithWebIdentity",
-        "Condition": {
-          "StringEquals": {
-            "${local.cluster_oidc_path}:aud": "sts.amazonaws.com"
-          }
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy" "cluster_autoscaler_policy" {
-   name = "cluster-autoscaler-policy"
-   role = aws_iam_role.cluster_autoscaler_role.id
-
-    policy = jsonencode({
-      "Version": "2012-10-17",
-      "Statement": [
-        {
-            "Action": [
-                "autoscaling:DescribeAutoScalingGroups",
-                "autoscaling:DescribeAutoScalingInstances",
-                "autoscaling:DescribeLaunchConfigurations",
-                "autoscaling:DescribeTags",
-                "autoscaling:SetDesiredCapacity",
-                "autoscaling:TerminateInstanceInAutoScalingGroup",
-                "ec2:DescribeLaunchTemplateVersions"
-            ],
-            "Resource": "*",
-            "Effect": "Allow"
-        }
-      ]
-    })
-}
-
-resource "null_resource" "eks_cluster_autoscaler_role" {
-  
-  triggers = {
-    cluster_autoscaler_role = "${aws_iam_role.cluster_autoscaler_role.arn}"
-  }
-
-  provisioner "local-exec" {
-    command = "kubectl apply -f  https://raw.githubusercontent.com/kubernetes/autoscaler/master/cluster-autoscaler/cloudprovider/aws/examples/cluster-autoscaler-autodiscover.yaml"
-  }
-
-  provisioner "local-exec" {
-    command = <<-EOT
-      kubectl -n kube-system patch deployment cluster-autoscaler --patch \
-      '{"spec": { "template": { "metadata":{"annotations":{"cluster-autoscaler.kubernetes.io/safe-to-evict": "false"}}, "spec": { "containers": [{ "image": "registry.k8s.io/autoscaling/cluster-autoscaler:v${local.cluster_autoscaler_version}.0", "name": "cluster-autoscaler", "resources": { "requests": {"cpu": "100m", "memory": "300Mi"}}, "command": [ "./cluster-autoscaler", "--v=4", "--stderrthreshold=info", "--cloud-provider=aws", "--skip-nodes-with-local-storage=false", "--expander=least-waste", "--node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/${var.cluster_name}", "--balance-similar-node-groups", "--skip-nodes-with-system-pods=false" ]}]}}}}'
-    EOT
-  }
-
-  provisioner "local-exec" {
-    command = <<-EOT
-      kubectl patch ServiceAccount cluster-autoscaler -n kube-system --patch \
-      '{"metadata":{"annotations":{"eks.amazonaws.com/role-arn": "${aws_iam_role.cluster_autoscaler_role.arn}"}}}'
-    EOT
-  }
-
 }
 
 resource "kubectl_manifest" "fsx_sc" {
@@ -1428,7 +1532,9 @@ resource "kubectl_manifest" "node_pool_neuron" {
           effect: NoExecute
         
     limits:
-      aws.amazon.com/neuron: 1024
+      aws.amazon.com/neuron: 512
+      aws.amazon.com/neurondevice: 512
+      aws.amazon.com/neuroncore: 1024
   YAML
 }
 
