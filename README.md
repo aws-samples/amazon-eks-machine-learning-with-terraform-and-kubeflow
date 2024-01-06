@@ -103,16 +103,9 @@ Below, we will build and push all the Docker images to Amazon ECR. Replace ```aw
 
 ### Install Helm charts for model training
 
-#### Install mpijob chart
-
-To deploy Kubeflow **MPIJob** *CustomResouceDefintion* using *mpijob chart*, execute:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/charts
-    helm install --debug mpijob ./mpijob/
-
 #### Install Mask-RCNN charts
  
-You have two Helm charts available for training Mask-RCNN models. Both these Helm charts use the same Kubernetes namespace, namely ```kubeflow```. Do not install both Helm charts at the same time.
+You have two Helm charts available for training Mask-RCNN models. Both these Helm charts use the same Kubernetes namespace, which, by default, is set to ```kubeflow```.
 
 To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize  [values.yaml](charts/maskrcnn/values.yaml), as described below:
 
