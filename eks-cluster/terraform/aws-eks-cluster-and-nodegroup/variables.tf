@@ -205,4 +205,10 @@ variable "nvidia_plugin_version" {
   default = "v0.14.3"
 }
 
+variable "local_helm_repo" {
+  description = "Local Helm charts path"
+  type        = string
+  default     = "../../../charts"
+}
+
 # END variables

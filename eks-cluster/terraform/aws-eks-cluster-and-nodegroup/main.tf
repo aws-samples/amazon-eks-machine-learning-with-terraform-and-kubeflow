@@ -40,6 +40,7 @@ provider "kubernetes" {
 }
 
 data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
 
 resource "aws_vpc" "vpc" {
   cidr_block = var.cidr_vpc
@@ -643,9 +644,20 @@ resource "kubectl_manifest" "neuron_device_plugin" {
 
 resource "kubernetes_namespace" "kubeflow" {
   metadata {
-    name = "kubeflow"
+    name = "${var.kubeflow_namespace}"
   }
 }
+
+module "kubeflow-components" {
+  source = "./kubeflow"
+
+  namespace = var.kubeflow_namespace
+  local_helm_repo = var.local_helm_repo
+
+  depends_on = [ kubernetes_namespace.kubeflow ]
+}
+
+
 
 data "tls_certificate" "this" {
   url = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
@@ -1049,6 +1061,7 @@ resource "aws_iam_role_policy_attachment" "karpenter_policy_attach" {
   
 }
 
+
 resource "kubectl_manifest" "aws_auth" {
 
   count = var.karpenter_enabled ? 1 : 0
@@ -1126,195 +1139,37 @@ resource "helm_release" "karpenter" {
 
 }
 
-resource "kubectl_manifest" "ec2_node_class" {
-
+resource "helm_release" "karpenter_components" {
   count = var.karpenter_enabled ? 1 : 0
-  depends_on = [helm_release.karpenter]
 
-  yaml_body = <<YAML
-  apiVersion: karpenter.k8s.aws/v1beta1
-  kind: EC2NodeClass
-  metadata:
-    name: default
-    namespace: "${var.karpenter_namespace}"
-  spec:
-    amiFamily: AL2                
-    subnetSelectorTerms:          
-      - tags:
-          karpenter.sh/discovery: "${aws_eks_cluster.eks_cluster.id}"
-    securityGroupSelectorTerms:   
-      - tags:
-          "kubernetes.io/cluster/${aws_eks_cluster.eks_cluster.id}": "owned"
-    
-    role: "${module.karpenter[0].role_name}"
+  chart = "${var.local_helm_repo}/karpenter-components"
+  name = "karpenter-components"
+  version = "1.0.0"
+  namespace = var.karpenter_namespace
+  
+  set {
+    name  = "namespace"
+    value = var.karpenter_namespace
+  }
 
-    tags:                  
-      name: "${aws_eks_cluster.eks_cluster.id}-karpenter"
-    
-    metadataOptions:
-      httpEndpoint: enabled
-      httpProtocolIPv6: disabled
-      httpPutResponseHopLimit: 2
-      httpTokens: required
+  set {
+    name  = "role_name"
+    value = module.karpenter[0].role_name
+  }
 
-    blockDeviceMappings:
-      - deviceName: /dev/xvda
-        ebs:
-          volumeSize: 200Gi
-          volumeType: gp3
-          iops: 10000
-          encrypted: false
-          deleteOnTermination: true
-          throughput: 125
-    userData: |
-      #!/bin/bash
-      # update routes if more than one ENI
-      TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` 
-      ALL_MACS=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/)
+  set {
+    name  = "cluster_id"
+    value = aws_eks_cluster.eks_cluster.id
+  }
 
-      MAC_ARRAY=($ALL_MACS)
-      if [[ "$${#MAC_ARRAY[@]}" -gt 1 ]]; then
-        TABLE_ID=1001
-        PREF_ID=32765
-        for MAC in "$${MAC_ARRAY[@]}"; do
-          TRIMMED_MAC=$(echo $MAC | sed 's:/*$::')
-          IF_NAME=$(ip -o link show | grep -F "link/ether $TRIMMED_MAC" | awk -F'[ :]+' '{print $2}')
+  set {
+    name  = "consolidate_after"
+    value = var.karpenter_consolidate_after
+  }
 
-          IF_IP=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/$TRIMMED_MAC/local-ipv4s | head -1)
-          
-          CIDR=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/$TRIMMED_MAC/subnet-ipv4-cidr-block)
+  set {
+    name  = "capacity_type"
+    value = var.karpenter_capacity_type
+  }
 
-          network=$(echo $CIDR | cut -d/ -f1)
-          router=$(($(echo $network | cut -d. -f4) + 1))
-          GATEWAY_IP="$(echo $network | cut -d. -f1-3).$router"
-
-          ip route replace default via $GATEWAY_IP dev $IF_NAME table $TABLE_ID
-          ip route replace $CIDR dev $IF_NAME proto kernel scope link src $IF_IP table $TABLE_ID
-          ip rule add from $IF_IP lookup $TABLE_ID pref $PREF_ID
-
-          ((TABLE_ID = TABLE_ID + 1))
-          ((PREF_ID = PREF_ID - 1))
-        done
-      fi
-  YAML
-}
-
-resource "kubectl_manifest" "node_pool_cuda" {
-
-  count = var.karpenter_enabled ? 1 : 0
-  depends_on = [helm_release.karpenter]
-
-  yaml_body = <<YAML
-  apiVersion: karpenter.sh/v1beta1
-  kind: NodePool
-  metadata:
-    name: cuda
-    namespace: "${var.karpenter_namespace}"
-  spec:
-    disruption:
-      consolidationPolicy: WhenEmpty
-      consolidateAfter: ${var.karpenter_consolidate_after}
-    template:
-      spec:
-        nodeClassRef:
-          name: default
-        requirements:
-        - key: kubernetes.io/arch
-          operator: In
-          values: ["amd64"]
-        - key: kubernetes.io/os
-          operator: In
-          values: ["linux"]
-        - key: karpenter.sh/capacity-type
-          operator: In
-          values: [ ${var.karpenter_capacity_type} ]
-        - key: node.kubernetes.io/instance-type
-          operator: In
-          values: 
-            - "g4dn.xlarge"
-            - "g4dn.2xlarge"
-            - "g4dn.4xlarge"
-            - "g4dn.8xlarge"
-            - "g4dn.12xlarge"
-            - "g4dn.16xlarge"
-            - "g5.xlarge"
-            - "g5.2xlarge"
-            - "g5.4xlarge"
-            - "g5.8xlarge"
-            - "g5.12xlarge"
-            - "g5.16xlarge"
-            - "g5.24xlarge"
-            - "g5.48xlarge"
-            - "p3.2xlarge"
-            - "p3.8xlarge"
-            - "p3.16xlarge"
-            - "p3dn.24xlarge"
-            - "p4d.24xlarge"
-            - "p4de.24xlarge"
-            - "p5.48xlarge"
-        taints:
-        - key: nvidia.com/gpu
-          value: "true"
-          effect: NoSchedule
-        startupTaints:
-        - key: fsx.csi.aws.com/agent-not-ready
-          effect: NoExecute
-        
-    limits:
-      nvidia.com/gpu: 1024
-  YAML
-}
-
-resource "kubectl_manifest" "node_pool_neuron" {
-
-  count = var.karpenter_enabled ? 1 : 0
-  depends_on = [helm_release.karpenter]
-
-  yaml_body = <<YAML
-  apiVersion: karpenter.sh/v1beta1
-  kind: NodePool
-  metadata:
-    name: neuron
-    namespace: "${var.karpenter_namespace}"
-  spec:
-    disruption:
-      consolidationPolicy: WhenEmpty
-      consolidateAfter: 600s
-    template:
-      spec:
-        nodeClassRef:
-          name: default
-        requirements:
-        - key: kubernetes.io/arch
-          operator: In
-          values: ["amd64"]
-        - key: kubernetes.io/os
-          operator: In
-          values: ["linux"]
-        - key: karpenter.sh/capacity-type
-          operator: In
-          values: [ ${var.karpenter_capacity_type} ]
-        - key: node.kubernetes.io/instance-type
-          operator: In
-          values: 
-            - "inf2.xlarge"
-            - "inf2.8xlarge"
-            - "inf2.24xlarge"
-            - "inf2.48xlarge"
-            - "trn1.2xlarge"
-            - "trn1.32xlarge"
-            - "trn1n.32xlarge"
-        taints:
-        - key: aws.amazon.com/neuron
-          value: "true"
-          effect: NoSchedule
-        startupTaints:
-        - key: fsx.csi.aws.com/agent-not-ready
-          effect: NoExecute
-        
-    limits:
-      aws.amazon.com/neuron: 512
-      aws.amazon.com/neurondevice: 512
-      aws.amazon.com/neuroncore: 1024
-  YAML
 }

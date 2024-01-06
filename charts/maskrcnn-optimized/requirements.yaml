@@ -1,4 +1,0 @@
-dependencies:
-  - name: mpi-operator
-    version: 1.0.0
-    repository: ./charts

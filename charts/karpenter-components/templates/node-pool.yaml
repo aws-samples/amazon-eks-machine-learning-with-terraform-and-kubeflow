@@ -1,0 +1,104 @@
+---
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: neuron
+  namespace: {{ .Values.namespace }}
+spec:
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: {{ .Values.consolidate_after }}
+  template:
+    spec:
+      nodeClassRef:
+        name: default
+      requirements:
+      - key: kubernetes.io/arch
+        operator: In
+        values: ["amd64"]
+      - key: kubernetes.io/os
+        operator: In
+        values: ["linux"]
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values: [ {{ .Values.capacity_type }} ]
+      - key: node.kubernetes.io/instance-type
+        operator: In
+        values: 
+          - "inf2.xlarge"
+          - "inf2.8xlarge"
+          - "inf2.24xlarge"
+          - "inf2.48xlarge"
+          - "trn1.2xlarge"
+          - "trn1.32xlarge"
+          - "trn1n.32xlarge"
+      taints:
+      - key: aws.amazon.com/neuron
+        value: "true"
+        effect: NoSchedule
+      startupTaints:
+      - key: fsx.csi.aws.com/agent-not-ready
+        effect: NoExecute
+      
+  limits:
+    aws.amazon.com/neuron: 512
+    aws.amazon.com/neurondevice: 512
+    aws.amazon.com/neuroncore: 1024
+---
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: cuda
+  namespace: {{ .Values.namespace }}
+spec:
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: {{ .Values.consolidate_after }}
+  template:
+    spec:
+      nodeClassRef:
+        name: default
+      requirements:
+      - key: kubernetes.io/arch
+        operator: In
+        values: ["amd64"]
+      - key: kubernetes.io/os
+        operator: In
+        values: ["linux"]
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values: [ {{ .Values.capacity_type }} ]
+      - key: node.kubernetes.io/instance-type
+        operator: In
+        values: 
+          - "g4dn.xlarge"
+          - "g4dn.2xlarge"
+          - "g4dn.4xlarge"
+          - "g4dn.8xlarge"
+          - "g4dn.12xlarge"
+          - "g4dn.16xlarge"
+          - "g5.xlarge"
+          - "g5.2xlarge"
+          - "g5.4xlarge"
+          - "g5.8xlarge"
+          - "g5.12xlarge"
+          - "g5.16xlarge"
+          - "g5.24xlarge"
+          - "g5.48xlarge"
+          - "p3.2xlarge"
+          - "p3.8xlarge"
+          - "p3.16xlarge"
+          - "p3dn.24xlarge"
+          - "p4d.24xlarge"
+          - "p4de.24xlarge"
+          - "p5.48xlarge"
+      taints:
+      - key: nvidia.com/gpu
+        value: "true"
+        effect: NoSchedule
+      startupTaints:
+      - key: fsx.csi.aws.com/agent-not-ready
+        effect: NoExecute
+      
+  limits:
+    nvidia.com/gpu: 1024

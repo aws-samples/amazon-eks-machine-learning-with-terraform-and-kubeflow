@@ -1,0 +1,64 @@
+apiVersion: karpenter.k8s.aws/v1beta1
+kind: EC2NodeClass
+metadata:
+  name: default
+  namespace: {{ .Values.namespace }}
+spec:
+  amiFamily: AL2                
+  subnetSelectorTerms:          
+    - tags:
+        karpenter.sh/discovery: "{{ .Values.cluster_id }}"
+  securityGroupSelectorTerms:   
+    - tags:
+        "kubernetes.io/cluster/{{ .Values.cluster_id }}": "owned"
+  
+  role: "{{ .Values.role_name }}"
+
+  tags:                  
+    name: {{ .Values.cluster_id }}-karpenter
+  
+  metadataOptions:
+    httpEndpoint: enabled
+    httpProtocolIPv6: disabled
+    httpPutResponseHopLimit: 2
+    httpTokens: required
+
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 200Gi
+        volumeType: gp3
+        iops: 10000
+        encrypted: false
+        deleteOnTermination: true
+        throughput: 125
+  userData: |
+    #!/bin/bash
+    # update routes if more than one ENI
+    TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` 
+    ALL_MACS=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/)
+
+    MAC_ARRAY=($ALL_MACS)
+    if [[ "$${#MAC_ARRAY[@]}" -gt 1 ]]; then
+      TABLE_ID=1001
+      PREF_ID=32765
+      for MAC in "$${MAC_ARRAY[@]}"; do
+        TRIMMED_MAC=$(echo $MAC | sed 's:/*$::')
+        IF_NAME=$(ip -o link show | grep -F "link/ether $TRIMMED_MAC" | awk -F'[ :]+' '{print $2}')
+
+        IF_IP=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/$TRIMMED_MAC/local-ipv4s | head -1)
+        
+        CIDR=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/$TRIMMED_MAC/subnet-ipv4-cidr-block)
+
+        network=$(echo $CIDR | cut -d/ -f1)
+        router=$(($(echo $network | cut -d. -f4) + 1))
+        GATEWAY_IP="$(echo $network | cut -d. -f1-3).$router"
+
+        ip route replace default via $GATEWAY_IP dev $IF_NAME table $TABLE_ID
+        ip route replace $CIDR dev $IF_NAME proto kernel scope link src $IF_IP table $TABLE_ID
+        ip rule add from $IF_IP lookup $TABLE_ID pref $PREF_ID
+
+        ((TABLE_ID = TABLE_ID + 1))
+        ((PREF_ID = PREF_ID - 1))
+      done
+    fi

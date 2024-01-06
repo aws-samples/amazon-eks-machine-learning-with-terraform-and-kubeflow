@@ -1,4 +1,0 @@
-mpioperator:
-  name: mpi-operator
-  image: mpioperator/mpi-operator:0.3.0
-  pullpolicy: Always
