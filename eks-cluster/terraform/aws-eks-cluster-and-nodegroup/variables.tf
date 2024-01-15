@@ -211,4 +211,10 @@ variable "local_helm_repo" {
   default     = "../../../charts"
 }
 
+variable "tags" {
+  description = "Tags"
+  type        = map
+  default     = {}
+}
+
 # END variables

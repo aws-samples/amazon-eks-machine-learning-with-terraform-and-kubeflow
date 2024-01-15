@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nvidia-device-plugin-daemonset
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    matchLabels:
+      name: nvidia-device-plugin-ds
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: nvidia-device-plugin-ds
+    spec:
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      priorityClassName: "system-node-critical"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                - key: "node.kubernetes.io/instance-type"
+                  operator: In
+                  values:
+                  - g4dn.xlarge
+                  - g4dn.2xlarge
+                  - g4dn.4xlarge
+                  - g4dn.8xlarge
+                  - g4dn.12xlarge
+                  - g4dn.16xlarge
+                  - g5.xlarge
+                  - g5.2xlarge
+                  - g5.4xlarge
+                  - g5.8xlarge
+                  - g5.12xlarge
+                  - g5.16xlarge
+                  - g5.24xlarge
+                  - g5.48xlarge
+                  - p3.2xlarge
+                  - p3.8xlarge
+                  - p3.16xlarge
+                  - p3dn.24xlarge
+                  - p4d.24xlarge
+                  - p4de.24xlarge
+                  - p5.48xlarge
+      containers:
+      - image: nvcr.io/nvidia/k8s-device-plugin:{{ .Chart.AppVersion }}
+        name: nvidia-device-plugin-ctr
+        env:
+          - name: FAIL_ON_INIT_ERROR
+            value: "false"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: device-plugin
+          mountPath: /var/lib/kubelet/device-plugins
+      volumes:
+      - name: device-plugin
+        hostPath:
+          path: /var/lib/kubelet/device-plugins

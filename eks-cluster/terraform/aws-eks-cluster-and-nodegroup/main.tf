@@ -15,6 +15,7 @@ provider "kubectl" {
     args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.eks_cluster.id]
     command     = "aws"
   }
+
 }
 
 provider "helm" {
@@ -281,79 +282,31 @@ resource "aws_eks_cluster" "eks_cluster" {
 
 }
 
+module "ebs_csi_driver_irsa" {
+  source = "aws-ia/eks-blueprints-addon/aws"
+  version = "~> 1.0" #ensure to update this to the latest/desired version
 
-resource "kubectl_manifest" "nvidia-device-plugin" {
+  # Disable helm release
+  create_release = false
 
-  yaml_body = <<YAML
-  apiVersion: apps/v1
-  kind: DaemonSet
-  metadata:
-    name: nvidia-device-plugin-daemonset
-    namespace: kube-system
-  spec:
-    selector:
-      matchLabels:
-        name: nvidia-device-plugin-ds
-    updateStrategy:
-      type: RollingUpdate
-    template:
-      metadata:
-        labels:
-          name: nvidia-device-plugin-ds
-      spec:
-        tolerations:
-        - key: nvidia.com/gpu
-          operator: Exists
-          effect: NoSchedule
-        priorityClassName: "system-node-critical"
-        affinity:
-          nodeAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-              nodeSelectorTerms:
-                - matchExpressions:
-                  - key: "node.kubernetes.io/instance-type"
-                    operator: In
-                    values:
-                    - g4dn.xlarge
-                    - g4dn.2xlarge
-                    - g4dn.4xlarge
-                    - g4dn.8xlarge
-                    - g4dn.12xlarge
-                    - g4dn.16xlarge
-                    - g5.xlarge
-                    - g5.2xlarge
-                    - g5.4xlarge
-                    - g5.8xlarge
-                    - g5.12xlarge
-                    - g5.16xlarge
-                    - g5.24xlarge
-                    - g5.48xlarge
-                    - p3.2xlarge
-                    - p3.8xlarge
-                    - p3.16xlarge
-                    - p3dn.24xlarge
-                    - p4d.24xlarge
-                    - p4de.24xlarge
-                    - p5.48xlarge
-        containers:
-        - image: nvcr.io/nvidia/k8s-device-plugin:${var.nvidia_plugin_version}
-          name: nvidia-device-plugin-ctr
-          env:
-            - name: FAIL_ON_INIT_ERROR
-              value: "false"
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
-          volumeMounts:
-          - name: device-plugin
-            mountPath: /var/lib/kubelet/device-plugins
-        volumes:
-        - name: device-plugin
-          hostPath:
-            path: /var/lib/kubelet/device-plugins
+  # IAM role for service account (IRSA)
+  create_role = true
+  create_policy = false
+  role_name   = substr("${aws_eks_cluster.eks_cluster.id}-ebs-csi-driver", 0, 38)
+  role_policies = {
+    AmazonEBSCSIDriverPolicy = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  }
 
-  YAML
+  oidc_providers = {
+    this = {
+      provider_arn    = aws_iam_openid_connect_provider.eks_oidc_provider.arn
+      namespace       = "kube-system"
+      service_account = "ebs-csi-controller-sa"
+    }
+  }
+
+  tags = var.tags
+
 }
 
 module "eks_blueprints_addons" {
@@ -370,6 +323,7 @@ module "eks_blueprints_addons" {
   enable_metrics_server                  = true
   enable_aws_efs_csi_driver              = true
   enable_aws_fsx_csi_driver              = true
+  enable_cert_manager                    = true
 
   aws_load_balancer_controller = {
     namespace     = "kube-system"
@@ -384,6 +338,18 @@ module "eks_blueprints_addons" {
   aws_fsx_csi_driver = {
     namespace     = "kube-system"
     chart_version = "1.8.0"
+  }
+
+  cert_manager = {
+    namespace     = "cert-manager"
+    chart_version = "1.13.3"
+  }
+
+  eks_addons = {
+    aws-ebs-csi-driver = {
+      addon_version              = "v1.26.0-eksbuild.1"
+      service_account_role_arn = module.ebs_csi_driver_irsa.iam_role_arn
+    }
   }
 
 }
@@ -491,173 +457,11 @@ resource "helm_release" "aws-efa-k8s-device-plugin" {
 
 }
 
-resource "kubectl_manifest" "neuron_device_rbac_cr" {
-
-  yaml_body = <<YAML
-  kind: ClusterRole
-  apiVersion: rbac.authorization.k8s.io/v1
-  metadata:
-    name: neuron-device-plugin
-  rules:
-  - apiGroups:
-    - ""
-    resources:
-    - nodes
-    verbs:
-    - get
-    - list
-    - watch
-  - apiGroups:
-    - ""
-    resources:
-    - events
-    verbs:
-    - create
-    - patch
-  - apiGroups:
-    - ""
-    resources:
-    - pods
-    verbs:
-    - update
-    - patch
-    - get
-    - list
-    - watch
-  - apiGroups:
-    - ""
-    resources:
-    - nodes/status
-    verbs:
-    - patch
-    - update
-  YAML
-
-}
-
-resource "kubectl_manifest" "neuron_device_rbac_sa" {
-
-  yaml_body = <<YAML
-  apiVersion: v1
-  kind: ServiceAccount
-  metadata:
-    name: neuron-device-plugin
-    namespace: kube-system
-  YAML
-
-}
-
-resource "kubectl_manifest" "neuron_device_rbac_crb" {
-
-  yaml_body = <<YAML
-  kind: ClusterRoleBinding
-  apiVersion: rbac.authorization.k8s.io/v1
-  metadata:
-    name: neuron-device-plugin
-    namespace: kube-system
-  roleRef:
-    apiGroup: rbac.authorization.k8s.io
-    kind: ClusterRole
-    name: neuron-device-plugin
-  subjects:
-  - kind: ServiceAccount
-    name: neuron-device-plugin
-    namespace: kube-system
-  YAML
-
-}
-
-resource "kubectl_manifest" "neuron_device_plugin" {
-
-  yaml_body = <<YAML
-  apiVersion: apps/v1
-  kind: DaemonSet
-  metadata:
-    name: neuron-device-plugin-daemonset
-    namespace: kube-system
-  spec:
-    selector:
-      matchLabels:
-        name:  neuron-device-plugin-ds
-    updateStrategy:
-      type: RollingUpdate
-    template:
-      metadata:
-        labels:
-          name: neuron-device-plugin-ds
-      spec:
-        serviceAccount: neuron-device-plugin
-        tolerations:
-        - key: CriticalAddonsOnly
-          operator: Exists
-        - key: aws.amazon.com/neuron
-          operator: Exists
-          effect: NoSchedule
-        priorityClassName: "system-node-critical"
-        affinity:
-          nodeAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-              nodeSelectorTerms:
-                - matchExpressions:
-                    - key: "node.kubernetes.io/instance-type"
-                      operator: In
-                      values:
-                        - inf2.xlarge
-                        - inf2.4xlarge
-                        - inf2.8xlarge
-                        - inf2.24xlarge
-                        - inf2.48xlarge
-                        - trn1.2xlarge
-                        - trn1.32xlarge
-                        - trn1n.32xlarge
-        containers:
-          #Device Plugin containers are available both in us-east and us-west ecr
-          #repos
-        - image: public.ecr.aws/neuron/neuron-device-plugin:2.18.3.0
-          imagePullPolicy: Always
-          name: neuron-device-plugin
-          env:
-          - name: KUBECONFIG
-            value: /etc/kubernetes/kubelet.conf
-          - name: NODE_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: spec.nodeName
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
-          volumeMounts:
-            - name: device-plugin
-              mountPath: /var/lib/kubelet/device-plugins
-            - name: infa-map
-              mountPath: /run
-        volumes:
-          - name: device-plugin
-            hostPath:
-              path: /var/lib/kubelet/device-plugins
-          - name: infa-map
-            hostPath:
-              path: /run
-  YAML
-}
-
 resource "kubernetes_namespace" "kubeflow" {
   metadata {
     name = "${var.kubeflow_namespace}"
   }
 }
-
-module "kubeflow-components" {
-  source = "./kubeflow"
-
-  namespace = var.kubeflow_namespace
-  local_helm_repo = var.local_helm_repo
-
-  depends_on = [ kubernetes_namespace.kubeflow ]
-}
-
-
 
 data "tls_certificate" "this" {
   url = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
@@ -668,129 +472,6 @@ resource "aws_iam_openid_connect_provider" "eks_oidc_provider" {
   thumbprint_list = [data.tls_certificate.this.certificates[0].sha1_fingerprint]
   url             = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
   
-}
-
-resource "kubectl_manifest" "fsx_sc" {
-
-  yaml_body = <<YAML
-  kind: StorageClass
-  apiVersion: storage.k8s.io/v1
-  metadata:
-    name: fsx-sc
-  provisioner: fsx.csi.aws.com
-  YAML
-}
-
-resource "kubectl_manifest" "pv_fsx" {
-
-  depends_on = [
-    kubectl_manifest.fsx_sc
-  ]
-
-  yaml_body = <<YAML
-  apiVersion: v1
-  kind: PersistentVolume
-  metadata:
-    name: pv-fsx
-  spec:
-    capacity:
-      storage: 1200Gi 
-    volumeMode: Filesystem
-    accessModes:
-      - ReadWriteMany
-    mountOptions:
-      - noatime
-      - flock
-    persistentVolumeReclaimPolicy: Retain
-    csi:
-      driver: fsx.csi.aws.com
-      volumeHandle: "${aws_fsx_lustre_file_system.fs.id}"
-      volumeAttributes:
-        dnsname: "${aws_fsx_lustre_file_system.fs.id}.fsx.${var.region}.amazonaws.com"
-        mountname: "${aws_fsx_lustre_file_system.fs.mount_name}"
-  YAML
-}
-
-resource "kubectl_manifest" "pvc_fsx" {
-
-  depends_on = [
-    kubectl_manifest.pv_fsx
-  ]
-
-  yaml_body = <<YAML
-  apiVersion: v1
-  kind: PersistentVolumeClaim
-  metadata:
-    name: pv-fsx
-    namespace: "${var.kubeflow_namespace}"
-  spec:
-    accessModes:
-      - ReadWriteMany
-    storageClassName: "" 
-    resources:
-      requests:
-        storage: 1200Gi
-    volumeName: pv-fsx
-  YAML
-}
-
-
-resource "kubectl_manifest" "efs_sc" {
-
-  yaml_body = <<YAML
-  kind: StorageClass
-  apiVersion: storage.k8s.io/v1
-  metadata:
-    name: efs-sc
-  provisioner: efs.csi.aws.com
-  YAML
-}
-
-resource "kubectl_manifest" "pv_efs" {
-
-  depends_on = [
-    kubectl_manifest.efs_sc
-  ]
-
-  yaml_body = <<YAML
-  apiVersion: v1
-  kind: PersistentVolume
-  metadata:
-    name: pv-efs
-  spec:
-    capacity:
-      storage: 1000Gi
-    volumeMode: Filesystem
-    accessModes:
-      - ReadWriteMany
-    persistentVolumeReclaimPolicy: Retain
-    storageClassName: efs-sc
-    csi:
-      driver: efs.csi.aws.com
-      volumeHandle: "${aws_efs_file_system.fs.id}"
-  YAML
-}
-
-resource "kubectl_manifest" "pvc_efs" {
-
-  depends_on = [
-    kubectl_manifest.pv_efs
-  ]
-
-  yaml_body = <<YAML
-  apiVersion: v1
-  kind: PersistentVolumeClaim
-  metadata:
-    name: pv-efs
-    namespace: "${var.kubeflow_namespace}"
-  spec:
-    accessModes:
-      - ReadWriteMany
-    storageClassName: efs-sc 
-    resources:
-      requests:
-        storage: 100Gi
-    YAML
 }
 
 resource "aws_iam_role" "node_role" {
@@ -1061,7 +742,6 @@ resource "aws_iam_role_policy_attachment" "karpenter_policy_attach" {
   
 }
 
-
 resource "kubectl_manifest" "aws_auth" {
 
   count = var.karpenter_enabled ? 1 : 0
@@ -1087,6 +767,7 @@ resource "kubectl_manifest" "aws_auth" {
   
   YAML
 }
+
 
 resource "helm_release" "karpenter" {
   count = var.karpenter_enabled ? 1 : 0
@@ -1172,4 +853,87 @@ resource "helm_release" "karpenter_components" {
     value = var.karpenter_capacity_type
   }
 
+  set {
+    name  = "node_role_arn"
+    value = aws_iam_role.node_role.arn
+  }
+
+  set {
+    name  = "karpenter_role_arn"
+    value = module.karpenter[0].role_arn
+  }
+
+}
+
+resource "helm_release" "neuron_device_plugin" {
+  chart = "${var.local_helm_repo}/neuron-device-plugin"
+  name = "neuron-device-plugin"
+  version = "1.0.0"
+  namespace = "kube-system"
+  
+  set {
+    name  = "namespace"
+    value = "kube-system"
+  }
+}
+
+resource "helm_release" "nvidia_device_plugin" {
+  chart = "${var.local_helm_repo}/nvidia-device-plugin"
+  name = "nvidia-device-plugin"
+  version = "1.0.0"
+  namespace = "kube-system"
+  
+  set {
+    name  = "namespace"
+    value = "kube-system"
+  }
+}
+
+resource "helm_release" "pv_efs" {
+  chart = "${var.local_helm_repo}/pv-efs"
+  name = "pv-efs"
+  version = "1.0.0"
+  
+  set {
+    name  = "namespace"
+    value = kubernetes_namespace.kubeflow.metadata[0].name
+  }
+
+  set {
+    name  = "fs_id"
+    value = aws_efs_file_system.fs.id
+  }
+}
+
+resource "helm_release" "pv_fsx" {
+  chart = "${var.local_helm_repo}/pv-fsx"
+  name = "pv-fsx"
+  version = "1.0.0"
+  
+  set {
+    name  = "namespace"
+    value = kubernetes_namespace.kubeflow.metadata[0].name
+  }
+
+  set {
+    name  = "fs_id"
+    value = aws_fsx_lustre_file_system.fs.id
+  }
+
+  set {
+    name  = "mount_name"
+    value = aws_fsx_lustre_file_system.fs.mount_name
+  }
+
+  set {
+    name  = "dns_name"
+    value = "${aws_fsx_lustre_file_system.fs.id}.fsx.${var.region}.amazonaws.com"
+  }
+}
+
+module "kubeflow-components" {
+  source = "./kubeflow"
+
+  kubeflow_namespace = kubernetes_namespace.kubeflow.metadata[0].name
+  local_helm_repo = var.local_helm_repo
 }

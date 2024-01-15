@@ -9,10 +9,10 @@ resource "helm_release" "mpi-operator" {
   chart      = "${var.local_helm_repo}/mpi-operator"
   version    = "2.0.0"
 
-  namespace = var.namespace
+  namespace = var.kubeflow_namespace
 
   set {
     name  = "namespace"
-    value = var.namespace
+    value = var.kubeflow_namespace
   }
 }

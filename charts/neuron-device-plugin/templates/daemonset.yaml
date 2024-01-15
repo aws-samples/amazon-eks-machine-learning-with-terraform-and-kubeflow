@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: neuron-device-plugin-daemonset
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    matchLabels:
+      name:  neuron-device-plugin-ds
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: neuron-device-plugin-ds
+    spec:
+      serviceAccount: neuron-device-plugin
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - key: aws.amazon.com/neuron
+        operator: Exists
+        effect: NoSchedule
+      priorityClassName: "system-node-critical"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: "node.kubernetes.io/instance-type"
+                    operator: In
+                    values:
+                      - inf2.xlarge
+                      - inf2.4xlarge
+                      - inf2.8xlarge
+                      - inf2.24xlarge
+                      - inf2.48xlarge
+                      - trn1.2xlarge
+                      - trn1.32xlarge
+                      - trn1n.32xlarge
+      containers:
+      - image: public.ecr.aws/neuron/neuron-device-plugin:{{ .Chart.AppVersion }}
+        imagePullPolicy: Always
+        name: neuron-device-plugin
+        env:
+        - name: KUBECONFIG
+          value: /etc/kubernetes/kubelet.conf
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+          - name: device-plugin
+            mountPath: /var/lib/kubelet/device-plugins
+          - name: infa-map
+            mountPath: /run
+      volumes:
+        - name: device-plugin
+          hostPath:
+            path: /var/lib/kubelet/device-plugins
+        - name: infa-map
+          hostPath:
+            path: /run
