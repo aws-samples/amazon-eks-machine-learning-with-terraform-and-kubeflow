@@ -109,21 +109,8 @@ You have two Helm charts available for training Mask-RCNN models. Both these Hel
 
 To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize  [values.yaml](charts/maskrcnn/values.yaml), as described below:
 
-1. Set ```shared_fs``` and ```data_fs``` to  ```fsx``` (default) or ```efs``` (see [Stage Data on EFS](#optional-stage-data-on-efs)). Set ```shared_pvc``` to the corresponding ```persistent-volume-claim```: ```pv-fsx``` for `fsx` (default), and `pv-efs` for `efs`. 
-2. Use [AWS check ip](http://checkip.amazonaws.com/) to get the public IP of your web browser client. Use this public IP to set ```global.source_cidr``` as a  ```/32``` CIDR. This will restrict Internet access to [Jupyter](https://jupyter.org/) notebook and [TensorBoard](https://www.tensorflow.org/tensorboard) services to your public IP. 
-3. Set `tf_device_min_sys_mem_mb` to `2560`, if `gpu_instance_type` is set to `p3.16xlarge`.
-
-To password protect [TensorBoard](https://www.tensorflow.org/tensorboard), generate the password hash for your password using the command below:
-
-    htpasswd -c .htpasswd tensorboard
-   
-Copy the generated password for `tensorboard` from `.htpasswd` file and set it as a quoted MD5 hash in ```charts/maskrcnn/charts/jupyter/value.yaml``` file, as shown in the example below:
-
-    htpasswd: "your-generated-password-hash" # MD5 password hash
-
-Finally, clean the generated password hash:
-
-    rm .htpasswd
+1. Set ```shared_fs``` and ```data_fs``` to  ```fsx``` (default) or ```efs``` (see [Stage Data on EFS](#optional-stage-data-on-efs)). Set ```shared_pvc``` to the corresponding ```persistent-volume-claim```: ```pv-fsx``` for `fsx` (default), and `pv-efs` for `efs`.  
+2. Set `tf_device_min_sys_mem_mb` to `2560`, if `gpu_instance_type` is set to `p3.16xlarge`.
 
 To install the ```maskrcnn``` chart, execute:
 
@@ -133,10 +120,7 @@ To install the ```maskrcnn``` chart, execute:
 To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, customize  [maskrcnn-optimized/values.yaml](charts/maskrcnn-optimized/values.yaml), as described below:
 
 1. Set ```shared_fs``` and ```data_fs``` to  ```fsx``` (default) or ```efs``` (see [Stage Data on EFS](#optional-stage-data-on-efs)). Set ```shared_pvc``` to the corresponding ```persistent-volume-claim```: ```pv-fsx``` for `fsx` (default), and `pv-efs` for `efs`. 
-2. Use [AWS check ip](http://checkip.amazonaws.com/) to get the public IP of your web browser client. Use this public IP to set ```global.source_cidr``` as a  ```/32``` CIDR. This will restrict Internet access to [Jupyter](https://jupyter.org/) notebook and [TensorBoard](https://www.tensorflow.org/tensorboard) services to your public IP.
-3. Set `tf_device_min_sys_mem_mb: 2560`, and `batch_size_per_gpu: 2`, if `gpu_instance_type` is set to `p3.16xlarge`.
-
-To password protect [TensorBoard](https://www.tensorflow.org/tensorboard), you **must** set ```htpasswd```  in  ```charts/maskrcnn-optimized/charts/jupyter/value.yaml``` to a quoted MD5 password hash.
+2. Set `tf_device_min_sys_mem_mb: 2560`, and `batch_size_per_gpu: 2`, if `gpu_instance_type` is set to `p3.16xlarge`.
 
 To install the ```maskrcnn-optimized``` chart, execute:
 
@@ -171,24 +155,65 @@ For ```efs```,  access your training logs as follows:
 
 Type ```exit``` to exit from the ```attach-pvc``` container. 
 
-### Test trained model
-Execute ```kubectl logs -f jupyter-xxxxx -n kubeflow -c jupyter``` to display Jupyter log. At the beginning of the Jupyter log, note the **security token** required to access Jupyter service in a browser. 
+### Uninstall Helm charts after training
+When training is complete, you may uninstall an installed chart by executing ```helm uninstall chart-name```, for example ```helm uninstall maskrcnn```. The logs and trained models will be preserved on the shared file system used for training. 
 
-Execute ```kubectl get services -n kubeflow``` to get the service DNS address. To test the trained model using a Jupyter notebook, access the service in a browser on port 443 using the service DNS and the security token.  Your URL to access the Jupyter service should look similar to the example below:
+### Test trained model
+
+#### Generate password hash
+
+To password protect [TensorBoard](https://www.tensorflow.org/tensorboard), generate the password hash for your password using the command below:
+
+    htpasswd -c .htpasswd tensorboard
+   
+Copy the generated password for `tensorboard` from `.htpasswd` file and save it to use in steps below. Finally, clean the generated password hash file:
+
+    rm .htpasswd
+    
+#### Test TensorPack Mask-RCNN model
+
+To test [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize  [charts/maskrcnn-jupyter/values.yaml](charts/maskrcnn-jupyter/values.yaml), as described below:
+
+1. Use [AWS check ip](http://checkip.amazonaws.com/) to get the public IP of your web browser client. Use this public IP to set ```global.source_cidr``` as a  ```/32``` CIDR. This will restrict Internet access to [Jupyter](https://jupyter.org/) notebook and [TensorBoard](https://www.tensorflow.org/tensorboard) services to your public IP.
+2. Set `global.log_dir` to the **relative path** of your training log directory, for example, `maskrcnn-XXXX-XX-XX-XX-XX-XX`.
+3. Set the generated password for `tensorboard`  as a quoted MD5 hash as shown in the example below:
+
+    ```htpasswd: "your-generated-password-hash"```
+
+To install the ```maskrcnn-jupyter``` chart, execute:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug maskrcnn-jupyter ./charts/maskrcnn-jupyter/
+
+Execute ```kubectl logs -f maskrcnn-jupyter-xxxxx -n kubeflow -c jupyter``` to display Jupyter log. At the beginning of the Jupyter log, note the **security token** required to access Jupyter service in a browser. 
+
+Execute ```kubectl get service maskrcnn-jupyter -n kubeflow``` to get the service DNS address. To test the trained model using a Jupyter notebook, access the service in a browser on port 443 using the service DNS and the security token.  Your URL to access the Jupyter service should look similar to the example below:
 
   https://xxxxxxxxxxxxxxxxxxxxxxxxx.elb.xx-xxxx-x.amazonaws.com?token=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   
 Because the service endpoint in this tutorial uses a **self-signed certificate**, accessing Jupyter service in a browser will display a browser warning. If you deem it appropriate, proceed to access the service. Open the notebook, and run it it to test the trained model. Note, there may not be any trained model checkpoint available at a given time, while training is in progress.
 
-### Visualize TensorBoard summaries
 To access TensorBoard via web, use the service DNS address noted above. Your URL to access the TensorBoard service should look similar to the example below:
 
   https://xxxxxxxxxxxxxxxxxxxxxxxxx.elb.xx-xxxx-x.amazonaws.com:6443/
   
 Accessing TensorBoard service in a browser will display a browser warning, because the service endpoint uses a **self-signed certificate**. If you deem it appropriate, proceed to access the service. When prompted for authentication, use the default username ```tensorboard```, and your password.
 
-### Delete Helm charts after training
-When training is complete, you may delete an installed chart by executing ```helm delete chart-name```, for example ```helm delete maskrcnn```. This will destroy all pods used in training and testing, including Tensorboard and Jupyter service pods. However, the logs and trained models will be preserved on the shared file system used for training. When you delete all the helm charts, the kubernetes Cluster Autoscaler will scale down the ```inference``` and ```training``` node groups to zero size.
+#### Test AWS Mask-RCNN model 
+
+To test [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow)  model, customize  [charts/maskrcnn-optimized-jupyter/values.yaml](charts/maskrcnn-optimized-jupyter/values.yaml) file, following the three steps shown for [TensorPack Mask-RCNN model](#test-tensorpack-mask-rcnn-model). Note, the `log_dir` will be different, for example, `maskrcnn-optimized-XXXX-XX-XX-XX-XX-XX`.
+
+To install the ```maskrcnn-optimized-jupyter``` chart, execute:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug maskrcnn-optimized-jupyter ./charts/maskrcnn-optimized-jupyter/
+
+Execute ```kubectl logs -f maskrcnn-optimized-jupyter-xxxxx -n kubeflow -c jupyter``` to display Jupyter log. At the beginning of the Jupyter log, note the **security token** required to access Jupyter service in a browser. 
+
+Execute ```kubectl get service maskrcnn-optimized-jupyter -n kubeflow``` to get the service DNS address. The rest of the steps are the same as for [TensorPack Mask-RCNN model](#test-tensorpack-mask-rcnn-model).
+
+### Uninstall Helm charts after testing
+When testing is complete, you may uninstall an installed chart by executing ```helm uninstall chart-name```, for example ```helm uninstall maskrcnn-jupyter```, or ```helm uninstall maskrcnn-optimized-jupyter```.
 
 ### (Optional) Stage Data on EFS
 The COCO 2017 training data used in the tutorial is **automatically imported** from the ```S3_BUCKET``` to the FSx for Lustre file-system. However, if you want to use the EFS file-system as the source for your training data, you need to customize ```S3_BUCKET``` variable in [stage-data.yaml](eks-cluster/stage-data.yaml), and run following command:

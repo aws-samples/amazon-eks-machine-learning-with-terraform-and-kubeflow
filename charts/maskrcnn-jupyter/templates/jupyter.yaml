@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .Values.jupyter.name }}
+  name: {{ .Values.global.name }}
   namespace: {{ .Values.global.namespace }}
   annotations:
     service.beta.kubernetes.io/aws-load-balancer-access-log-enabled: "false"
@@ -29,7 +29,7 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: nginx-conf
+  name: {{ .Values.global.name }}-nginx-conf
   namespace: {{ .Values.global.namespace }}
 data:
   nginx.conf: |
@@ -84,7 +84,7 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: nginx-htpasswd
+  name: {{ .Values.global.name }}-nginx-htpasswd
   namespace: {{ .Values.global.namespace }}
 data:
   .htpasswd: |
@@ -93,7 +93,7 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Values.jupyter.name }}
+  name: {{ .Values.global.name }}
   namespace: {{ .Values.global.namespace }}
   labels:
     app: {{ .Values.jupyter.name }}
@@ -115,13 +115,13 @@ spec:
             claimName: {{ .Values.global.shared_pvc }}
       - name: nginx-conf
         configMap:
-          name: nginx-conf
+          name: {{ .Values.global.name }}-nginx-conf
           items:
           - key: nginx.conf
             path: nginx.conf
       - name: nginx-htpasswd
         configMap:
-          name: nginx-htpasswd
+          name: {{ .Values.global.name }}-nginx-htpasswd
           items:
           - key: .htpasswd
             path: .htpasswd
@@ -137,7 +137,7 @@ spec:
       - name:  {{ .Values.jupyter.name }}
         env:
         - name: LOGDIR
-          value: /{{ .Values.global.shared_fs }}/{{ .Release.Name }}-{{ date "2006-01-02-15-04-05" .Release.Time  }}
+          value: /{{ .Values.global.shared_fs }}/{{ .Values.global.log_dir }}
         command:
         - jupyter
         args:
@@ -169,7 +169,7 @@ spec:
         command:
         - tensorboard
         args:
-        - --logdir=/{{ .Values.global.shared_fs }}/{{ .Release.Name }}-{{ date "2006-01-02-15-04-05" .Release.Time  }}/train_log/maskrcnn
+        - --logdir=/{{ .Values.global.shared_fs }}/{{ .Values.global.log_dir }}/train_log/maskrcnn
         - --port={{ .Values.tensorboard.upstream_port }}
         image: {{ .Values.image }}
         imagePullPolicy: {{ .Values.image_pull_policy }}

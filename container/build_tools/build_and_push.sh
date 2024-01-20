@@ -58,7 +58,7 @@ docker push ${fullname}
 if [ $? -eq 0 ]; then
 	echo "Amazon ECR URI: ${fullname}"
 	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../charts/maskrcnn/values.yaml
-	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../charts/maskrcnn/charts/jupyter/values.yaml
+	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../charts/maskrcnn-jupyter/values.yaml
 else
 	echo "Error: Image build and push failed"
 	exit 1

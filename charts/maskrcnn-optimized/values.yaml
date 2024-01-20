@@ -2,7 +2,6 @@ global:
   namespace: kubeflow
   shared_fs: fsx #efs
   shared_pvc: pv-fsx # pv-efs
-  source_cidr: # Public IP source CIDR
 maskrcnn:
   name: mask-rcnn-tensorflow
   gpus: 16

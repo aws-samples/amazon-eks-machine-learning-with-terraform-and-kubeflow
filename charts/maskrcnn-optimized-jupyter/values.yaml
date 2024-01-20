@@ -1,3 +1,10 @@
+global:
+  name: maskrcnn-optimized-jupyter
+  namespace: kubeflow
+  shared_fs: fsx
+  shared_pvc: pv-fsx # pv-efs
+  source_cidr:  # Public IP source CIDR
+  log_dir:  # relative path on shared file-system to directory containing 'train_log' folder
 image:
 image_pull_policy: Always
 jupyter:
