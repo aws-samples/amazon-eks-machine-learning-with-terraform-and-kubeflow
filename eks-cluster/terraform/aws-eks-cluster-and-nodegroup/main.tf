@@ -650,8 +650,9 @@ resource "aws_eks_node_group" "this" {
 module "karpenter" {
   count = var.karpenter_enabled ? 1 : 0
 
-  source = "terraform-aws-modules/eks/aws//modules/karpenter"
-
+  source  = "terraform-aws-modules/eks/aws//modules/karpenter"
+  version = "19.21.0"
+  
   cluster_name = aws_eks_cluster.eks_cluster.id
 
   irsa_oidc_provider_arn          = aws_iam_openid_connect_provider.eks_oidc_provider.arn
