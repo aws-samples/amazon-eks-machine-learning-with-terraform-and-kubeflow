@@ -312,7 +312,7 @@ module "ebs_csi_driver_irsa" {
 module "eks_blueprints_addons" {
 
   source = "aws-ia/eks-blueprints-addons/aws"
-  version = "~> 1.12" #ensure to update this to the latest/desired version
+  version = "1.13.0"
 
   cluster_name      = aws_eks_cluster.eks_cluster.id
   cluster_endpoint  = aws_eks_cluster.eks_cluster.endpoint
