@@ -1,0 +1,196 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubeflow-notebooks-webapp-config
+  namespace: {{ .Values.kubeflow.namespace }}
+
+data:
+  spawner_ui_config.yaml: | 
+    spawnerFormDefaults:
+      ################################################################
+      # Container Images
+      ################################################################
+      # if users can input custom images, or only select from dropdowns
+      allowCustomImage: true
+
+      # if the registry of the container image is hidden from display
+      hideRegistry: true
+
+      # if the tag of the container image is hidden from display
+      hideTag: false
+
+      # configs for the ImagePullPolicy
+      imagePullPolicy:
+        readOnly: false
+
+        # the default ImagePullPolicy
+        # (possible values: "Always", "IfNotPresent", "Never")
+        value: IfNotPresent
+
+      image:
+        # the default container image
+        value: kubeflownotebookswg/jupyter-scipy:v1.8.0
+
+        # the list of available container images in the dropdown
+        options:
+        - kubeflownotebookswg/jupyter-scipy:v1.8.0
+        - kubeflownotebookswg/jupyter-pytorch-full:v1.8.0
+        - kubeflownotebookswg/jupyter-pytorch-cuda-full:v1.8.0
+        - kubeflownotebookswg/jupyter-tensorflow-full:v1.8.0
+        - kubeflownotebookswg/jupyter-tensorflow-cuda-full:v1.8.0
+        - public.ecr.aws/kubeflow-on-aws/notebook-servers/jupyter-pytorch:2.0.0-cpu-py310-ubuntu20.04-ec2-v1.0
+        - public.ecr.aws/kubeflow-on-aws/notebook-servers/jupyter-pytorch:2.0.0-gpu-py310-cu118-ubuntu20.04-ec2-v1.0
+        - public.ecr.aws/kubeflow-on-aws/notebook-servers/jupyter-tensorflow:2.12.0-cpu-py310-ubuntu20.04-ec2-v1.0
+        - public.ecr.aws/kubeflow-on-aws/notebook-servers/jupyter-tensorflow:2.12.0-gpu-py310-cu118-ubuntu20.04-ec2-v1.0
+        
+
+      imageGroupOne:
+        # the default container image
+        value: kubeflownotebookswg/codeserver-python:v1.8.0
+
+        # the list of available container images in the dropdown
+        options:
+        - kubeflownotebookswg/codeserver-python:v1.8.0
+
+      imageGroupTwo:
+        # the default container image
+        value: kubeflownotebookswg/rstudio-tidyverse:v1.8.0
+
+        # the list of available container images in the dropdown
+        options:
+        - kubeflownotebookswg/rstudio-tidyverse:v1.8.0
+
+      ################################################################
+      # CPU Resources
+      ################################################################
+      cpu:
+        readOnly: false
+
+        # the default cpu request for the container
+        value: "0.5"
+
+        # a factor by which to multiply the CPU request calculate the cpu limit
+        # (to disable cpu limits, set as "none")
+        limitFactor: "8.0"
+
+      ################################################################
+      # Memory Resources
+      ################################################################
+      memory:
+        readOnly: false
+
+        # the default memory request for the container
+        value: "1.0Gi"
+
+        # a factor by which to multiply the memory request calculate the memory limit
+        # (to disable memory limits, set as "none")
+        limitFactor: "8.0"
+
+      ################################################################
+      # GPU/Device-Plugin Resources
+      ################################################################
+      gpus:
+        readOnly: false
+
+        value:
+          vendor: "nvidia.com/gpu"
+          vendors:
+            - limitsKey: "nvidia.com/gpu"
+              uiName: "NVIDIA"
+
+          # the default value of the limit
+          # (possible values: "none", "1", "2", "4", "8")
+          num: "none"
+
+      ################################################################
+      # Workspace Volumes
+      ################################################################
+      workspaceVolume:
+        readOnly: false
+
+        # the default workspace volume to be created and mounted
+        # (to have no default, set `value: null`)
+        value:
+          mount: /home/jovyan
+
+          # pvc configs for creating new workspace volumes
+          # https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#persistentvolumeclaim-v1-core
+          newPvc:
+            metadata:
+              name: "{notebook-name}-workspace"
+            spec:
+              storageClassName: ebs-sc
+              resources:
+                requests:
+                  storage: 5Gi
+              accessModes:
+              - ReadWriteOnce
+
+      ################################################################
+      # Data Volumes
+      ################################################################
+      dataVolumes:
+        readOnly: false
+
+        # a list of additional data volumes to be created and/or mounted
+        value:
+        - mount: /home/jovyan/fsx
+          existingSource:
+            persistentVolumeClaim:
+              claimName: "pv-fsx"
+        - mount: /home/jovyan/efs
+          existingSource:
+            persistentVolumeClaim:
+              claimName: "pv-efs"
+        
+
+      ################################################################
+      # Affinity
+      ################################################################
+      affinityConfig:
+        readOnly: false
+        value: ""
+
+        # the list of available affinity configs in the dropdown
+        options: []
+
+      ################################################################
+      # Tolerations
+      ################################################################
+      tolerationGroup:
+        readOnly: false
+        value: "nvidia_gpu"
+
+        # the list of available toleration groups in the dropdown
+        options:
+        - groupKey: "nvidia_gpu"
+          displayName: "Nvidia GPU"
+          tolerations:
+          - key: "nvidia.com/gpu"
+            operator: "Exists"
+            effect: "NoSchedule"
+
+      ################################################################
+      # Shared Memory
+      ################################################################
+      shm:
+        readOnly: false
+        value: true
+
+      ################################################################
+      # PodDefaults
+      ################################################################
+      configurations:
+        readOnly: false
+        value:
+        - access-ml-pipeline
+
+      ################################################################
+      # Environment
+      #
+      # NOTE:
+      #  - these configs are only used by the ROK "flavor" of the UI
+      ################################################################
+      environment:
+        readOnly: false
+        value: {}

@@ -1,0 +1,15 @@
+apiVersion: v1
+data:
+  ADMIN: ''
+  USERID_HEADER: x-auth-request-email
+  USERID_PREFIX: ''
+  WORKLOAD_IDENTITY: ''
+  ISTIO_INGRESS_GATEWAY_PRINCIPAL: "cluster.local/ns/{{ .Values.ingress.namespace }}/sa/{{ .Values.ingress.sa }}"
+  NOTEBOOK_CONTROLLER_PRINCIPAL: "cluster.local/ns/{{ .Values.kubeflow.namespace }}/sa/{{ .Values.notebook_controller.sa }}"
+  KFP_UI_PRINCIPAL: "cluster.local/ns/{{ .Values.kubeflow.namespace }}/sa/{{ .Values.pipeline_ui.sa }}"
+kind: ConfigMap
+metadata:
+  labels:
+    control-plane: profiles
+  name: profiles-config
+  namespace: {{ .Values.kubeflow.namespace }}

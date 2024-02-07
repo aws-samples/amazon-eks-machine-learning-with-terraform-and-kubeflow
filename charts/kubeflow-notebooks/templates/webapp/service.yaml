@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: kubeflow-notebooks-webapp
+    run: kubeflow-notebooks-webapp
+  name: kubeflow-notebooks-webapp-service
+  namespace: {{ .Values.kubeflow.namespace }}
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 5000
+  selector:
+    app: kubeflow-notebooks-webapp
+  type: ClusterIP

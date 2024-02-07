@@ -1,0 +1,6 @@
+apiVersion: v2
+name: cluster-issuer
+description: A Helm chart for Kubeflow self-signing certificate issuer
+type: application
+version: 1.0.0
+appVersion: "v1.8.0"

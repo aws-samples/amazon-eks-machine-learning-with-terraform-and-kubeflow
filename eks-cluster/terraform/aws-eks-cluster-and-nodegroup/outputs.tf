@@ -52,3 +52,20 @@ output "fsx_mount_name" {
   description = "FSx for Lustre file-system mount name"
   value = aws_fsx_lustre_file_system.fs.mount_name
 }
+
+output "static_email" {
+  description = "kubeflow email"
+  value = var.static_email
+}
+
+output "static_username" {
+  description = "kubeflow username"
+  value = var.static_username
+}
+
+
+output "static_password" {
+  description = "kubeflow password"
+  sensitive = true
+  value = random_password.static_password.result
+}

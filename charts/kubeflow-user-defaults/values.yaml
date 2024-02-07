@@ -1,0 +1,8 @@
+user: 
+  profile: kubeflow-user-example-com
+efs:
+  fs_id:
+fsx:
+  fs_id:
+  dns_name:
+  mount_name:

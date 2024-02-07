@@ -1,5 +1,0 @@
-apiVersion: v1
-appVersion: "v2beta1"
-description: A Helm chart for kubeflow  mpijob customer resource definition
-name: mpijob
-version: 2.0.0

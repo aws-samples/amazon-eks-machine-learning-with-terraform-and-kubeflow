@@ -1,0 +1,40 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  labels:
+    app.kubernetes.io/component: cert-manager
+    app.kubernetes.io/name: cert-manager
+  name: self-signed-issuer
+  namespace: {{ .Values.cluster_issuer.namespace }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: self-signed-ca
+  namespace: {{ .Values.cluster_issuer.namespace }}
+spec:
+  isCA: true
+  commonName: self-signed-ca
+  secretName: ca-secret
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  issuerRef:
+    name: self-signed-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  labels:
+    app.kubernetes.io/component: cert-manager
+    app.kubernetes.io/name: cert-manager
+  name: {{ .Values.cluster_issuer.name }}
+  namespace: {{ .Values.cluster_issuer.namespace }}
+spec:
+  ca:
+    secretName: ca-secret

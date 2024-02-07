@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dex
+  namespace:  {{ .Values.dex.namespace }}
+data:
+  config.yaml: |
+    issuer: https://istio-ingressgateway.{{ .Values.ingress.namespace }}.svc.cluster.local/dex
+    storage:
+      type: kubernetes
+      config:
+        inCluster: true
+    web:
+      http: 0.0.0.0:5556
+    logger:
+      level: "debug"
+      format: text
+    oauth2:
+      skipApprovalScreen: true
+    enablePasswordDB: true
+    staticPasswords:
+    - email: {{ .Values.dex.user.email }}
+      hashFromEnv: DEX_USER_HASH
+      username: {{ .Values.dex.user.username }}
+      userID: {{ .Values.dex.user.userid }}
+    staticClients:
+    - idEnv: OIDC_CLIENT_ID
+      redirectURIs: ["https://istio-ingressgateway.{{ .Values.ingress.namespace }}.svc.cluster.local/oauth2/callback"]
+      name: 'Dex Login Application'
+      secretEnv: OIDC_CLIENT_SECRET

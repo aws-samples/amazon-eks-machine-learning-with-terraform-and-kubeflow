@@ -1,0 +1,75 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name:  pvcviewer-controller
+  namespace: {{ .Values.kubeflow.namespace }}
+  labels:
+    control-plane: pvcviewer-controller-manager
+spec:
+  selector:
+    matchLabels:
+      control-plane: pvcviewer-controller-manager
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        control-plane: pvcviewer-controller-manager
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - command:
+        - /manager
+        envFrom:
+        - configMapRef:
+            name: pvcviewer-controller-config
+        args:
+        - --leader-elect
+        image: docker.io/kubeflownotebookswg/pvcviewer-controller:v1.8.0
+        imagePullPolicy: IfNotPresent
+        name: manager
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: cert
+          readOnly: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - "ALL"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+      volumes:
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: pvcviewer-server-cert
+      serviceAccountName:  pvcviewer-controller-sa
+      terminationGracePeriodSeconds: 10
+     

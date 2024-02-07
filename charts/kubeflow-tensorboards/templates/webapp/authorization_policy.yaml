@@ -1,0 +1,15 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: tensorboards-web-app
+  namespace: {{ .Values.kubeflow.namespace }}
+spec:
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/{{ .Values.ingress.namespace }}/sa/{{ .Values.ingress.sa }}
+  selector:
+    matchLabels:
+      app: tensorboards-web-app

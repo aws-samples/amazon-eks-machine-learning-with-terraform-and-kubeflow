@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  annotations: {}
+  name: notebook-controller
+  namespace: {{ .Values.kubeflow.namespace }}
+data:
+  CLUSTER_DOMAIN: cluster.local
+  CULL_IDLE_TIME: '{{ .Values.cullingPolicy.cullIdleTime }}'
+  ENABLE_CULLING: '{{ .Values.cullingPolicy.enableCulling }}'
+  IDLENESS_CHECK_PERIOD: '{{ .Values.cullingPolicy.idlenessCheckPeriod }}'
+  ISTIO_GATEWAY: {{ .Values.ingress.namespace }}/{{ .Values.ingress.gateway }}
+  USE_ISTIO: 'true'

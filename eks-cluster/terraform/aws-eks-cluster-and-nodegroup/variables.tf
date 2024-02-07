@@ -100,8 +100,26 @@ variable "node_group_min" {
 }
 
 variable "capacity_type" {
-  description = "ON_DEMAND or SPOT capacity"
+  description = "Work node group capacity type: ON_DEMAND or SPOT capacity"
   default = "ON_DEMAND"
+  type = string
+}
+
+variable "system_capacity_type" {
+  description = "System node group capacity type: ON_DEMAND or SPOT capacity"
+  default = "SPOT"
+  type = string
+}
+
+variable "auth_namespace" {
+  description = "Auth namespace"
+  default = "auth"
+  type = string
+}
+
+variable "ingress_namespace" {
+  description = "Ingress namespace"
+  default = "ingress"
   type = string
 }
 
@@ -109,6 +127,18 @@ variable "kubeflow_namespace" {
   description = "Kubeflow namespace"
   default = "kubeflow"
   type = string
+}
+
+variable "static_email" {
+  description = "Default user email"
+  type = string
+  default = "user@example.com"
+}
+
+variable "static_username" {
+  description = "Default username"
+  type = string
+  default = "user"
 }
 
 variable "efa_enabled" {
@@ -133,11 +163,21 @@ variable "system_instances" {
   description = "List of instance types for system nodes."
   type = list(string)
   default = [
+    "t3a.large",
+    "t3a.xlarge",
+    "t3a.2xlarge",
+    "m5.large", 
+    "m5.xlarge", 
+    "m5.2xlarge", 
+    "m5.4xlarge", 
+    "m5a.large", 
+    "m5a.xlarge", 
+    "m5a.2xlarge", 
+    "m5a.4xlarge", 
     "m7a.large", 
     "m7a.xlarge", 
-    "m7a.2xlarge", 
-    "m7a.4xlarge", 
-    "m7a.8xlarge"
+    "m7a.2xlarge",
+    "m7a.4xlarge"
   ]
 }
 
@@ -185,7 +225,7 @@ variable "karpenter_namespace" {
 variable "karpenter_version" {
   description = "Karpenter version"
   type = string
-  default = "v0.33.0"
+  default = "v0.33.2"
 }
 
 variable "karpenter_capacity_type" {
@@ -215,6 +255,55 @@ variable "tags" {
   description = "Tags"
   type        = map
   default     = {}
+}
+
+variable "ingress_scheme" {
+  description = "ingress scheme: 'internal' or 'internet-facing'"
+  type = string
+  default = "internal"
+}
+
+variable "ingress_cidrs" {
+  description = "ingress source cidrs comma separated list"
+  type = string
+  default = "0.0.0.0/0"
+}
+
+variable "ingress_gateway" {
+  description = "Ingress Gateway name"
+  type = string
+  default = "ingress-gateway"
+}
+
+
+variable "cluster_issuer" {
+  description = "Cluster issuer name"
+  type        = string
+  default = "ca-self-signing-issuer"
+}
+
+variable "kubeflow_platform_enabled" {
+  description = "Install Kubeflow Components, if enabled"
+  type        = bool
+  default = false
+}
+
+variable "system_group_desired" {
+    description = "System group desired size"
+    default = 4
+    type = number
+}
+
+variable "system_group_max" {
+    description = "System group maximum size"
+    default = 32
+    type = number
+}
+
+variable "system_group_min" {
+    description = "System group minimum size"
+    default = 1
+    type = number
 }
 
 # END variables

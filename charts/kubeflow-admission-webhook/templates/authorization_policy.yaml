@@ -1,0 +1,17 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  labels:
+    control-plane: profiles
+  name: profiles-kfam
+  namespace: {{ .Values.kubeflow.namespace }}
+spec:
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/{{ .Values.kubeflow.namespace }}/sa/centraldashboard
+  selector:
+    matchLabels:
+      control-plane: profiles

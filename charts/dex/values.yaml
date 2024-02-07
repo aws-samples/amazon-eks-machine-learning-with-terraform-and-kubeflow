@@ -1,0 +1,14 @@
+dex:
+  namespace:
+  user:
+    email:
+    username:
+    userid:
+    bcrypt_hash:
+  oidc:
+    client_id:
+    client_secret:
+ingress:
+  namespace:
+  gateway:
+

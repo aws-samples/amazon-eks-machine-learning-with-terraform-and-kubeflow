@@ -1,0 +1,15 @@
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: katib-ui
+  namespace: {{ .Values.kubeflow.namespace }}
+spec:
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/{{ .Values.ingress.namespace }}/sa/{{ .Values.ingress.sa }}
+  selector:
+    matchLabels:
+      katib.kubeflow.org/component: ui

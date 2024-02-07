@@ -1,0 +1,6 @@
+apiVersion: v2
+name: istio-ingress
+description: A Helm chart for istio ingress components
+type: application
+version: 1.0.0
+appVersion: "1.20.2"

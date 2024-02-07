@@ -1,9 +1,16 @@
+provider "aws" {
+  region                   = var.region
+  shared_credentials_files = [var.credentials]
+  profile                  = var.profile
+}
 
 provider "aws" {
-  region                  = var.region
+  region                   = "us-east-1"
+  alias                    = "virginia"
   shared_credentials_files = [var.credentials]
-  profile                 = var.profile
+  profile                  = var.profile
 }
+
 
 provider "kubectl" {
   host                   = aws_eks_cluster.eks_cluster.endpoint
@@ -41,7 +48,6 @@ provider "kubernetes" {
 }
 
 data "aws_caller_identity" "current" {}
-data "aws_partition" "current" {}
 
 resource "aws_vpc" "vpc" {
   cidr_block = var.cidr_vpc
@@ -111,7 +117,7 @@ resource "aws_route_table" "private" {
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_nat_gateway.ngw.id
+    nat_gateway_id = aws_nat_gateway.ngw.id
   }
 
   tags = {
@@ -219,6 +225,8 @@ resource "aws_efs_mount_target" "target" {
 
   subnet_id      = aws_subnet.private.*.id[count.index] 
   security_groups = [aws_security_group.efs_sg.id] 
+
+  depends_on = [ aws_subnet.private, aws_security_group.efs_sg]
 }
 
 resource "aws_security_group" "fsx_lustre_sg" {
@@ -246,19 +254,23 @@ resource "aws_security_group" "fsx_lustre_sg" {
 }
 
 resource "aws_fsx_lustre_file_system" "fs" {
-  import_path      = var.import_path != "" ? var.import_path: null 
   storage_capacity = 1200
   subnet_ids       = [aws_subnet.private[0].id]
-  deployment_type = "SCRATCH_2"
+  deployment_type  = "SCRATCH_2"
+
   security_group_ids = [aws_security_group.fsx_lustre_sg.id] 
+  import_path = var.import_path
+  export_path = var.import_path
 
   tags = {
     Name = var.cluster_name
   }
 }
 
+
 locals {
   use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.28": var.k8s_version
+  s3_bucket = split("/", substr(var.import_path, 5, -1))[0]
 }
 
 resource "aws_eks_cluster" "eks_cluster" {
@@ -284,7 +296,7 @@ resource "aws_eks_cluster" "eks_cluster" {
 
 module "ebs_csi_driver_irsa" {
   source = "aws-ia/eks-blueprints-addon/aws"
-  version = "~> 1.0" #ensure to update this to the latest/desired version
+  version = "1.1.1"
 
   # Disable helm release
   create_release = false
@@ -323,11 +335,11 @@ module "eks_blueprints_addons" {
   enable_metrics_server                  = true
   enable_aws_efs_csi_driver              = true
   enable_aws_fsx_csi_driver              = true
-  enable_cert_manager                    = true
 
   aws_load_balancer_controller = {
     namespace     = "kube-system"
     chart_version = "v1.6.2"
+    wait = true
   }
 
   aws_efs_csi_driver = {
@@ -340,11 +352,6 @@ module "eks_blueprints_addons" {
     chart_version = "1.8.0"
   }
 
-  cert_manager = {
-    namespace     = "cert-manager"
-    chart_version = "1.13.3"
-  }
-
   eks_addons = {
     aws-ebs-csi-driver = {
       addon_version              = "v1.26.0-eksbuild.1"
@@ -352,7 +359,91 @@ module "eks_blueprints_addons" {
     }
   }
 
+  depends_on = [  helm_release.cluster-autoscaler ]
 }
+
+data "aws_iam_policy_document" "cert_manager" {
+  source_policy_documents   = []
+  override_policy_documents = []
+
+  statement {
+    actions   = ["route53:GetChange", ]
+    resources = ["arn:aws:route53:::change/*"]
+  }
+
+  statement {
+    actions = [
+      "route53:ChangeResourceRecordSets",
+      "route53:ListResourceRecordSets",
+    ]
+    resources = ["arn:aws:route53:::hostedzone/*"]
+  }
+
+  statement {
+    actions   = ["route53:ListHostedZonesByName"]
+    resources = ["*"]
+  }
+}
+
+
+module "cert_manager" {
+  source  = "aws-ia/eks-blueprints-addon/aws"
+  version = "1.1.1"
+
+  create = true
+  create_release = true
+
+  name             = "cert-manager"
+  description      = "A Helm chart to deploy cert-manager"
+  namespace        = "cert-manager"
+  create_namespace = true
+  chart            = "cert-manager"
+  chart_version    = "1.13.3"
+  repository       = "https://charts.jetstack.io"
+  
+  wait = true
+
+  set = [
+    {
+      name  = "installCRDs"
+      value = true
+    },
+    {
+      name  = "serviceAccount.name"
+      value = "cert-manager"
+    }
+  ]
+    
+  # IAM role for service account (IRSA)
+  set_irsa_names                = ["serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"]
+  create_role                   = true
+  role_name                     = "cert-manager"
+  role_name_use_prefix          = true
+  role_path                     =  "/"
+  role_permissions_boundary_arn =  null
+  role_description              = "IRSA for cert-manger"
+  role_policies                 = {}
+
+  allow_self_assume_role  =  true
+  source_policy_documents = data.aws_iam_policy_document.cert_manager[*].json
+  policy_statements       = []
+  policy_name             = "cert-manager"
+  policy_name_use_prefix  = true
+  policy_path             =  null
+  policy_description      = "IAM Policy for cert-manager"
+
+
+  oidc_providers = {
+    this = {
+      provider_arn    = aws_iam_openid_connect_provider.eks_oidc_provider.arn
+      # namespace is inherited from chart
+      service_account = "cert-manager"
+    }
+  }
+
+  depends_on = [ module.eks_blueprints_addons ]
+}
+
 
 resource "helm_release" "cluster-autoscaler" {
   name       = "cluster-autoscaler"
@@ -400,6 +491,8 @@ resource "helm_release" "cluster-autoscaler" {
     name  = "podAnnotations.cluster-autoscaler\\.kubernetes\\.io/safe-to-evict"
     value = "\"false\""
   }
+
+  depends_on = [ aws_eks_node_group.system_ng ]
 
 }
 
@@ -457,10 +550,28 @@ resource "helm_release" "aws-efa-k8s-device-plugin" {
 
 }
 
+resource "kubernetes_namespace" "auth" {
+  metadata {
+    labels = {
+      istio-injection = "enabled"
+    }
+
+    name = "${var.auth_namespace}"
+  }
+
+  depends_on = [  helm_release.cluster-autoscaler ]
+}
+
 resource "kubernetes_namespace" "kubeflow" {
   metadata {
+    labels = {
+      istio-injection = "enabled"
+    }
+
     name = "${var.kubeflow_namespace}"
   }
+
+  depends_on = [  helm_release.cluster-autoscaler ]
 }
 
 data "tls_certificate" "this" {
@@ -544,11 +655,12 @@ resource "aws_eks_node_group" "system_ng" {
   instance_types  = var.system_instances
   disk_size       = var.system_volume_size
   ami_type        = "AL2_x86_64"
+  capacity_type = var.system_capacity_type
 
   scaling_config {
-    desired_size = 2 
-    max_size     = 8
-    min_size     = 2 
+    desired_size = var.system_group_desired
+    max_size     = var.system_group_max
+    min_size     = var.system_group_min
   }
 
   dynamic "remote_access" {
@@ -558,6 +670,13 @@ resource "aws_eks_node_group" "system_ng" {
     }
   }
 
+  depends_on = [ 
+                aws_subnet.private, 
+                aws_subnet.public, 
+                aws_route_table_association.private, 
+                aws_route_table_association.public,
+                kubectl_manifest.aws_auth
+              ]
 }
 
 resource "aws_launch_template" "this" {
@@ -644,102 +763,29 @@ resource "aws_eks_node_group" "this" {
     }
   }
 
+  depends_on = [ helm_release.cluster-autoscaler ]
 }
-
 
 module "karpenter" {
   count = var.karpenter_enabled ? 1 : 0
 
   source  = "terraform-aws-modules/eks/aws//modules/karpenter"
-  version = "19.21.0"
-  
+  version = "20.0.1"
+
   cluster_name = aws_eks_cluster.eks_cluster.id
 
   irsa_oidc_provider_arn          = aws_iam_openid_connect_provider.eks_oidc_provider.arn
   irsa_namespace_service_accounts = ["${var.karpenter_namespace}:karpenter"]
 
   create_iam_role = true
-  iam_role_attach_cni_policy = true
-  iam_role_additional_policies = {
+  create_node_iam_role = true
+  enable_irsa  = true
+  create_access_entry = false
+
+  node_iam_role_attach_cni_policy = true
+  node_iam_role_additional_policies = {
     s3_policy = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
   }
-  irsa_tag_key = "karpenter.sh/managed-by"
-
-}
-
-resource "aws_iam_policy" "karpenter" {
-  count = var.karpenter_enabled ? 1 : 0
-
-  name        = "karpenter-iam-policy"
-  
-  policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Action": "iam:GetInstanceProfile",
-      "Effect": "Allow",
-      "Resource": "*"
-    },
-    {
-      "Action": "iam:CreateInstanceProfile",
-      "Condition": {
-        "StringEquals": {
-          "aws:RequestTag/kubernetes.io/cluster/${aws_eks_cluster.eks_cluster.id}": "owned",
-          "aws:RequestTag/topology.kubernetes.io/region": "${var.region}"
-        },
-        "StringLike": {
-          "aws:RequestTag/karpenter.k8s.aws/ec2nodeclass": "*"
-        }
-      },
-      "Effect": "Allow",
-      "Resource": "*"
-    },
-    {
-      "Action": [
-        "iam:AddRoleToInstanceProfile",
-        "iam:RemoveRoleFromInstanceProfile",
-        "iam:DeleteInstanceProfile"
-      ],
-      "Condition": {
-        "StringEquals": {
-          "aws:ResourceTag/kubernetes.io/cluster/${aws_eks_cluster.eks_cluster.id}": "owned",
-          "aws:ResourceTag/topology.kubernetes.io/region": "${var.region}"
-        },
-        "StringLike": {
-          "aws:ResourceTag/karpenter.k8s.aws/ec2nodeclass": "*"
-        }
-      },
-      "Effect": "Allow",
-      "Resource": "*"
-    },
-    {
-      "Action": "iam:TagInstanceProfile",
-      "Condition": {
-        "StringEquals": {
-          "aws:ResourceTag/kubernetes.io/cluster/${aws_eks_cluster.eks_cluster.id}": "owned",
-          "aws:ResourceTag/topology.kubernetes.io/region": "${var.region}",
-          "aws:RequestTag/kubernetes.io/cluster/${aws_eks_cluster.eks_cluster.id}": "owned",
-          "aws:RequestTag/topology.kubernetes.io/region": "${var.region}"
-        },
-        "StringLike": {
-          "aws:ResourceTag/karpenter.k8s.aws/ec2nodeclass": "*",
-          "aws:RequestTag/karpenter.k8s.aws/ec2nodeclass": "*"
-        }
-      },
-      "Effect": "Allow",
-      "Resource": "*"
-    }
-  ]
-}
-EOF
-}
-
-resource "aws_iam_role_policy_attachment" "karpenter_policy_attach" {
-  count = var.karpenter_enabled ? 1 : 0
-
-  role       = "${module.karpenter[0].irsa_name}"
-  policy_arn = "${aws_iam_policy.karpenter[0].arn}"
   
 }
 
@@ -760,7 +806,7 @@ resource "kubectl_manifest" "aws_auth" {
         groups:
           - system:bootstrappers
           - system:nodes
-      - rolearn: "${module.karpenter[0].role_arn}"
+      - rolearn: "${module.karpenter[0].node_iam_role_arn}"
         username: system:node:{{EC2PrivateDNSName}}
         groups:
           - system:bootstrappers
@@ -808,16 +854,17 @@ resource "helm_release" "karpenter" {
     value = "2Gi"
   }
 
-
   set {
     name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = module.karpenter[0].irsa_arn
+    value = module.karpenter[0].iam_role_arn
   }
 
   set {
     name  = "settings.interruptionQueue"
     value = module.karpenter[0].queue_name
   }
+
+  depends_on = [  helm_release.cluster-autoscaler ]
 
 }
 
@@ -836,7 +883,7 @@ resource "helm_release" "karpenter_components" {
 
   set {
     name  = "role_name"
-    value = module.karpenter[0].role_name
+    value = module.karpenter[0].node_iam_role_name
   }
 
   set {
@@ -854,16 +901,7 @@ resource "helm_release" "karpenter_components" {
     value = var.karpenter_capacity_type
   }
 
-  set {
-    name  = "node_role_arn"
-    value = aws_iam_role.node_role.arn
-  }
-
-  set {
-    name  = "karpenter_role_arn"
-    value = module.karpenter[0].role_arn
-  }
-
+  depends_on = [ helm_release.karpenter ]
 }
 
 resource "helm_release" "neuron_device_plugin" {
@@ -909,7 +947,7 @@ resource "helm_release" "pv_efs" {
 resource "helm_release" "pv_fsx" {
   chart = "${var.local_helm_repo}/pv-fsx"
   name = "pv-fsx"
-  version = "1.0.0"
+  version = "1.1.0"
   
   set {
     name  = "namespace"
@@ -930,11 +968,363 @@ resource "helm_release" "pv_fsx" {
     name  = "dns_name"
     value = "${aws_fsx_lustre_file_system.fs.id}.fsx.${var.region}.amazonaws.com"
   }
+
+}
+
+resource "kubernetes_namespace" "istio_system" {
+  metadata {
+    labels = {
+      istio-operator-managed = "Reconcile"
+      istio-injection = "disabled"
+    }
+
+    name = "istio-system"
+  }
+
+  depends_on = [  helm_release.cluster-autoscaler ]
+}
+
+module "istio" {
+  source = "./istio"
+
+  istio_system_namespace = kubernetes_namespace.istio_system.metadata[0].name
+  auth_namespace = kubernetes_namespace.auth.metadata[0].name
+
+  depends_on = [ module.cert_manager ]
+}
+
+locals {
+  istio_repo_url = "https://istio-release.storage.googleapis.com/charts"
+  istio_repo_version = "1.20.2"
+}
+
+resource "kubernetes_namespace" "ingress" {
+  metadata {
+    labels = {
+      istio-injection = "enabled"
+    }
+
+    name = "${var.ingress_namespace}"
+  }
+
+  depends_on = [  helm_release.cluster-autoscaler ]
+}
+
+resource "helm_release" "istio-ingressgateway" {
+  name          = "istio-ingressgateway"
+  chart         = "gateway"
+  version       = local.istio_repo_version
+  repository    = local.istio_repo_url
+  namespace     = kubernetes_namespace.ingress.metadata[0].name
+  description   = "Istio ingressgateway"
+  wait          = true
+
+  values = [
+    <<-EOT
+      service:
+        type: ClusterIP
+        ports:
+        - name: status-port
+          port: 15021
+          protocol: TCP
+          targetPort: 15021
+        - name: http2
+          port: 80
+          protocol: TCP
+          targetPort: 8080
+        - name: https
+          port: 443
+          protocol: TCP
+          targetPort: 8443
+        - name: tcp
+          port: 31400
+          protocol: TCP
+          targetPort: 31400
+        - name: tls
+          port: 15443
+          protocol: TCP
+          targetPort: 15443
+    EOT
+  ]
+
+  depends_on = [ module.istio ]
+}
+
+resource "helm_release" "cluster-issuer" {
+  name       = "cluster-issuer"
+  chart      = "${var.local_helm_repo}/cluster-issuer"
+  version    = "1.0.0"
+
+  values = [
+    <<-EOT
+      cluster_issuer:
+        name: ${var.cluster_issuer}
+    EOT
+  ]
+
+  depends_on = [ module.cert_manager ]
+}
+
+resource "helm_release" "istio-ingress" {
+  name       = "istio-ingress"
+  chart      = "${var.local_helm_repo}/istio-ingress"
+  version    = "1.0.0"
+
+  values = [
+    <<-EOT
+      ingress:
+        namespace: "${var.ingress_namespace}"
+        gateway: "${var.ingress_gateway}"
+      healthcheck:
+        port: 8080
+        path: "/healthcheck"
+      cluster_issuer:
+        name: "${var.cluster_issuer}"
+    EOT
+  ]
+
+  depends_on = [ helm_release.cluster-issuer, helm_release.istio-ingressgateway]
+}
+
+resource "aws_iam_role" "user_profile_role" {
+  name = "${aws_eks_cluster.eks_cluster.id}-user-profile"
+
+  assume_role_policy = <<POLICY
+{
+  "Version": "2012-10-17",
+  "Statement": [
+      {
+      "Effect": "Allow",
+      "Principal": {
+          "Federated": "${aws_iam_openid_connect_provider.eks_oidc_provider.arn}"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+          "StringEquals": {
+          "${substr(aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer, 8, -1)}:aud": "sts.amazonaws.com"
+          }
+      }
+      }
+  ]
+}
+POLICY
+}
+
+resource "aws_iam_role_policy" "user_profile_policy" {
+   name = "user-profile-policy"
+   role = aws_iam_role.user_profile_role.id
+
+    policy = jsonencode({
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+            "Action": [
+                "s3:Get*",
+                "s3:List*",
+                "s3:PutObject*",
+                "s3:DeleteObject*"
+            ],
+            "Resource": [
+                "arn:aws:s3:::${local.s3_bucket}",
+                "arn:aws:s3:::${local.s3_bucket}/*",
+                "arn:aws:s3:::sagemaker-${var.region}-${data.aws_caller_identity.current.account_id}",
+                "arn:aws:s3:::sagemaker-${var.region}-${data.aws_caller_identity.current.account_id}/*"
+            ],
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "ecr:GetAuthorizationToken",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:GetRepositoryPolicy",
+                "ecr:DescribeRepositories",
+                "ecr:ListImages",
+                "ecr:DescribeImages",
+                "ecr:BatchGetImage"
+            ],
+            "Resource": ["*"],
+            "Effect": "Allow"
+        }
+      ]
+    })
+}
+
+module "profiles-controller-irsa" {
+  source = "aws-ia/eks-blueprints-addon/aws"
+  version = "1.1.1"
+
+  # Disable helm release
+  create_release = false
+
+  # IAM role for service account (IRSA)
+  create_role = true
+  create_policy = true
+  role_name   = substr("${aws_eks_cluster.eks_cluster.id}-profiles-controller", 0, 38)
+  policy_name = substr("${aws_eks_cluster.eks_cluster.id}-profiles-controller", 0, 38)
+  policy_statements = [
+    {
+      sid = "statement0"
+      effect = "Allow"
+      actions = ["iam:GetRole", "iam:UpdateAssumeRolePolicy"],
+      resources = [ "*" ]
+    }
+  ]
+
+  oidc_providers = {
+    this = {
+      provider_arn    = aws_iam_openid_connect_provider.eks_oidc_provider.arn
+      namespace       = kubernetes_namespace.kubeflow.metadata[0].name
+      service_account = "profiles-controller-service-account"
+    }
+  }
+
+  tags = var.tags
+}
+
+resource "helm_release" "ebs-sc" {
+  name       = "ebs-sc"
+  chart      = "${var.local_helm_repo}/ebs-sc"
+  version    = "1.0.0"
+
+  depends_on = [ module.eks_blueprints_addons ]
+}
+
+resource "helm_release" "mpi-operator" {
+  name       = "mpi-operator"
+  chart      = "${var.local_helm_repo}/mpi-operator"
+  version    = "2.1.0"
+  
+  set {
+    name  = "namespace"
+    value = kubernetes_namespace.kubeflow.metadata[0].name
+  }
+
+  depends_on = [  helm_release.cluster-autoscaler ]
 }
 
 module "kubeflow-components" {
+  count = var.kubeflow_platform_enabled ? 1 : 0
+
   source = "./kubeflow"
 
   kubeflow_namespace = kubernetes_namespace.kubeflow.metadata[0].name
+  ingress_gateway = var.ingress_gateway
+  ingress_namespace = kubernetes_namespace.ingress.metadata[0].name
+  ingress_sa = "istio-ingressgateway"
+  static_email = var.static_email
+  user_profile_role_arn = aws_iam_role.user_profile_role.arn
+  profile_controller_role_arn = module.profiles-controller-irsa.iam_role_arn
+  kubeflow_user_profile = "kubeflow-user-example-com"
+  efs_fs_id = aws_efs_file_system.fs.id
+  fsx = {
+    fs_id = aws_fsx_lustre_file_system.fs.id
+    mount_name = aws_fsx_lustre_file_system.fs.mount_name
+    dns_name = "${aws_fsx_lustre_file_system.fs.id}.fsx.${var.region}.amazonaws.com"
+  }
+
   local_helm_repo = var.local_helm_repo
+
+  depends_on = [ 
+    helm_release.istio-ingress, 
+    helm_release.pv_fsx, 
+    helm_release.pv_efs
+  ]
+}
+
+resource "random_password" "static_password" {
+  length           = 16
+  special          = true
+}
+resource "random_string" "static_user_id" {
+  length           = 16
+  special          = false
+}
+
+resource "random_password" "oidc_client_secret" {
+  length           = 32
+  special          = false
+}
+
+locals {
+  oidc_client_id = "oauth2-proxy"
+}
+
+resource helm_release "dex" {
+  chart = "${var.local_helm_repo}/dex"
+  name = "dex"
+  version = "1.0.0"
+  
+  values = [
+    <<-EOT
+      dex:
+        namespace: ${kubernetes_namespace.auth.metadata[0].name}
+        user:
+          email: "${var.static_email}"
+          username: "${var.static_username}"
+          userid: "${random_string.static_user_id.result}"
+          bcrypt_hash: "${random_password.static_password.bcrypt_hash}"
+        oidc:
+          client_id: "${local.oidc_client_id}"
+          client_secret: "${random_password.oidc_client_secret.result}"
+      ingress:
+        namespace: ${kubernetes_namespace.ingress.metadata[0].name}
+        gateway: ${var.ingress_gateway}
+    EOT
+  ]
+
+  depends_on = [ helm_release.istio-ingress ]
+
+}
+
+resource "helm_release" "oauth2-proxy" {
+  name          = "oauth2-proxy"
+  chart         = "oauth2-proxy"
+  version       = "6.23.1"
+  repository    = "https://oauth2-proxy.github.io/manifests"
+  namespace     = kubernetes_namespace.auth.metadata[0].name
+  description   = "Oauth2 proxy"
+  wait          = true
+
+  values = [
+    <<-EOT
+      config:
+        clientID: "${local.oidc_client_id}"
+        clientSecret: "${random_password.oidc_client_secret.result}"
+        configFile: |-
+          provider = "oidc"
+          oidc_issuer_url = "https://istio-ingressgateway.${kubernetes_namespace.ingress.metadata[0].name}.svc.cluster.local/dex"
+
+          request_logging = true
+          auth_logging = true
+      
+          ssl_insecure_skip_verify = true
+          set_authorization_header = true
+          set_xauthrequest = true
+          cookie_samesite = "lax"
+
+          email_domains = ["*"]
+          skip_provider_button = true
+          upstreams = [ "static://200" ]
+    EOT
+  ]
+  depends_on = [ helm_release.dex ]
+}
+
+resource helm_release "oauth2-proxy-route" {
+  chart = "${var.local_helm_repo}/oauth2-proxy-route"
+  name = "oauth2-proxy-route"
+  version = "1.0.0"
+  
+  values = [
+    <<-EOT
+    oauth2_proxy:
+      namespace: ${kubernetes_namespace.auth.metadata[0].name}
+    ingress:
+      namespace: ${kubernetes_namespace.ingress.metadata[0].name}
+      gateway: ${var.ingress_gateway}
+    EOT
+  ]
+
+  depends_on = [ helm_release.oauth2-proxy ]
 }

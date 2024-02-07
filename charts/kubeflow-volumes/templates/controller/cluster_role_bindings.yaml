@@ -1,0 +1,27 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pvcviewer-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: pvcviewer-manager-role
+subjects:
+- kind: ServiceAccount
+  name:  pvcviewer-controller-sa
+  namespace: {{ .Values.kubeflow.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pvcviewer-proxy-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: pvcviewer-proxy-role
+subjects:
+- kind: ServiceAccount
+  name:  pvcviewer-controller-sa
+  namespace: {{ .Values.kubeflow.namespace }}
+---

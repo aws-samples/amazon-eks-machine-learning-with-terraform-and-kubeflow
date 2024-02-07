@@ -1,0 +1,5 @@
+oauth2_proxy:
+  namespace: auth
+ingress:
+  namespace: ingress
+  gateway: ingress-gateway

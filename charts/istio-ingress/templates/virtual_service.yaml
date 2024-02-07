@@ -1,0 +1,19 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: {{ .Values.ingress.gateway }}-health-check
+  namespace: {{ .Values.ingress.namespace }} 
+spec:
+  hosts:
+  - '*'
+  gateways:
+  - {{ .Values.ingress.namespace }}/{{ .Values.ingress.gateway }}
+  http:
+  - match:
+    - uri:
+        exact: {{ .Values.healthcheck.path }}
+      method:
+        exact: GET
+      port: {{ .Values.healthcheck.port }}
+    directResponse:
+      status: 200

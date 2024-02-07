@@ -1,0 +1,13 @@
+profile_controller:
+  role_arn:
+kubeflow:
+  namespace: kubeflow
+ingress:
+  namespace: ingress
+  gateway: ingress-gateway
+  sa: istio-ingressgateway
+notebook_controller:
+  sa: notebook-controller-service-account
+pipeline_ui:
+  sa: ml-pipeline-ui
+

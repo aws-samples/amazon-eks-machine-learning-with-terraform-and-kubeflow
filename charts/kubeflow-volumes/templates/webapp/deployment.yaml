@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: volumes-web-app
+  name: volumes-web-app-deployment
+  namespace: {{ .Values.kubeflow.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: volumes-web-app
+  template:
+    metadata:
+      labels:
+        app: volumes-web-app
+    spec:
+      containers:
+      - name: volumes-web-app
+        image: docker.io/kubeflownotebookswg/volumes-web-app:v1.8.0
+        ports:
+        - containerPort: 5000
+        env:
+        - name: APP_PREFIX
+          value: /volumes
+        - name: USERID_HEADER
+          value: x-auth-request-email
+        - name: USERID_PREFIX
+          value: ''
+        - name: APP_SECURE_COOKIES
+          value: 'true'
+        - name: VOLUME_VIEWER_IMAGE
+          value: filebrowser/filebrowser:latest
+        volumeMounts: 
+        - name: viewer-spec
+          mountPath: /etc/config/viewer-spec.yaml
+          subPath: viewer-spec.yaml 
+      serviceAccountName: volumes-web-app-service-account
+      volumes: 
+      - name: viewer-spec
+        configMap: 
+          name: volumes-web-app-viewer-spec

@@ -1,0 +1,7 @@
+apiVersion: v1
+data:
+  ISTIO_GATEWAY: {{ .Values.ingress.namespace }}/{{ .Values.ingress.gateway }}
+kind: ConfigMap
+metadata:
+  name: pvcviewer-controller-config
+  namespace: {{ .Values.kubeflow.namespace }}

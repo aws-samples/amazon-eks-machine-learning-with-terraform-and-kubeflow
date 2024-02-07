@@ -108,6 +108,7 @@ spec:
         app: {{ .Values.jupyter.name }}
       annotations:
         karpenter.sh/do-not-disrupt: "true"
+        sidecar.istio.io/inject: 'false'
     spec:
       volumes:
       - name: {{ .Values.global.shared_fs }} 

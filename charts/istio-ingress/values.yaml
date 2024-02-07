@@ -1,0 +1,8 @@
+ingress:
+  namespace: ingress
+  gateway: ingress-gateway
+healthcheck:
+  port: 8080
+  path: /healthcheck
+cluster_issuer: 
+  name: cluster-self-signing-issuer

@@ -1,0 +1,9 @@
+kubeflow:
+  namespace: kubeflow
+ingress:
+  namespace: ingress
+  gateway: ingress-gateway
+cullingPolicy:
+  enableCulling: false
+  cullIdleTime: 30
+  idlenessCheckPeriod: 5

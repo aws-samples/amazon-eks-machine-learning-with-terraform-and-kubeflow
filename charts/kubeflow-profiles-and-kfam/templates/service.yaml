@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    control-plane: profiles
+  name: profiles-kfam
+  namespace: {{ .Values.kubeflow.namespace }}
+spec:
+  ports:
+  - port: 8081
+  selector:
+    control-plane: profiles

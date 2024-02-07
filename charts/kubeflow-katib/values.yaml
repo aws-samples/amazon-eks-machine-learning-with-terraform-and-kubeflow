@@ -1,0 +1,6 @@
+kubeflow:
+  namespace: kubeflow
+ingress:
+  namespace: ingress
+  gateway: ingress-gateway
+  sa: istio-ingressgateway

@@ -1,0 +1,18 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  labels:
+    app: cache-server-cert-manager
+  name: kfp-cache-cert
+  namespace: {{ .Values.kubeflow.namespace }}
+spec:
+  commonName: kfp-cache-cert
+  dnsNames:
+  - cache-server
+  - cache-server.{{ .Values.kubeflow.namespace }}
+  - cache-server.{{ .Values.kubeflow.namespace }}.svc
+  isCA: true
+  issuerRef:
+    kind: Issuer
+    name: kfp-cache-selfsigned-issuer
+  secretName: webhook-server-cert

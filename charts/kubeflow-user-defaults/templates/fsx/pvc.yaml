@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pv-fsx
+  namespace:  {{ .Values.user.profile }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: fsx-sc
+  volumeName: {{ .Values.user.profile }}-pv-fsx
+  resources:
+    requests:
+      storage: 1200Gi

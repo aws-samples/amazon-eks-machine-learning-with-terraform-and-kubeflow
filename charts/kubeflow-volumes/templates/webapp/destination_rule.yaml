@@ -1,0 +1,13 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  labels:
+    app: volumes-web-app
+    
+  name: volumes-web-app
+  namespace: {{ .Values.kubeflow.namespace }}
+spec:
+  host: volumes-web-app-service.{{ .Values.kubeflow.namespace }}.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL

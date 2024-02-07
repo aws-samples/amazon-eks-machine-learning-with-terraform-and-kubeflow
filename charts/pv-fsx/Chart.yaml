@@ -2,4 +2,4 @@ apiVersion: v1
 appVersion: "1.8.0"
 description: A Helm chart for k8s persistent volume for FSx for Lustre
 name: pv-fsx
-version: 1.0.0
+version: 1.1.0

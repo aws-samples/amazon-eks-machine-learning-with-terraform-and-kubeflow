@@ -1,0 +1,26 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: oauth2-proxy
+  namespace: {{ .Values.oauth2_proxy.namespace }} 
+spec:
+  hosts:
+  - '*'
+  gateways:
+  - {{ .Values.ingress.namespace }}/{{ .Values.ingress.gateway }}
+  http:
+  - name: logout
+    match:
+    - uri:
+        exact: /authservice/logout
+    redirect:
+      uri: /oauth2/sign_out
+  - name: "oauth2"
+    match:
+    - uri:
+        prefix: "/oauth2"
+    route:
+    - destination:
+        host: oauth2-proxy.{{ .Values.oauth2_proxy.namespace }}.svc.cluster.local
+        port:
+          number: 80

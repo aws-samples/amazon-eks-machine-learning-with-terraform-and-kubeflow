@@ -1,0 +1,19 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  labels:
+    app: centraldashboard
+    app.kubernetes.io/component: centraldashboard
+    app.kubernetes.io/name: centraldashboard
+  name: central-dashboard
+  namespace: {{ .Values.kubeflow.namespace }}
+spec:
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/{{ .Values.ingress.namespace }}/sa/{{ .Values.ingress.sa }}
+  selector:
+    matchLabels:
+      app: centraldashboard
