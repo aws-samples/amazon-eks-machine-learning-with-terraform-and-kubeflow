@@ -6,8 +6,8 @@ metadata:
 spec:
   accessModes:
     - ReadWriteMany
-  storageClassName: "" 
+  storageClassName: "fsx-sc"
+  volumeName: pv-fsx
   resources:
     requests:
       storage: 1200Gi
-  volumeName: pv-fsx

@@ -11,7 +11,8 @@ spec:
   mountOptions:
     - noatime
     - flock
-  persistentVolumeReclaimPolicy: Retain
+  ersistentVolumeReclaimPolicy: Retain
+  storageClassName: fsx-sc
   csi:
     driver: fsx.csi.aws.com
     volumeHandle:  {{ .Values.fs_id }}
