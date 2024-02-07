@@ -9,7 +9,7 @@ spec:
     command: ["/bin/bash"]
     securityContext:
       privileged: true
-    args: ["-c", "while true; do echo $(date -u) >> /data/out.txt; sleep 3600; done"]
+    args: ["-c", "trap : TERM INT; sleep infinity & wait"]
     volumeMounts:
     - name:  fsx 
       mountPath: /fsx
