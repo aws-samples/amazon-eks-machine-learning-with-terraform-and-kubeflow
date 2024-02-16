@@ -12,6 +12,9 @@ rules:
   verbs:
   - get
   - list
+  - create
+  - delete
+  - update
 - apiGroups:
   - ''
   resources:
@@ -49,6 +52,7 @@ rules:
   - ''
   resources:
   - pods
+  - pods/status
   - pods/exec
   - pods/log
   - services
