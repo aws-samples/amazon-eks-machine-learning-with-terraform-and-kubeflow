@@ -12,6 +12,7 @@ resource "helm_release" "kubeflow-training-operator" {
   name       = "kubeflow-training-operator"
   chart      = "${var.local_helm_repo}/kubeflow-training-operator"
   version  = "1.0.0"
+  namespace = var.kubeflow_namespace
 
   set {
     name  = "namespace"
@@ -23,6 +24,7 @@ resource "helm_release" "kubeflow-roles" {
    name       = "kubeflow-roles"
   chart      = "${var.local_helm_repo}/kubeflow-roles"
   version  = "1.0.0"
+  namespace = var.kubeflow_namespace
 }
 
 
@@ -30,6 +32,7 @@ resource "helm_release" "kubeflow-admission-webhook" {
   name       = "kubeflow-admission-webhook"
   chart      = "${var.local_helm_repo}/kubeflow-admission-webhook"
   version  = "1.0.0"
+  namespace = var.kubeflow_namespace
 
   values = [
     <<-EOT
@@ -45,6 +48,7 @@ resource "helm_release" "kubeflow-profiles-and-kfam" {
   name       = "kubeflow-profiles-and-kfam"
   chart      = "${var.local_helm_repo}/kubeflow-profiles-and-kfam"
   version  = "1.0.0"
+  namespace = var.kubeflow_namespace
 
   values = [
     <<-EOT
@@ -70,6 +74,7 @@ resource "helm_release" "kubeflow-notebooks" {
   name       = "kubeflow-notebooks"
   chart      = "${var.local_helm_repo}/kubeflow-notebooks"
   version  = "1.0.0"
+  namespace = var.kubeflow_namespace
 
   values = [
     <<-EOT
@@ -89,6 +94,7 @@ resource "helm_release" "kubeflow-tensorboards" {
   name       = "kubeflow-tensorboards"
   chart      = "${var.local_helm_repo}/kubeflow-tensorboards"
   version  = "1.0.0"
+  namespace = var.kubeflow_namespace
 
   values = [
     <<-EOT
@@ -108,6 +114,7 @@ resource "helm_release" "kubeflow-pipelines" {
   name       = "kubeflow-pipelines"
   chart      = "${var.local_helm_repo}/kubeflow-pipelines"
   version  = "1.0.0"
+  namespace = var.kubeflow_namespace
 
   values = [
     <<-EOT
@@ -131,6 +138,7 @@ resource "helm_release" "kubeflow-volumes" {
   name       = "kubeflow-volumes"
   chart      = "${var.local_helm_repo}/kubeflow-volumes"
   version  = "1.0.0"
+  namespace = var.kubeflow_namespace
 
   values = [
     <<-EOT
@@ -151,6 +159,7 @@ resource "helm_release" "kubeflow-user-profile" {
   name       = "kubeflow-user-profile"
   chart      = "${var.local_helm_repo}/kubeflow-user-profile"
   version  = "1.0.0"
+  namespace = var.kubeflow_namespace
 
  values = [
     <<-EOT
@@ -169,6 +178,7 @@ resource "helm_release" "kubeflow-katib" {
   name       = "kubeflow-katib"
   chart      = "${var.local_helm_repo}/kubeflow-katib"
   version  = "1.0.0"
+  namespace = var.kubeflow_namespace
 
   values = [
     <<-EOT
@@ -188,7 +198,8 @@ resource "helm_release" "kubeflow-katib" {
 resource "helm_release" "kubeflow-user-defaults" {
   name       = "kubeflow-user-defaults"
   chart      = "${var.local_helm_repo}/kubeflow-user-defaults"
-  version  = "1.0.0"
+  version  = "1.0.1"
+  namespace = var.kubeflow_namespace
 
  values = [
     <<-EOT
@@ -210,6 +221,7 @@ resource "helm_release" "kubeflow-central-dashboard" {
   name       = "kubeflow-central-dashboard"
   chart      = "${var.local_helm_repo}/kubeflow-central-dashboard"
   version  = "1.0.0"
+  namespace = var.kubeflow_namespace
 
   values = [
     <<-EOT

@@ -932,6 +932,7 @@ resource "helm_release" "pv_efs" {
   chart = "${var.local_helm_repo}/pv-efs"
   name = "pv-efs"
   version = "1.0.0"
+  namespace = kubernetes_namespace.kubeflow.metadata[0].name
   
   set {
     name  = "namespace"
@@ -948,6 +949,7 @@ resource "helm_release" "pv_fsx" {
   chart = "${var.local_helm_repo}/pv-fsx"
   name = "pv-fsx"
   version = "1.1.0"
+  namespace = kubernetes_namespace.kubeflow.metadata[0].name
   
   set {
     name  = "namespace"
@@ -1054,6 +1056,7 @@ resource "helm_release" "cluster-issuer" {
   name       = "cluster-issuer"
   chart      = "${var.local_helm_repo}/cluster-issuer"
   version    = "1.0.0"
+  namespace = "cert-manager"
 
   values = [
     <<-EOT
@@ -1069,6 +1072,7 @@ resource "helm_release" "istio-ingress" {
   name       = "istio-ingress"
   chart      = "${var.local_helm_repo}/istio-ingress"
   version    = "1.0.0"
+  namespace     = kubernetes_namespace.ingress.metadata[0].name
 
   values = [
     <<-EOT
@@ -1194,6 +1198,7 @@ resource "helm_release" "mpi-operator" {
   name       = "mpi-operator"
   chart      = "${var.local_helm_repo}/mpi-operator"
   version    = "2.1.0"
+  namespace = kubernetes_namespace.kubeflow.metadata[0].name
   
   set {
     name  = "namespace"
@@ -1254,6 +1259,7 @@ resource helm_release "dex" {
   chart = "${var.local_helm_repo}/dex"
   name = "dex"
   version = "1.0.0"
+  namespace = kubernetes_namespace.auth.metadata[0].name
   
   values = [
     <<-EOT
@@ -1315,6 +1321,7 @@ resource helm_release "oauth2-proxy-route" {
   chart = "${var.local_helm_repo}/oauth2-proxy-route"
   name = "oauth2-proxy-route"
   version = "1.0.0"
+  namespace =  kubernetes_namespace.auth.metadata[0].name
   
   values = [
     <<-EOT
