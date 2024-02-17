@@ -1,0 +1,181 @@
+# PIPELINE DEFINITION
+# Name: helm-charts-pipeline
+# Inputs:
+#    chart_configs: list
+# Outputs:
+#    Output: str
+components:
+  comp-helm-charts-component:
+    executorLabel: exec-helm-charts-component
+    inputDefinitions:
+      parameters:
+        chart_configs:
+          parameterType: LIST
+    outputDefinitions:
+      parameters:
+        Output:
+          parameterType: STRING
+deploymentSpec:
+  executors:
+    exec-helm-charts-component:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - helm_charts_component
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.6.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef helm_charts_component(chart_configs: List[Dict]) -> str:\n\n\
+          \    import os\n    import signal\n    import sys\n    from tempfile import\
+          \ NamedTemporaryFile\n    import time\n    from pyhelm import repo\n   \
+          \ import yaml\n    import subprocess\n    from kubernetes import client,\
+          \ config\n    from kubernetes.client.exceptions import ApiException\n\n\
+          \    class HelmChartHandler:\n\n        def __init__(self, chart_config:\
+          \ dict) -> str:\n            self.chart_config = chart_config\n\n      \
+          \      signal.signal(signal.SIGINT, self.__exit_gracefully)\n          \
+          \  signal.signal(signal.SIGTERM, self.__exit_gracefully)\n            signal.signal(signal.SIGABRT,\
+          \ self.__exit_gracefully)\n\n        def __call__(self) -> int:\n      \
+          \      exit_code = 0\n            try:\n                exit_code = self.install_chart()\n\
+          \                if exit_code == 0:\n                    self.wait_for_pods()\n\
+          \            except Exception as e:\n                print(str(e))\n   \
+          \         finally:\n                exit_code = self.uninstall_release()\n\
+          \n            return exit_code\n\n        def __exit_gracefully(self, signum,\
+          \ frame):\n            self.uninstall_release()\n            sys.exit(f\"\
+          Signal: {signum}\")\n\n        @staticmethod\n        def run_cmd(cmd:str)\
+          \ -> int:\n\n            print(f\"run command: {cmd}\")\n            exit_code\
+          \ = 0\n            try:\n                completed_process = subprocess.run(cmd,capture_output=True,check=True)\n\
+          \                if completed_process.stdout:\n                    print(completed_process.stdout)\n\
+          \                if completed_process.stderr:\n                    print(completed_process.stderr)\n\
+          \                exit_code = completed_process.returncode\n            except\
+          \ subprocess.CalledProcessError as e:\n                exit_code = e.returncode\n\
+          \                print(str(e))\n\n            return exit_code\n\n     \
+          \   def install_chart(self) -> int:\n\n            print(f\"Install chart:\
+          \ {self.chart_config}...\")\n\n            release_name = self.chart_config['release_name']\n\
+          \            namespace = self.chart_config.get('namespace', 'default')\n\
+          \            repo_url = self.chart_config['repo_url']\n\n            path\
+          \ = self.chart_config.get('path', None)\n            if path is not None:\n\
+          \                branch = self.chart_config.get('branch', 'master')\n  \
+          \              local_chart_path = repo.git_clone(repo_url=repo_url, branch=branch,\
+          \ path=path)\n            else:\n                chart = self.chart_config['chart']\n\
+          \                version = self.chart_config.get('version', None)\n    \
+          \            local_chart_path = repo.from_repo(repo_url, chart, version=version)\n\
+          \n\n            cmd = [\"helm\",\n                    \"install\",\n   \
+          \                 \"--debug\",\n                    release_name, \n   \
+          \                 local_chart_path, \n                    \"--namespace\"\
+          ,\n                    namespace,\n                    \"--wait\"\n    \
+          \            ]\n\n            timeout = self.chart_config.get('timeout',\
+          \ None)\n            if timeout is not None:\n                cmd += [ \"\
+          --timeout\", timeout]\n\n            values_file = os.path.join(local_chart_path,\
+          \ \"values.yaml\")\n            if os.path.exists(values_file):\n      \
+          \          cmd += [ \"--values\", values_file]\n\n            values = self.chart_config.get('values',\
+          \ None)\n            if values:\n                with NamedTemporaryFile(mode=\"\
+          w+\", encoding=\"utf-8\", \\\n                                        prefix=\"\
+          values\", suffix=\".yaml\", delete=False) as values_files:\n           \
+          \         yaml.dump(values, values_files, default_flow_style=False)\n  \
+          \                  values_files.close()\n\n                    cmd += [\
+          \ \"--values\", values_files.name]\n\n            exit_code = self.run_cmd(cmd=cmd)\n\
+          \            if exit_code == 0:\n                print(f\"Release {release_name}\
+          \ successful\")\n            else:\n                print(f\"Release {release_name}\
+          \ failed\")\n\n            return exit_code\n\n        def uninstall_release(self)\
+          \ -> int:\n            release_name = self.chart_config['release_name']\n\
+          \            namespace = self.chart_config.get('namespace', 'default')\n\
+          \n            print(f\"Uninstall release: {release_name} in {namespace}\"\
+          )\n\n            cmd = [\n                    \"helm\",\n              \
+          \      \"uninstall\",\n                    release_name,\n             \
+          \       \"--namespace\",\n                    namespace\n              \
+          \  ]\n\n            exit_code = self.run_cmd(cmd=cmd)\n            if exit_code\
+          \ == 0:\n                print(f\"Uninstall release: {release_name} successful\"\
+          )\n            else:\n                print(f\"Uninstall release: {release_name}\
+          \ failed\")\n\n            return exit_code\n\n        def wait_for_pods(self):\n\
+          \n            release_name = self.chart_config['release_name']\n       \
+          \     namespace = self.chart_config.get('namespace', 'default')\n\n    \
+          \        print(f\"Wait for pods in release {release_name} in namespace {namespace}\"\
+          )\n\n            complete_timeout = self.chart_config.get('pod_complete_timeout',\
+          \ 7*24*3600)\n            error_timeout = self.chart_config.get('pod_error_timeout',\
+          \ 1800)\n\n            config.load_incluster_config() # config.load_kube_config()\
+          \ \n            v1 = client.CoreV1Api()\n\n            max_retries = 5\n\
+          \            attempt = 0\n            wait_pods = []\n            while\
+          \ not wait_pods and (attempt < max_retries):\n                attempt +=\
+          \ 1\n\n                time.sleep(60) # let pods start\n               \
+          \ pods = v1.list_namespaced_pod(namespace=namespace, async_req=False, timeout_seconds=120)\n\
+          \n                for pod in pods.items:\n                    annotations\
+          \ = pod.metadata.annotations\n\n                    managed_by = annotations.get(\"\
+          app.kubernetes.io/managed-by\", None)\n                    if managed_by\
+          \ == 'Helm':\n                        release_name = annotations.get(\"\
+          app.kubernetes.io/instance\", None)\n                        if release_name\
+          \ == release_name:\n                            wait_pods.append(pod.metadata.name)\n\
+          \n            if not wait_pods:\n                print(\"No pods to wait\
+          \ for...\")\n            else:\n                print(f\"Waiting for pods\
+          \ to complete: {wait_pods}\")\n\n            start = time.time()\n     \
+          \       pod_check_secs = self.chart_config.get('pod_check_secs', 300)\n\n\
+          \            for name in wait_pods:\n                phase = \"Running\"\
+          \n                while (phase == \"Running\" and (time.time() - start)\
+          \ < complete_timeout) or \\\n                    (phase != \"Completed\"\
+          \ and (time.time() - start) < error_timeout):\n\n                    try:\n\
+          \                        print(f\"read pod status: {name}\")\n         \
+          \               pod = v1.read_namespaced_pod_status(name=name, namespace=namespace,\
+          \ \n                                                            async_req=False,\
+          \ _request_timeout=120)\n                        phase = pod.status.phase\n\
+          \                        print(f\"Pod {name} phase: {phase}\")\n       \
+          \             except ApiException as e:\n                        if e.reason\
+          \ == 'Not Found':\n                            print(f\"Pod {name} Not Found\"\
+          )\n                            phase = \"Deleted\"\n\n                 \
+          \   if phase == \"Running\":\n                        print(f\"Check pod\
+          \ in: {pod_check_secs} secs\")\n                        time.sleep(pod_check_secs)\n\
+          \                    elif phase != \"Deleted\":\n                      \
+          \  print(f\"Check pod in: 60 secs\")\n                        time.sleep(60)\n\
+          \n            print(f\"Waiting for pod complete: {wait_pods}\")\n\n    for\
+          \ chart_config in chart_configs:\n        helm_chart_handler = HelmChartHandler(chart_config)\n\
+          \        exit_code = helm_chart_handler()\n        if exit_code > 0:\n \
+          \           return \"Failure\"\n\n    return \"Success\"\n\n"
+        image: public.ecr.aws/w0d9j2p3/eks/universal-client:1.0.0
+pipelineInfo:
+  name: helm-charts-pipeline
+root:
+  dag:
+    outputs:
+      parameters:
+        Output:
+          valueFromParameter:
+            outputParameterKey: Output
+            producerSubtask: helm-charts-component
+    tasks:
+      helm-charts-component:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-helm-charts-component
+        inputs:
+          parameters:
+            chart_configs:
+              componentInputParameter: chart_configs
+        taskInfo:
+          name: helm-charts-component
+  inputDefinitions:
+    parameters:
+      chart_configs:
+        parameterType: LIST
+  outputDefinitions:
+    parameters:
+      Output:
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.6.0
