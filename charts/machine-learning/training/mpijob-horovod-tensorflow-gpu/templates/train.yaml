@@ -1,0 +1,86 @@
+---
+apiVersion: kubeflow.org/v2beta1
+kind: MPIJob
+metadata:
+  name: mpijob-{{ .Release.Name }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  runPolicy:
+    backoffLimit: {{ .Values.backoff_limit }}
+    cleanPodPolicy: Running
+  mpiImplementation: OpenMPI
+  mpiReplicaSpecs:
+    Launcher:
+      replicas: 1
+      template:
+        metadata:
+          annotations:
+            karpenter.sh/do-not-disrupt: "true"
+            sidecar.istio.io/inject: 'false'
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            app.kubernetes.io/managed-by: {{ .Release.Service }}
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: launcher 
+            env:
+            {{- range $v := .Values.mpirun.env }}
+            - name: {{ $v.name }}
+              value: "{{ tpl $v.value $ }}"
+            {{- end }} 
+            command: 
+            - mpirun
+            args:
+            {{- range .Values.mpirun.args }}
+            - "{{ tpl .  $ }}"
+            {{- end }}
+            {{- range .Values.train.command }}
+            - {{ . }}
+            {{- end }}
+            {{- range .Values.train.args }}
+            - {{ . }}
+            {{- end }}
+            image: {{ .Values.image }} 
+            imagePullPolicy: IfNotPresent
+      
+    Worker:
+      replicas: {{ .Values.resources.gpu_nodes }}
+      template:
+        metadata:
+          annotations:
+            karpenter.sh/do-not-disrupt: "true"
+            sidecar.istio.io/inject: 'false'
+        spec:
+          restartPolicy: Never
+          volumes:
+          - name: pv 
+            persistentVolumeClaim:
+              claimName: {{ .Values.pvc.name }}
+          - name: shm
+            hostPath:
+              path: /dev/shm
+              type: Directory
+          tolerations:
+          - key: "nvidia.com/gpu"
+            operator: "Exists"
+            effect: "NoSchedule"
+          nodeSelector:
+            node.kubernetes.io/instance-type: {{ .Values.resources.gpu_instance_type }}
+          containers:
+          - name: worker
+            image: {{ .Values.image }}
+            imagePullPolicy: IfNotPresent
+            volumeMounts:
+            - mountPath: {{ .Values.pvc.mount_path }}
+              name: pv
+            - mountPath: /dev/shm
+              name: shm
+            resources:
+              requests:
+                nvidia.com/gpu: {{ .Values.resources.gpus_per_node }}
+              limits:
+                nvidia.com/gpu: {{ .Values.resources.gpus_per_node }}
+  slotsPerWorker: {{ .Values.resources.gpus_per_node }}

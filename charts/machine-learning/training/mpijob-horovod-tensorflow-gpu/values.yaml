@@ -1,0 +1,115 @@
+image:
+backoff_limit: 2000
+resources:
+  gpu_nodes: 2
+  gpus_per_node: 8
+  gpu_instance_type: p3dn.24xlarge
+pvc:
+  name: pv-fsx
+  mount_path: /fsx
+train:
+  command: []
+  args: []
+horovod:
+  autotune: "1"
+  log_level: "INFO"
+nccl:
+  ifname: "^lo,docker0" 
+  debug_level: "INFO"
+tensorflow:
+  sys_memory_mb: "4096"
+  autotune_threshold: "1"
+  cpp_min_log_level: "2"
+  mixed_precision: "0"
+  gpu_allocator: "cuda_malloc_async" # advanced setting
+mpirun:
+  env:
+    - name: HOME
+      value: "{{ .Values.pvc.mount_path }}"
+    - name: HOROVOD_AUTOTUNE
+      value: "{{ .Values.horovod.autotune }}"
+    - name: HOROVOD_LOG_LEVEL
+      value: "{{ .Values.horovod.log_level }}"
+    - name: NCCL_SOCKET_IFNAME
+      value: "{{ .Values.nccl.ifname }}" 
+    - name: NCCL_DEBUG
+      value: "{{ .Values.nccl.debug_level }}"
+    - name: TF_DEVICE_MIN_SYS_MEMORY_IN_MB 
+      value: "{{ .Values.tensorflow.sys_memory_mb }}" 
+    - name: TF_CPP_MIN_LOG_LEVEL 
+      value: "{{ .Values.tensorflow.cpp_min_log_level }}"  
+    - name: TF_GPU_ALLOCATOR
+      value: "{{ .Values.tensorflow.gpu_allocator }}"  
+    - name: TF_AUTOTUNE_THRESHOLD
+      value: "{{ .Values.tensorflow.autotune_threshold }}" 
+    - name: TF_ENABLE_AUTO_MIXED_PRECISION 
+      value: "{{ .Values.tensorflow.mixed_precision }}"  
+    - name: TF_ENABLE_CUBLAS_TENSOR_OP_MATH_FP32 
+      value: "{{ .Values.tensorflow.mixed_precision }}"  
+    - name: TF_ENABLE_CUDNN_TENSOR_OP_MATH_FP32 
+      value: "{{ .Values.tensorflow.mixed_precision }}" 
+  args:
+    - "-wdir"
+    - "{{ .Values.pvc.mount_path }}"
+    - "--output-filename" 
+    - "{{ .Values.pvc.mount_path }}/logs/{{ .Release.Name }}-{{ date \"2006-01-02-15-04-05\" .Release.Time  }}"
+    - "--allow-run-as-root"
+    - "-np"
+    - "{{ mul .Values.resources.gpu_nodes  .Values.resources.gpus_per_node }}"
+    - "-bind-to"
+    - "none"
+    - "-map-by"
+    - "slot"
+    - "-mca" 
+    - "btl_tcp_if_exclude" 
+    - "lo,docker0"
+    - "-mca" 
+    - "oob_tcp_if_exclude" 
+    - "lo,docker0"
+    - "-mca"
+    - "plm_rsh_no_tree_spawn"
+    - "1"
+    - "-x"
+    - HOME
+    - "-x"
+    - HOROVOD_AUTOTUNE
+    - "-x"
+    - HOROVOD_HIERARCHICAL_ALLREDUCE=0 
+    - "-x"
+    - HOROVOD_HIERARCHICAL_ALLGATHER=0 
+    - "-x"
+    - HOROVOD_TORUS_ALLREDUCE=0 
+    - "-x"
+    - HOROVOD_LOG_LEVEL
+    - "-x"
+    - NCCL_SOCKET_IFNAME
+    - "-x"
+    - NCCL_DEBUG
+    - "-x"
+    - TF_DEVICE_MIN_SYS_MEMORY_IN_MB
+    - "-x"
+    - TF_CPP_MIN_LOG_LEVEL 
+    - "-x"
+    - TF_GPU_ALLOCATOR 
+    - "-x"
+    - TF_AUTOTUNE_THRESHOLD
+    - "-x"
+    - TF_ENABLE_AUTO_MIXED_PRECISION
+    - "-x"
+    - TF_ENABLE_CUBLAS_TENSOR_OP_MATH_FP32 
+    - "-x"
+    - TF_ENABLE_CUDNN_TENSOR_OP_MATH_FP32 
+    - "-x"
+    - LD_LIBRARY_PATH
+    - "-x"
+    - PATH
+    - "-mca"
+    - "pml"
+    - "ob1"
+    - "-mca"
+    - "btl"
+    - "^openib"
+    - "--display-map"
+    - "--tag-output"
+    - "--timestamp-output"
+  
