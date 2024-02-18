@@ -1,0 +1,4 @@
+pvc:
+  name: pv-fsx
+  mount_path: /fsx
+  data_path: data/coco2017 # relative to mount_path
