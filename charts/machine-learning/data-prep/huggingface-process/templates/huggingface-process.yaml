@@ -1,0 +1,81 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: huggingface-process-{{ .Release.Name }}
+data:
+  huggingface-process.sh: |
+    #!/bin/bash
+    
+    {{- range .Values.git.pre_script }}
+    {{ . }}
+    {{- end }}
+
+    TMP_DIR=$HOME/$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 16 | head -n 1)
+    git clone {{ .Values.git.repo_url }} $TMP_DIR
+
+    cd $TMP_DIR
+
+    {{- if .Values.git.branch }}
+    git checkout {{ .Values.git.branch }}
+    {{- end }}
+
+    {{- if .Values.git.commit }}
+    git fetch origin {{ .Values.git.commit }}
+    git reset --hard {{ .Values.git.commit }}
+    {{- end }}
+
+    python3 {{ .Values.git.python_script_path }}
+    cd $HOME
+
+    rm -rf $TMP_DIR
+
+    {{- range .Values.post_script }}
+    {{ . }}
+    {{- end }}
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: huggingface-process-{{ .Release.Name }}
+  annotations:
+    karpenter.sh/do-not-disrupt: "true"
+    sidecar.istio.io/inject: 'false'
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  restartPolicy: Never
+  volumes:
+  - name: pv
+    persistentVolumeClaim:
+      claimName: {{ .Values.pvc.name }} 
+  - name: config
+    configMap:
+      defaultMode: 420
+      items:
+      - key: huggingface-process.sh
+        mode: 365
+        path: huggingface-process.sh
+      name: huggingface-process-{{ .Release.Name }}
+  containers:
+  - name: huggingface-process
+    env:
+    - name: HOME 
+      value: {{ .Values.pvc.mount_path }}
+    command:
+    -  sh 
+    - /etc/config/huggingface-process.sh
+    image: {{ .Values.image }}
+    volumeMounts:
+    - mountPath: /etc/config
+      name: config
+    - mountPath: {{ .Values.pvc.mount_path }}
+      name: pv
+    resources:
+      requests:
+        cpu: "1000m"
+        memory: "384Mi"
+      limits:
+        cpu: "2000m"
+        memory: "1024Mi"

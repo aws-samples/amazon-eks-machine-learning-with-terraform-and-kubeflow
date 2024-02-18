@@ -1,0 +1,11 @@
+image:
+pvc:
+  name: pv-fsx
+  mount_path: /fsx
+git:
+  repo_url:
+  branch:
+  commit:
+  python_script_path: # relative to pvc.mount_path
+  pre_script: []
+  post_script: []
