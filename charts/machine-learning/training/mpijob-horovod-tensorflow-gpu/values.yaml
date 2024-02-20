@@ -1,4 +1,5 @@
 image:
+image_pull_policy: IfNotPresent
 backoff_limit: 2000
 resources:
   gpu_nodes: 2
@@ -7,6 +8,12 @@ resources:
 pvc:
   name: pv-fsx
   mount_path: /fsx
+git:
+  repo_url:
+  branch:
+  commit:
+  pre_script: []
+  post_script: []
 train:
   command: []
   args: []

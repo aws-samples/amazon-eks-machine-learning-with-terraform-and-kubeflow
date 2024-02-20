@@ -11,10 +11,11 @@ data:
     {{ . }}
     {{- end }}
 
-    TMP_DIR=$HOME/$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 16 | head -n 1)
-    git clone {{ .Values.git.repo_url }} $TMP_DIR
-
-    cd $TMP_DIR
+    {{- if .Values.git.repo_url }}
+    mkdir -p $HOME/tmp/{{ .Release.Name }}
+    GIT_CLONE_DIR=$HOME/tmp/{{ .Release.Name }}/$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 16 | head -n 1)
+    git clone {{ .Values.git.repo_url }} $GIT_CLONE_DIR
+    cd $GIT_CLONE_DIR
 
     {{- if .Values.git.branch }}
     git checkout {{ .Values.git.branch }}
@@ -24,14 +25,24 @@ data:
     git fetch origin {{ .Values.git.commit }}
     git reset --hard {{ .Values.git.commit }}
     {{- end }}
-
-    python3 {{ .Values.git.python_script_path }}
-    cd $HOME
-
-    rm -rf $TMP_DIR
+    
+    {{- end }}
+    
+    {{- range .Values.process.command }}
+    {{ . }} \
+    {{- end }}
+    {{- range .Values.process.args }}
+    {{ . }} \
+    {{- end }}
+    && echo "Processing script done"
 
     {{- range .Values.post_script }}
     {{ . }}
+    {{- end }}
+
+    {{- if .Values.git.repo_url }}
+    cd $HOME
+    rm -rf $GIT_CLONE_DIR
     {{- end }}
 
 ---
@@ -74,8 +85,8 @@ spec:
       name: pv
     resources:
       requests:
-        cpu: "1000m"
-        memory: "384Mi"
+        cpu: {{ .Values.resources.requests.cpu }}
+        memory: {{ .Values.resources.requests.memory }}
       limits:
-        cpu: "2000m"
-        memory: "1024Mi"
+        cpu: {{ .Values.resources.limits.cpu }}
+        memory: {{ .Values.resources.limits.memory }}

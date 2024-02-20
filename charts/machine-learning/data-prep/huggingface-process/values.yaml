@@ -6,6 +6,15 @@ git:
   repo_url:
   branch:
   commit:
-  python_script_path: # relative to pvc.mount_path
   pre_script: []
   post_script: []
+process:
+  command: []
+  args: []
+resources:
+  requests:
+    cpu: "1000m"
+    memory: "384Mi"
+  limits:
+    cpu: "4000m"
+    memory: "8192Mi"

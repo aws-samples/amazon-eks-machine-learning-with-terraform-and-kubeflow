@@ -1,4 +1,51 @@
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: train-script-{{ .Release.Name }}
+data:
+  train-script.sh: |
+    #!/bin/bash
+    
+    {{- range .Values.git.pre_script }}
+    {{ . }}
+    {{- end }}
+
+    {{- if .Values.git.repo_url }}
+    mkdir -p $HOME/tmp/{{ .Release.Name }}
+    GIT_CLONE_DIR=$HOME/tmp/{{ .Release.Name }}/$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 16 | head -n 1)
+
+    git clone {{ .Values.git.repo_url }} $GIT_CLONE_DIR
+    cd $GIT_CLONE_DIR
+
+    {{- if .Values.git.branch }}
+    git checkout {{ .Values.git.branch }}
+    {{- end }}
+
+    {{- if .Values.git.commit }}
+    git fetch origin {{ .Values.git.commit }}
+    git reset --hard {{ .Values.git.commit }}
+    {{- end }}
+    
+    {{- end }}
+    
+    {{- range .Values.train.command }}
+    {{ . }} \
+    {{- end }}
+    {{- range .Values.train.args }}
+    {{ . }} \
+    {{- end }}
+    && echo "Training script done"
+
+    {{- range .Values.post_script }}
+    {{ . }}
+    {{- end }}
+
+    {{- if .Values.git.repo_url }}
+    cd $HOME
+    rm -rf $GIT_CLONE_DIR
+    {{- end }}
+---
 apiVersion: kubeflow.org/v2beta1
 kind: MPIJob
 metadata:
@@ -37,14 +84,9 @@ spec:
             {{- range .Values.mpirun.args }}
             - "{{ tpl .  $ }}"
             {{- end }}
-            {{- range .Values.train.command }}
-            - {{ . }}
-            {{- end }}
-            {{- range .Values.train.args }}
-            - {{ . }}
-            {{- end }}
+            - /etc/config/train-script.sh
             image: {{ .Values.image }} 
-            imagePullPolicy: IfNotPresent
+            imagePullPolicy: {{ .Values.image_pull_policy }} 
       
     Worker:
       replicas: {{ .Values.resources.gpu_nodes }}
@@ -56,6 +98,14 @@ spec:
         spec:
           restartPolicy: Never
           volumes:
+          - name: config
+            configMap:
+              defaultMode: 420
+              items:
+              - key: train-script.sh
+                mode: 365
+                path: train-script.sh
+              name: train-script-{{ .Release.Name }}
           - name: pv 
             persistentVolumeClaim:
               claimName: {{ .Values.pvc.name }}
@@ -74,6 +124,8 @@ spec:
             image: {{ .Values.image }}
             imagePullPolicy: IfNotPresent
             volumeMounts:
+            - mountPath: /etc/config
+              name: config
             - mountPath: {{ .Values.pvc.mount_path }}
               name: pv
             - mountPath: /dev/shm
