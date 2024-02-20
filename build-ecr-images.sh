@@ -9,5 +9,8 @@ else
     exit 1
 fi
 
-./container/build_tools/build_and_push.sh $region
-./container-optimized/build_tools/build_and_push.sh $region
+cd containers
+for dir in `ls -d *`
+do
+$dir/build_tools/build_and_push.sh $region
+done

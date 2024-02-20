@@ -43,9 +43,10 @@ fi
 
 # Build the docker image locally with the image name and then push it to ECR
 # with the full name.
+# Get the login command from ECR and execute it directly
+aws ecr-public get-login-password --region us-east-1 \
+	| docker login --username AWS --password-stdin public.ecr.aws
 
-aws ecr get-login-password --region us-west-2 \
-		| docker login --username AWS --password-stdin 763104351884.dkr.ecr.us-west-2.amazonaws.com
 
 docker build  -t ${image} $DIR/..
 docker tag ${image} ${fullname}
@@ -57,8 +58,8 @@ aws ecr get-login-password --region ${region} \
 docker push ${fullname}
 if [ $? -eq 0 ]; then
 	echo "Amazon ECR URI: ${fullname}"
-	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../charts/maskrcnn-optimized/values.yaml
-	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../charts/maskrcnn-optimized-jupyter/values.yaml
+	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../../charts/maskrcnn/values.yaml
+	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../../charts/maskrcnn-jupyter/values.yaml
 else
 	echo "Error: Image build and push failed"
 	exit 1
