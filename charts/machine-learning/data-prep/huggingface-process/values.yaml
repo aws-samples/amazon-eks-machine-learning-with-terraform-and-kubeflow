@@ -6,8 +6,8 @@ git:
   repo_url:
   branch:
   commit:
-  pre_script: []
-  post_script: []
+pre_script: []
+post_script: []
 process:
   command: []
   args: []

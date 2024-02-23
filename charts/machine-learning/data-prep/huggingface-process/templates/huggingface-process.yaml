@@ -7,7 +7,7 @@ data:
   huggingface-process.sh: |
     #!/bin/bash
     
-    {{- range .Values.git.pre_script }}
+    {{- range .Values.pre_script }}
     {{ . }}
     {{- end }}
 
