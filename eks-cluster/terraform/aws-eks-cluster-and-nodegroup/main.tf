@@ -500,53 +500,34 @@ resource "helm_release" "aws-efa-k8s-device-plugin" {
   name       = "aws-efa-k8s-device-plugin"
   repository = "https://aws.github.io/eks-charts"
   chart      = "aws-efa-k8s-device-plugin"
-  version    = "v0.4.2"
+  version    = "v0.4.4"
   namespace  = "kube-system"
 
-  set {
-    name  = "tolerations[0].key"
-    value = "nvidia.com/gpu"
-  }
 
-  set {
-    name  = "tolerations[0].operator"
-    value = "Exists"
-  }
-
-  set {
-    name  = "tolerations[0].effect"
-    value = "NoSchedule"
-  }
-
-  set {
-    name  = "tolerations[1].key"
-    value = "aws.amazon.com/neuron"
-  }
-
-  set {
-    name  = "tolerations[1].operator"
-    value = "Exists"
-  }
-
-  set {
-    name  = "tolerations[1].effect"
-    value = "NoSchedule"
-  }
-
-  set {
-    name  = "tolerations[2].key"
-    value = "aws.amazon.com/efa"
-  }
-
-  set {
-    name  = "tolerations[2].operator"
-    value = "Exists"
-  }
-
-  set {
-    name  = "tolerations[2].effect"
-    value = "NoSchedule"
-  }
+  values = [
+    <<-EOT
+      supportedInstanceLabels:
+        keys: 
+          - "nodes.kubernetes.io/instance-type"
+        values:
+          - "trn1.32xlarge"
+          - "trn1n.32xlarge"
+          - "p3dn.24xlarge"
+          - "p4d.24xlarge"
+          - "p4de.24xlarge"
+          - "p5.48xlarge"
+        tolerations:
+          - key: "nvidia.com/gpu"
+            operator: "Exists"
+            effect: "NoSchedule"
+          - key: "aws.amazon.com/neuron"
+            operator: "Exists"
+            effect: "NoSchedule"
+          - key: "aws.amazon.com/efa"
+            operator: "Exists"
+            effect: "NoSchedule"
+    EOT
+  ]
 
 }
 
