@@ -508,7 +508,7 @@ resource "helm_release" "aws-efa-k8s-device-plugin" {
     <<-EOT
       supportedInstanceLabels:
         keys: 
-          - "nodes.kubernetes.io/instance-type"
+          - "node.kubernetes.io/instance-type"
         values:
           - "trn1.32xlarge"
           - "trn1n.32xlarge"
@@ -516,16 +516,22 @@ resource "helm_release" "aws-efa-k8s-device-plugin" {
           - "p4d.24xlarge"
           - "p4de.24xlarge"
           - "p5.48xlarge"
-        tolerations:
-          - key: "nvidia.com/gpu"
-            operator: "Exists"
-            effect: "NoSchedule"
-          - key: "aws.amazon.com/neuron"
-            operator: "Exists"
-            effect: "NoSchedule"
-          - key: "aws.amazon.com/efa"
-            operator: "Exists"
-            effect: "NoSchedule"
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+        - key: "aws.amazon.com/neuron"
+          operator: "Exists"
+          effect: "NoSchedule"
+        - key: "aws.amazon.com/neuroncore"
+          operator: "Exists"
+          effect: "NoSchedule"
+        - key: "aws.amazon.com/neurondevice"
+          operator: "Exists"
+          effect: "NoSchedule"
+        - key: "aws.amazon.com/efa"
+          operator: "Exists"
+          effect: "NoSchedule"
     EOT
   ]
 
