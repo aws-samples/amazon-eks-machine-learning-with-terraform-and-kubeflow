@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-neuron
+  annotations:
+    karpenter.sh/do-not-disrupt: "true"
+    sidecar.istio.io/inject: 'false'
+spec:
+  containers:
+  - name: test-neuron 
+    image: ubuntu:latest
+    command: ["/bin/bash"]
+    securityContext:
+      privileged: true
+    args: ["-c", "trap : TERM INT; sleep infinity & wait"]
+    volumeMounts:
+    - name:  fsx 
+      mountPath: /fsx
+    resources:
+      requests:
+        "aws.amazon.com/neuron": 16
+        "aws.amazon.com/neuroncore": 32
+        "aws.amazon.com/neurondevice": 16
+        "vpc.amazonaws.com/efa": 8
+      limits:
+        "aws.amazon.com/neuron": 16
+        "aws.amazon.com/neuroncore": 32
+        "aws.amazon.com/neurondevice": 16
+        "vpc.amazonaws.com/efa": 8
+  volumes:
+  - name:  fsx
+    persistentVolumeClaim:
+      claimName: pv-fsx # k8s persistent-volume-claim name
+  nodeSelector:
+    node.kubernetes.io/instance-type: "trn1.32xlarge" 
+  tolerations:
+    - key: "aws.amazon.com/neuron"
+      operator: "Exists"
+      effect: "NoSchedule"
+    - key: "aws.amazon.com/efa"
+      operator: "Exists"
+      effect: "NoSchedule"
