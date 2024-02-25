@@ -31,9 +31,9 @@ spec:
     - name: S3_BUCKET
       value: my-bucket
     - name: S3_PREFIX
-      value: mask-rcnn/eks/input 
+      value: ml-platform/data/coco2017 
     - name: STAGE_DIR 
-      value: /fsx/mask-rcnn/eks/input
+      value: /fsx/data/coco2017
     command:
     -  sh 
     - /etc/config/stage-data.sh

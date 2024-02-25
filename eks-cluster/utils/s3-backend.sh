@@ -8,7 +8,7 @@ export BUCKET_REGION=$(aws configure get region)
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-cat <<EOF > $DIR/terraform/aws-eks-cluster-and-nodegroup/backend.tf
+cat <<EOF > $DIR/../terraform/aws-eks-cluster-and-nodegroup/backend.tf
 terraform {
     backend "s3" {
         bucket = "${S3_BUCKET_NAME}"

@@ -58,8 +58,8 @@ aws ecr get-login-password --region ${region} \
 docker push ${fullname}
 if [ $? -eq 0 ]; then
 	echo "Amazon ECR URI: ${fullname}"
-	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../../charts/maskrcnn/values.yaml
-	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../../charts/maskrcnn-jupyter/values.yaml
+	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../../charts/machine-learning/training/maskrcnn/values.yaml
+	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../../charts/machine-learning/testing/maskrcnn-jupyter/values.yaml
 else
 	echo "Error: Image build and push failed"
 	exit 1

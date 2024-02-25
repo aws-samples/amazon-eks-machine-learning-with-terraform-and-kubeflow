@@ -11,7 +11,7 @@ maskrcnn:
   image:
   train_script: /tensorpack/examples/FasterRCNN/train.py
   data_fs: fsx # efs
-  data_dir: mask-rcnn/eks/input/data
+  data_dir: data/coco2017
   steps_per_epoch: 7500  # Must be equal to 120000/gpus 
   lr_schedule: "[240000,320000,360000]"
   base_lr: 0.01 # For a total batch size=8, adjusted automatically to actual total batch size
@@ -21,7 +21,7 @@ maskrcnn:
   mode_fpn: 'True'
   mode_mask: 'True'
   backbone_norm: FreezeBN
-  backbone_weights: mask-rcnn/eks/input/data/pretrained-models/ImageNet-R50-AlignPadding.npz
+  backbone_weights: data/coco2017/pretrained-models/ImageNet-R50-AlignPadding.npz
   image_pull_policy: Always
   nccl_socket_ifname: ^lo,docker0
   if_exclude:  lo,docker0

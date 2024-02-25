@@ -12,7 +12,7 @@ maskrcnn:
   train_script: /mask-rcnn-tensorflow/MaskRCNN/train.py
   batch_size_per_gpu: 4
   data_fs: fsx #efs
-  data_dir: mask-rcnn/eks/input/data #data
+  data_dir: data/coco2017 #data
   working_dir:  /mask-rcnn-tensorflow
   images_per_epoch: 120000 
   lr_epoch_schedule: "[(16, 0.1), (20, 0.01), (24, None)]"
@@ -23,7 +23,7 @@ maskrcnn:
   mode_fpn: 'True'
   mode_mask: 'True'
   backbone_norm: FreezeBN
-  backbone_weights: mask-rcnn/eks/input/data/pretrained-models/ImageNet-R50-AlignPadding.npz
+  backbone_weights: data/coco2017/pretrained-models/ImageNet-R50-AlignPadding.npz
   image_pull_policy: Always 
   extra_config: 'TRAIN.GRADIENT_CLIP=0.36'
   nccl_socket_ifname: ^lo,docker0

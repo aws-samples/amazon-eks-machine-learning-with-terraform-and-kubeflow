@@ -72,9 +72,9 @@ For non-Linux, [install and configure kubectl for EKS](https://docs.aws.amazon.c
 
 ### Upload COCO 2017 dataset to Amazon S3 bucket
 
-To download COCO 2017 dataset to your build environment instance, and upload it to your Amazon S3 bucket, customize [prepare-s3-bucket.sh](eks-cluster/utils/prepare-s3-bucket.sh) script to specify your S3 bucket in ```S3_BUCKET``` variable, and run following command:
+To download COCO 2017 dataset to your build environment instance, and upload it to your Amazon S3 bucket, replace S3_BUCKET with your bucket name and run following command:
 
-    ./eks-cluster/utils/prepare-s3-bucket.sh
+    ./eks-cluster/utils/prepare-s3-bucket.sh S3_BUCKET
 
 **Note:** 
 In the script above, by default, data is uploaded under a top-level S3 folder named `ml-platform`. This folder is used in the `import_path` terraform variable in the section [Use Terraform to create infrastructure](#use-terraform-to-create-infrastructure). If you change this folder name, make sure to change it in both places.
@@ -90,12 +90,15 @@ We use Terraform to create:
 
 Set `region` to your selected AWS Region, set `cluster_name` to a unique EKS cluster name, set `azs` to your Availability Zones, replace `S3_BUCKET` with your S3 bucket name, and execute the commands below:
 
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    ./eks-cluster/utils/s3-backend.sh S3_BUCKET
+    
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster-and-nodegroup
     terraform init
 
     terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET/ml-platform"
 
-[Cluster Autoscaler](https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html) manages the auto scaling of the non-accelerator nodes, and [Karpenter](https://karpenter.sh/) manages the just-in-time provisioning of the accelerator nodes.
+In this solution, [Cluster Autoscaler](https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html) manages the CPU only nodes, and [Karpenter](https://karpenter.sh/) manages the GPU and AWS Neuron accelerator nodes.
 
 ### Build and Upload Docker Images to Amazon EC2 Container Registry (ECR)
 
@@ -110,25 +113,25 @@ Below, we will build and push all the Docker images to Amazon ECR. Replace ```aw
  
 You have two Helm charts available for training Mask-RCNN models. Both these Helm charts use the same Kubernetes namespace, which, by default, is set to ```kubeflow```.
 
-To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize  [values.yaml](charts/maskrcnn/values.yaml), as described below:
+To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize  [values.yaml](charts/machine-learning/training/maskrcnn/values.yaml), as described below:
 
 1. Set ```shared_fs``` and ```data_fs``` to  ```fsx``` (default) or ```efs``` (see [Stage Data on EFS](#optional-stage-data-on-efs)). Set ```shared_pvc``` to the corresponding ```persistent-volume-claim```: ```pv-fsx``` for `fsx` (default), and `pv-efs` for `efs`.  
 2. Set `tf_device_min_sys_mem_mb` to `2560`, if `gpu_instance_type` is set to `p3.16xlarge`.
 
 To install the ```maskrcnn``` chart, execute:
 
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/charts
-    helm install --debug maskrcnn ./maskrcnn/
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug maskrcnn ./charts/machine-learning/training/maskrcnn/
 
-To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, customize  [maskrcnn-optimized/values.yaml](charts/maskrcnn-optimized/values.yaml), as described below:
+To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, customize  [values.yaml](charts/machine-learning/training/maskrcnn-optimized/values.yaml), as described below:
 
 1. Set ```shared_fs``` and ```data_fs``` to  ```fsx``` (default) or ```efs``` (see [Stage Data on EFS](#optional-stage-data-on-efs)). Set ```shared_pvc``` to the corresponding ```persistent-volume-claim```: ```pv-fsx``` for `fsx` (default), and `pv-efs` for `efs`. 
 2. Set `tf_device_min_sys_mem_mb: 2560`, and `batch_size_per_gpu: 2`, if `gpu_instance_type` is set to `p3.16xlarge`.
 
 To install the ```maskrcnn-optimized``` chart, execute:
 
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/charts
-    helm install --debug maskrcnn-optimized ./maskrcnn-optimized/
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug maskrcnn-optimized ./charts/machine-learning/training/maskrcnn-optimized/
 
 ### Monitor training
 
@@ -175,7 +178,7 @@ Copy the generated password for `tensorboard` from `.htpasswd` file and save it 
     
 #### Test TensorPack Mask-RCNN model
 
-To test [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize  [charts/maskrcnn-jupyter/values.yaml](charts/maskrcnn-jupyter/values.yaml), as described below:
+To test [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize  [values.yaml](charts/machine-learning/testing/maskrcnn-jupyter/values.yaml), as described below:
 
 1. Use [AWS check ip](http://checkip.amazonaws.com/) to get the public IP of your web browser client. Use this public IP to set ```global.source_cidr``` as a  ```/32``` CIDR. This will restrict Internet access to [Jupyter](https://jupyter.org/) notebook and [TensorBoard](https://www.tensorflow.org/tensorboard) services to your public IP.
 2. Set `global.log_dir` to the **relative path** of your training log directory, for example, `maskrcnn-XXXX-XX-XX-XX-XX-XX`.
@@ -186,7 +189,7 @@ To test [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/mas
 To install the ```maskrcnn-jupyter``` chart, execute:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm install --debug maskrcnn-jupyter ./charts/maskrcnn-jupyter/
+    helm install --debug maskrcnn-jupyter ./charts/machine-learning/testing/maskrcnn-jupyter/
 
 Execute ```kubectl logs -f maskrcnn-jupyter-xxxxx -n kubeflow -c jupyter``` to display Jupyter log. At the beginning of the Jupyter log, note the **security token** required to access Jupyter service in a browser. 
 
@@ -204,12 +207,12 @@ Accessing TensorBoard service in a browser will display a browser warning, becau
 
 #### Test AWS Mask-RCNN model 
 
-To test [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow)  model, customize  [charts/maskrcnn-optimized-jupyter/values.yaml](charts/maskrcnn-optimized-jupyter/values.yaml) file, following the three steps shown for [TensorPack Mask-RCNN model](#test-tensorpack-mask-rcnn-model). Note, the `log_dir` will be different, for example, `maskrcnn-optimized-XXXX-XX-XX-XX-XX-XX`.
+To test [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow)  model, customize  [values.yaml](charts/machine-learning/testing/maskrcnn-optimized-jupyter/values.yaml) file, following the three steps shown for [TensorPack Mask-RCNN model](#test-tensorpack-mask-rcnn-model). Note, the `log_dir` will be different, for example, `maskrcnn-optimized-XXXX-XX-XX-XX-XX-XX`.
 
 To install the ```maskrcnn-optimized-jupyter``` chart, execute:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm install --debug maskrcnn-optimized-jupyter ./charts/maskrcnn-optimized-jupyter/
+    helm install --debug maskrcnn-optimized-jupyter ./charts/machine-learning/testing/maskrcnn-optimized-jupyter/
 
 Execute ```kubectl logs -f maskrcnn-optimized-jupyter-xxxxx -n kubeflow -c jupyter``` to display Jupyter log. At the beginning of the Jupyter log, note the **security token** required to access Jupyter service in a browser. 
 
