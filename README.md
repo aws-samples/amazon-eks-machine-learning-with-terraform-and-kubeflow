@@ -76,6 +76,9 @@ To download COCO 2017 dataset to your build environment instance, and upload it 
 
     ./eks-cluster/prepare-s3-bucket.sh
 
+**Note:** 
+In the script above, by default, data is uploaded under a top-level S3 folder named `ml-platform`. This folder is used in the `import_path` terraform variable in the section [Use Terraform to create infrastructure](#use-terraform-to-create-infrastructure). If you change this folder name, make sure to change it in both places.
+
 ### Use Terraform to create infrastructure
 
 We use Terraform to create:
@@ -90,7 +93,7 @@ Set `region` to your selected AWS Region, set `cluster_name` to a unique EKS clu
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster-and-nodegroup
     terraform init
 
-    terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET"
+    terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET/ml-platform"
 
 [Cluster Autoscaler](https://docs.aws.amazon.com/eks/latest/userguide/autoscaling.html) manages the auto scaling of the non-accelerator nodes, and [Karpenter](https://karpenter.sh/) manages the just-in-time provisioning of the accelerator nodes.
 

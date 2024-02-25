@@ -254,19 +254,39 @@ resource "aws_security_group" "fsx_lustre_sg" {
 }
 
 resource "aws_fsx_lustre_file_system" "fs" {
+  file_system_type_version = "2.15"
+
   storage_capacity = 1200
   subnet_ids       = [aws_subnet.private[0].id]
   deployment_type  = "SCRATCH_2"
 
-  security_group_ids = [aws_security_group.fsx_lustre_sg.id] 
-  import_path = var.import_path
-  export_path = var.import_path
+  security_group_ids = [aws_security_group.fsx_lustre_sg.id]
+
+  log_configuration {
+    level = "WARN_ERROR"
+  }
 
   tags = {
     Name = var.cluster_name
   }
 }
 
+resource "aws_fsx_data_repository_association" "this" {
+  file_system_id       = aws_fsx_lustre_file_system.fs.id
+  data_repository_path = var.import_path
+  file_system_path     = "/"
+  batch_import_meta_data_on_create = true
+
+  s3 {
+    auto_export_policy {
+      events = ["NEW", "CHANGED", "DELETED"]
+    }
+
+    auto_import_policy {
+      events = ["NEW", "CHANGED", "DELETED"]
+    }
+  }
+}
 
 locals {
   use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.28": var.k8s_version
@@ -958,6 +978,8 @@ resource "helm_release" "pv_fsx" {
     value = "${aws_fsx_lustre_file_system.fs.id}.fsx.${var.region}.amazonaws.com"
   }
 
+  depends_on = [ aws_fsx_data_repository_association.this ]
+
 }
 
 resource "kubernetes_namespace" "istio_system" {
@@ -1215,7 +1237,7 @@ module "kubeflow-components" {
     dns_name = "${aws_fsx_lustre_file_system.fs.id}.fsx.${var.region}.amazonaws.com"
   }
 
-  local_helm_repo = var.local_helm_repo
+  local_helm_repo = "${var.local_helm_repo}/ml-platform"
 
   depends_on = [ 
     helm_release.istio-ingress, 

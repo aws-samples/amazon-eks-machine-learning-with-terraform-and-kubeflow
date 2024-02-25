@@ -4,7 +4,7 @@
 S3_BUCKET=
 
 # Customize S3_PREFIX
-S3_PREFIX=mask-rcnn/eks/input
+S3_PREFIX=ml-platform/mask-rcnn/eks/input
 
 # Customize Stage DIR
 # Stage directory must be on EBS volume with 100 GB available space
