@@ -58,7 +58,7 @@ Clone this git repository on the build machine using the following commands:
 To install ```kubectl``` on Linux, execute following commands:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    ./eks-cluster/install-kubectl-linux.sh
+    ./eks-cluster/utils/install-kubectl-linux.sh
 
 For non-Linux, [install and configure kubectl for EKS](https://docs.aws.amazon.com/eks/latest/userguide/configure-kubectl.html), install [aws-iam-authenticator](https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html), and make sure the command ```aws-iam-authenticator help``` works. 
 
@@ -72,9 +72,9 @@ For non-Linux, [install and configure kubectl for EKS](https://docs.aws.amazon.c
 
 ### Upload COCO 2017 dataset to Amazon S3 bucket
 
-To download COCO 2017 dataset to your build environment instance, and upload it to your Amazon S3 bucket, customize [prepare-s3-bucket.sh](eks-cluster/prepare-s3-bucket.sh) script to specify your S3 bucket in ```S3_BUCKET``` variable, and run following command:
+To download COCO 2017 dataset to your build environment instance, and upload it to your Amazon S3 bucket, customize [prepare-s3-bucket.sh](eks-cluster/utils/prepare-s3-bucket.sh) script to specify your S3 bucket in ```S3_BUCKET``` variable, and run following command:
 
-    ./eks-cluster/prepare-s3-bucket.sh
+    ./eks-cluster/utils/prepare-s3-bucket.sh
 
 **Note:** 
 In the script above, by default, data is uploaded under a top-level S3 folder named `ml-platform`. This folder is used in the `import_path` terraform variable in the section [Use Terraform to create infrastructure](#use-terraform-to-create-infrastructure). If you change this folder name, make sure to change it in both places.
@@ -142,7 +142,7 @@ This will show the live training log from the launcher pod.
 
 Model checkpoints and all training logs are also available on the ```shared_fs``` file-system  set in ```values.yaml```, i.e. ```fsx``` (default), or `efs`.  For ```fsx``` (default), access your training logs as follows:
 
-    kubectl apply -f eks-cluster/attach-pvc-fsx.yaml -n kubeflow
+    kubectl apply -f eks-cluster/utils/attach-pvc-fsx.yaml -n kubeflow
     kubectl exec -it -n kubeflow attach-pvc-fsx -- /bin/bash
     cd /fsx
     ls -ltr maskrcnn-*
@@ -151,7 +151,7 @@ Type ```exit``` to exit from the ```attach-pvc-fsx``` container.
 
 For ```efs```,  access your training logs as follows:
 
-    kubectl apply -f eks-cluster/attach-pvc.yaml  -n kubeflow
+    kubectl apply -f eks-cluster/utils/attach-pvc.yaml  -n kubeflow
     kubectl exec -it -n kubeflow attach-pvc -- /bin/bash
     cd /efs
     ls -ltr maskrcnn-*
@@ -219,9 +219,9 @@ Execute ```kubectl get service maskrcnn-optimized-jupyter -n kubeflow``` to get 
 When testing is complete, you may uninstall an installed chart by executing ```helm uninstall chart-name```, for example ```helm uninstall maskrcnn-jupyter```, or ```helm uninstall maskrcnn-optimized-jupyter```.
 
 ### (Optional) Stage Data on EFS
-The COCO 2017 training data used in the tutorial is **automatically imported** from the ```S3_BUCKET``` to the FSx for Lustre file-system. However, if you want to use the EFS file-system as the source for your training data, you need to customize ```S3_BUCKET``` variable in [stage-data.yaml](eks-cluster/stage-data.yaml), and run following command:
+The COCO 2017 training data used in the tutorial is **automatically imported** from the ```S3_BUCKET``` to the FSx for Lustre file-system. However, if you want to use the EFS file-system as the source for your training data, you need to customize ```S3_BUCKET``` variable in [stage-data.yaml](eks-cluster/utils/stage-data.yaml), and run following command:
 
-    kubectl apply -f stage-data.yaml -n kubeflow
+    kubectl apply -f eks-cluster/utils/stage-data.yaml -n kubeflow
 
 Execute ```kubectl get pods -n kubeflow``` to check the status of the staging Pod. Once the status of the Pod is marked ```Completed```, data is successfully staged on EFS.
 
