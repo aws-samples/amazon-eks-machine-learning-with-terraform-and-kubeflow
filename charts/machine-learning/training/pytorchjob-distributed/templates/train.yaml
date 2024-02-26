@@ -6,11 +6,7 @@ metadata:
 data:
   train-script.sh: |
     #!/bin/bash
-    
-    {{- range .Values.pre_script }}
-    {{ . }}
-    {{- end }}
-
+  
     {{- if .Values.git.repo_url }}
     mkdir -p $HOME/tmp/{{ .Release.Name }}
     GIT_CLONE_DIR=$HOME/tmp/{{ .Release.Name }}/$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 16 | head -n 1)
@@ -28,7 +24,11 @@ data:
     {{- end }}
     
     {{- end }}
-    
+     
+    {{- range .Values.pre_script }}
+    {{ . }}
+    {{- end }}
+
     {{- range .Values.train.command }}
     {{ . }} \
     {{- end }}

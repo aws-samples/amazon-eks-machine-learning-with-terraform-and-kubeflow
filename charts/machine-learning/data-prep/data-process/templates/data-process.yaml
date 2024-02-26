@@ -6,11 +6,7 @@ metadata:
 data:
   data-process.sh: |
     #!/bin/bash
-    
-    {{- range .Values.pre_script }}
-    {{ . }}
-    {{- end }}
-
+   
     {{- if .Values.git.repo_url }}
     mkdir -p $HOME/tmp/{{ .Release.Name }}
     GIT_CLONE_DIR=$HOME/tmp/{{ .Release.Name }}/$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 16 | head -n 1)
@@ -26,6 +22,10 @@ data:
     git reset --hard {{ .Values.git.commit }}
     {{- end }}
     
+    {{- end }}
+    
+    {{- range .Values.pre_script }}
+    {{ . }}
     {{- end }}
     
     {{- range .Values.process.command }}
