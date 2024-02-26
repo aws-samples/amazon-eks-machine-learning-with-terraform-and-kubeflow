@@ -58,9 +58,6 @@ metadata:
 spec:
   restartPolicy: Never
   volumes:
-  - name: pv
-    persistentVolumeClaim:
-      claimName: {{ .Values.pvc.name }} 
   - name: config
     configMap:
       defaultMode: 420
@@ -69,11 +66,15 @@ spec:
         mode: 365
         path: data-process.sh
       name: data-process-{{ .Release.Name }}
+  {{- $pv_index := 1 }}
+  {{- range $pv := .Values.pvc }}
+  - name: pv-{{ $pv_index }}
+    persistentVolumeClaim:
+      claimName: {{ $pv.name }}
+  {{- $pv_index = add $pv_index 1 }}
+  {{- end }}
   containers:
   - name: data-process
-    env:
-    - name: HOME 
-      value: {{ .Values.pvc.mount_path }}
     command:
     -  sh 
     - /etc/config/data-process.sh
@@ -81,8 +82,12 @@ spec:
     volumeMounts:
     - mountPath: /etc/config
       name: config
-    - mountPath: {{ .Values.pvc.mount_path }}
-      name: pv
+    {{- $pv_index := 1 }}
+    {{- range $pv := .Values.pvc }}
+    - mountPath: {{ $pv.mount_path }}
+      name: pv-{{ $pv_index }}
+    {{- $pv_index = add $pv_index 1 }}
+    {{- end }}
     resources:
       requests:
       {{- range $k, $v := .Values.resources.requests }}

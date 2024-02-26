@@ -8,8 +8,10 @@ resources:
   node_type: 
 tolerations: []
 pvc:
-  name: pv-fsx
-  mount_path: /fsx
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
 git:
   repo_url:
   branch:

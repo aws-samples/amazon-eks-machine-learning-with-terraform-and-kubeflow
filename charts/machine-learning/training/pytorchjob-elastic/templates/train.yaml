@@ -86,13 +86,17 @@ spec:
                 mode: 365
                 path: train-script.sh
               name: train-script-{{ .Release.Name }}
-          - name: pv 
-            persistentVolumeClaim:
-              claimName: {{ .Values.pvc.name }}
           - name: shm
             hostPath:
               path: /dev/shm
               type: Directory
+          {{- $pv_index := 1 }}
+          {{- range $pv := .Values.pvc }}
+          - name: pv-{{ $pv_index }}
+            persistentVolumeClaim:
+              claimName: {{ $pv.name }}
+          {{- $pv_index = add $pv_index 1 }}
+          {{- end }}
           tolerations:
           {{- range $v := .Values.tolerations }}
             - key: {{ $v.key }}
@@ -128,7 +132,11 @@ spec:
               volumeMounts:
                 - mountPath: /etc/config
                   name: config
-                - mountPath: {{ .Values.pvc.mount_path }}
-                  name: pv
                 - mountPath: /dev/shm
                   name: shm
+                {{- $pv_index := 1 }}
+                {{- range $pv := .Values.pvc }}
+                - mountPath: {{ $pv.mount_path }}
+                  name: pv-{{ $pv_index }}
+                {{- $pv_index = add $pv_index 1 }}
+                {{- end }}

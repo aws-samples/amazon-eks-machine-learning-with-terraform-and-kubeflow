@@ -6,8 +6,10 @@ resources:
   gpus_per_node: 8
   gpu_instance_type: p3dn.24xlarge
 pvc:
-  name: pv-fsx
-  mount_path: /fsx
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
 git:
   repo_url:
   branch:
@@ -31,8 +33,6 @@ tensorflow:
   gpu_allocator: "cuda_malloc_async" # advanced setting
 mpirun:
   env:
-    - name: HOME
-      value: "{{ .Values.pvc.mount_path }}"
     - name: HOROVOD_AUTOTUNE
       value: "{{ .Values.horovod.autotune }}"
     - name: HOROVOD_LOG_LEVEL
@@ -56,10 +56,8 @@ mpirun:
     - name: TF_ENABLE_CUDNN_TENSOR_OP_MATH_FP32 
       value: "{{ .Values.tensorflow.mixed_precision }}" 
   args:
-    - "-wdir"
-    - "{{ .Values.pvc.mount_path }}"
     - "--output-filename" 
-    - "{{ .Values.pvc.mount_path }}/logs/{{ .Release.Name }}-{{ date \"2006-01-02-15-04-05\" .Release.Time  }}"
+    - "$HOME/logs/{{ .Release.Name }}-{{ date \"2006-01-02-15-04-05\" .Release.Time  }}"
     - "--allow-run-as-root"
     - "-np"
     - "{{ mul .Values.resources.gpu_nodes  .Values.resources.gpus_per_node }}"
