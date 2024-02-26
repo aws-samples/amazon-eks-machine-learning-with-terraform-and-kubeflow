@@ -12,9 +12,5 @@ process:
   command: []
   args: []
 resources:
-  requests:
-    cpu: "1000m"
-    memory: "384Mi"
-  limits:
-    cpu: "4000m"
-    memory: "8192Mi"
+  requests: {}
+  limits: {}
