@@ -93,10 +93,6 @@ def helm_charts_component(chart_configs: List[Dict]) -> str:
             if timeout is not None:
                 cmd += [ "--timeout", timeout]
             
-            values_file = os.path.join(local_chart_path, "values.yaml")
-            if os.path.exists(values_file):
-                cmd += [ "--values", values_file]
-
             values = self.chart_config.get('values', None)
             if values:
                 with NamedTemporaryFile(mode="w+", encoding="utf-8", \
