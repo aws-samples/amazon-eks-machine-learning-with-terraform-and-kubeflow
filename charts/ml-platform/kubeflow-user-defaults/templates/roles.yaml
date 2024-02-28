@@ -20,9 +20,7 @@ rules:
   resources:
   - configmaps
   verbs:
-  - get
-  - watch
-  - list
+  - '*'
 - apiGroups:
   - ''
   resources:
