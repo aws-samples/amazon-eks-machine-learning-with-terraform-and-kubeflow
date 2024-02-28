@@ -83,9 +83,7 @@ deploymentSpec:
           ,\n                    namespace,\n                    \"--wait\"\n    \
           \            ]\n\n            timeout = self.chart_config.get('timeout',\
           \ None)\n            if timeout is not None:\n                cmd += [ \"\
-          --timeout\", timeout]\n\n            values_file = os.path.join(local_chart_path,\
-          \ \"values.yaml\")\n            if os.path.exists(values_file):\n      \
-          \          cmd += [ \"--values\", values_file]\n\n            values = self.chart_config.get('values',\
+          --timeout\", timeout]\n\n            values = self.chart_config.get('values',\
           \ None)\n            if values:\n                with NamedTemporaryFile(mode=\"\
           w+\", encoding=\"utf-8\", \\\n                                        prefix=\"\
           values\", suffix=\".yaml\", delete=False) as values_files:\n           \
