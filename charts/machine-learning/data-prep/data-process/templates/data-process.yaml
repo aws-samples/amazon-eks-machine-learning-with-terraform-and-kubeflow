@@ -75,6 +75,11 @@ spec:
   {{- end }}
   containers:
   - name: data-process
+    env:
+    {{- range $v := .Values.process.env }}
+    - name: {{ $v.name }}
+      value: "{{ tpl $v.value $ }}"
+    {{- end }}
     command:
     -  sh 
     - /etc/config/data-process.sh

@@ -198,7 +198,7 @@ resource "helm_release" "kubeflow-katib" {
 resource "helm_release" "kubeflow-user-defaults" {
   name       = "kubeflow-user-defaults"
   chart      = "${var.local_helm_repo}/kubeflow-user-defaults"
-  version  = "1.0.5"
+  version  = "1.0.6"
   namespace = var.kubeflow_namespace
 
  values = [

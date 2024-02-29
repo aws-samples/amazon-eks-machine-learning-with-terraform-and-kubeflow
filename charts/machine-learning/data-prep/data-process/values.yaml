@@ -11,6 +11,7 @@ git:
 pre_script: []
 post_script: []
 process:
+  env: []
   command: []
   args: []
 resources:
