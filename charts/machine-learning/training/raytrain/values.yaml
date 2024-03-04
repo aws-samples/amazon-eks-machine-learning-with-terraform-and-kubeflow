@@ -1,0 +1,31 @@
+ray:
+  version: 2.9.0
+  dashboard:
+    host: '0.0.0.0'
+  ports: []
+  resources:
+    requests: {}
+    limits: {}
+image:
+resources:
+  nnodes: 1
+  nproc_per_node: 
+  node_type:
+  requests: {}
+  limits: {}
+tolerations: []
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+git:
+  repo_url:
+  branch:
+  commit:
+pre_script: []
+post_script: []
+train:
+  env: []
+  command: []
+  args: []

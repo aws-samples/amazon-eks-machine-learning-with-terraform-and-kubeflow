@@ -1,0 +1,288 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: train-script-{{ .Release.Name }}
+data:
+  train-script.sh: |
+    #!/bin/bash
+
+    {{- if .Values.git.repo_url }}
+    mkdir -p $HOME/tmp/{{ .Release.Name }}
+    GIT_CLONE_DIR=$HOME/tmp/{{ .Release.Name }}/$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 16 | head -n 1)
+
+    git clone {{ .Values.git.repo_url }} $GIT_CLONE_DIR
+    cd $GIT_CLONE_DIR
+
+    {{- if .Values.git.branch }}
+    git checkout {{ .Values.git.branch }}
+    {{- end }}
+
+    {{- if .Values.git.commit }}
+    git fetch origin {{ .Values.git.commit }}
+    git reset --hard {{ .Values.git.commit }}
+    {{- end }}
+    
+    {{- end }}
+        
+    {{- range .Values.pre_script }}
+    {{ . }}
+    {{- end }}
+
+    {{- range .Values.train.command }}
+    {{ . }} \
+    {{- end }}
+    {{- range .Values.train.args }}
+    {{ . }} \
+    {{- end }}
+    && echo "Training script done"
+
+    {{- range .Values.post_script }}
+    {{ . }}
+    {{- end }}
+
+    {{- if .Values.git.repo_url }}
+    cd $HOME
+    rm -rf $GIT_CLONE_DIR
+    {{- end }}
+---
+apiVersion: ray.io/v1
+kind: RayJob
+metadata:
+  name: rayjob-{{ .Release.Name }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  shutdownAfterJobFinishes: true
+  entrypoint: /etc/config/train-script.sh
+  rayClusterSpec:
+    rayVersion: {{ .Values.ray.version }}
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: {{ .Values.ray.dashboard.host }}
+      template:
+        metadata:
+          annotations:
+            karpenter.sh/do-not-disrupt: "true"
+            sidecar.istio.io/inject: 'false'
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            app.kubernetes.io/managed-by: {{ .Release.Service }}
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: ray-head
+            env:
+              {{- range $v := .Values.train.env }}
+              - name: {{ $v.name }}
+                value: "{{ tpl $v.value $ }}"
+              {{- end }} 
+            image: {{ .Values.image }}
+            imagePullPolicy: IfNotPresent
+            ports:
+            {{- range $v := .Values.ray.ports }}
+              - name: {{ $v.name }}
+                containerPort: {{ $v.port }}
+            {{- end }}
+            volumeMounts:
+              - mountPath: /etc/config
+                name: config
+              {{- $pv_index := 1 }}
+              {{- range $pv := .Values.pvc }}
+              - mountPath: {{ $pv.mount_path }}
+                name: pv-{{ $pv_index }}
+              {{- $pv_index = add $pv_index 1 }}
+              {{- end }}
+            resources:
+              requests:
+              {{- range $k, $v := .Values.ray.resources.requests }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
+              limits:
+              {{- range $k, $v := .Values.ray.resources.limits }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
+          volumes:
+            - name: config
+              configMap:
+                defaultMode: 420
+                items:
+                - key: train-script.sh
+                  mode: 365
+                  path: train-script.sh
+                name: train-script-{{ .Release.Name }}
+            - name: shm
+              hostPath:
+                path: /dev/shm
+                type: Directory
+            {{- $pv_index := 1 }}
+            {{- range $pv := .Values.pvc }}
+            - name: pv-{{ $pv_index }}
+              persistentVolumeClaim:
+                claimName: {{ $pv.name }}
+            {{- $pv_index = add $pv_index 1 }}
+            {{- end }}
+          tolerations:
+          {{- range $v := .Values.tolerations }}
+            - key: {{ $v.key }}
+              {{- if $v.operator }}
+              operator: "{{ $v.operator }}"
+              {{- end }}
+              {{- if $v.effect }}
+              effect: "{{ $v.effect }}"
+              {{- end }}
+          {{- end }}
+          nodeSelector:
+            node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
+
+    workerGroupSpecs:
+    - replicas: {{ .Values.resources.nnodes }}
+      minReplicas: {{ .Values.resources.nnodes }}
+      maxReplicas: {{ .Values.resources.nnodes }}
+      groupName: worker-group 
+      rayStartParams: {}
+      template:
+        metadata:
+          annotations:
+            karpenter.sh/do-not-disrupt: "true"
+            sidecar.istio.io/inject: 'false'
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            app.kubernetes.io/managed-by: {{ .Release.Service }}
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: ray-worker
+            env:
+              {{- range $v := .Values.train.env }}
+              - name: {{ $v.name }}
+                value: "{{ tpl $v.value $ }}"
+              {{- end }} 
+            image: {{ .Values.image }}
+            imagePullPolicy: IfNotPresent
+            lifecycle:
+              preStop:
+                exec:
+                  command: [ "/bin/sh","-c","ray stop" ]
+            volumeMounts:
+              - mountPath: /etc/config
+                name: config
+              - mountPath: /dev/shm
+                name: shm
+              {{- $pv_index := 1 }}
+              {{- range $pv := .Values.pvc }}
+              - mountPath: {{ $pv.mount_path }}
+                name: pv-{{ $pv_index }}
+              {{- $pv_index = add $pv_index 1 }}
+              {{- end }}
+            resources:
+              requests:
+              {{- range $k, $v := .Values.resources.requests }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
+              limits:
+              {{- range $k, $v := .Values.resources.limits }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
+          volumes:
+            - name: config
+              configMap:
+                defaultMode: 420
+                items:
+                - key: train-script.sh
+                  mode: 365
+                  path: train-script.sh
+                name: train-script-{{ .Release.Name }}
+            - name: shm
+              hostPath:
+                path: /dev/shm
+                type: Directory
+            {{- $pv_index := 1 }}
+            {{- range $pv := .Values.pvc }}
+            - name: pv-{{ $pv_index }}
+              persistentVolumeClaim:
+                claimName: {{ $pv.name }}
+            {{- $pv_index = add $pv_index 1 }}
+            {{- end }}
+          tolerations:
+          {{- range $v := .Values.tolerations }}
+            - key: {{ $v.key }}
+              {{- if $v.operator }}
+              operator: "{{ $v.operator }}"
+              {{- end }}
+              {{- if $v.effect }}
+              effect: "{{ $v.effect }}"
+              {{- end }}
+          {{- end }}
+          nodeSelector:
+            node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
+
+    submitterPodTemplate:
+      metadata:
+        annotations:
+          karpenter.sh/do-not-disrupt: "true"
+          sidecar.istio.io/inject: 'false'
+          app.kubernetes.io/instance: {{ .Release.Name }}
+          app.kubernetes.io/managed-by: {{ .Release.Service }}
+      spec:
+        restartPolicy: Never
+        containers:
+          - name: job-submitter
+            env:
+              {{- range $v := .Values.train.env }}
+              - name: {{ $v.name }}
+                value: "{{ tpl $v.value $ }}"
+              {{- end }} 
+            image: {{ .Values.image }}
+            imagePullPolicy: IfNotPresent
+            volumeMounts:
+              - mountPath: /etc/config
+                name: config
+              {{- $pv_index := 1 }}
+              {{- range $pv := .Values.pvc }}
+              - mountPath: {{ $pv.mount_path }}
+                name: pv-{{ $pv_index }}
+              {{- $pv_index = add $pv_index 1 }}
+              {{- end }}
+            resources:
+              requests:
+              {{- range $k, $v := .Values.ray.resources.requests }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
+              limits:
+              {{- range $k, $v := .Values.ray.resources.limits }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
+        volumes:
+          - name: config
+            configMap:
+              defaultMode: 420
+              items:
+              - key: train-script.sh
+                mode: 365
+                path: train-script.sh
+              name: train-script-{{ .Release.Name }}
+          - name: shm
+            hostPath:
+              path: /dev/shm
+              type: Directory
+          {{- $pv_index := 1 }}
+          {{- range $pv := .Values.pvc }}
+          - name: pv-{{ $pv_index }}
+            persistentVolumeClaim:
+              claimName: {{ $pv.name }}
+          {{- $pv_index = add $pv_index 1 }}
+          {{- end }}
+        tolerations:
+        {{- range $v := .Values.tolerations }}
+          - key: {{ $v.key }}
+            {{- if $v.operator }}
+            operator: "{{ $v.operator }}"
+            {{- end }}
+            {{- if $v.effect }}
+            effect: "{{ $v.effect }}"
+            {{- end }}
+        {{- end }}
+        nodeSelector:
+          node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
+              

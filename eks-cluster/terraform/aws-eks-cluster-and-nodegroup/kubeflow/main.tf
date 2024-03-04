@@ -20,6 +20,14 @@ resource "helm_release" "kubeflow-training-operator" {
   }
 }
 
+resource "helm_release" "kuberay-operator" {
+  name       = "kuberay-operator"
+  chart      = "kuberay-operator"
+  repository  = "https://ray-project.github.io/kuberay-helm/"
+  version    = "1.0.0"
+  namespace  = var.kubeflow_namespace
+}
+
 resource "helm_release" "kubeflow-roles" {
    name       = "kubeflow-roles"
   chart      = "${var.local_helm_repo}/kubeflow-roles"
