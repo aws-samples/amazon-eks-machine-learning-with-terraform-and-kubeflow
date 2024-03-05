@@ -140,7 +140,7 @@ spec:
     - replicas: {{ .Values.resources.nnodes }}
       minReplicas: {{ .Values.resources.nnodes }}
       maxReplicas: {{ .Values.resources.nnodes }}
-      groupName: worker-group 
+      groupName: training
       rayStartParams: {}
       template:
         metadata:
