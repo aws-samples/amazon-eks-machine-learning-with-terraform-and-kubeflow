@@ -158,7 +158,7 @@ Next, modify your `/etc/hosts` file to add following entry:
 
     127.0.0.1 	istio-ingressgateway.ingress.svc.cluster.local
 
-Open your web browser to the [KubeFlow Central Dashboard](https://istio-ingressgateway.ingress.svc.cluster.local/) URL to access the dashboard.
+Open your web browser to the [KubeFlow Central Dashboard](https://istio-ingressgateway.ingress.svc.cluster.local/) URL to access the dashboard. For login, use the static username `user@example.com`, and [retrieve the static password from terraform](#retrieve-static-user-password).
 
 ### Use Terraform to destroy infrastructure
 
