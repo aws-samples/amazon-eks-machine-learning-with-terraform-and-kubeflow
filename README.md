@@ -17,7 +17,7 @@ The deployed Kubeflow platform version is 1.8.0, and includes [Kubeflow Notebook
 
 The accelerator machines used for running the training jobs are automatically managed by [Karpenter](https://karpenter.sh/), which means, all machines used in data-preprocessing, and  training, are provisioned on-demand.
 
-To launch a data pre-processing or training job, all you need to do is install one of the pre-defined [machine-learning charts](./charts/machine-learning/) with a YAML file that defines inputs to the chart. Here is a [very quick example](./examples/accelerate/bert-glue-mrpc/README.md) that pre-trains Bert model pn Glue MRPC dataset using Hugging Face Accelerate. 
+To launch a data pre-processing or training job, all you need to do is install one of the pre-defined [machine-learning charts](./charts/machine-learning/) with a YAML file that defines inputs to the chart. Here is a [very quick example](./examples/accelerate/bert-glue-mrpc/README.md) that pre-trains Bert model n Glue MRPC dataset using Hugging Face Accelerate. 
 
 ## What is in the YAML file
 
@@ -35,7 +35,7 @@ The YAML file is a [Helm values](https://helm.sh/docs/chart_template_guide/value
 
 1. [Create and activate an AWS Account](https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/)
 2. Select your AWS Region. For the tutorial below, we assume the region to be ```us-west-2```
-3. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) for required EC2 instances. Ensure your EC2 service limits in your selected AWS Region are set to at least 2 each for [p3.16xlarge, p3dn.24xlarge](https://aws.amazon.com/ec2/instance-types/p3/), [g5.12xlarge]([g5.xlarge](https://aws.amazon.com/ec2/instance-types/g5/)), and [g5.xlarge](https://aws.amazon.com/ec2/instance-types/g5/). If you use other EC2 instance types, ensure your EC2 service limits are set accordingly.
+3. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) for required EC2 instances. Ensure your EC2 service limits in your selected AWS Region are set to at least 2 each for [p3.16xlarge, p3dn.24xlarge](https://aws.amazon.com/ec2/instance-types/p3/), [g5.12xlarge](https://aws.amazon.com/ec2/instance-types/g5/), and [g5.xlarge](https://aws.amazon.com/ec2/instance-types/g5/). If you use other EC2 instance types, ensure your EC2 service limits are set accordingly.
 
 ## Getting started
 
