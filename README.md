@@ -154,6 +154,10 @@ After you have enabled IAM access to your EKS cluster, open a terminal on your c
 
 **Note**: Leave the terminal open.
 
+Next, modify your `/etc/hosts` file to add following entry:
+
+    127.0.0.1 	istio-ingressgateway.ingress.svc.cluster.local
+
 Open your web browser to the [KubeFlow Central Dashboard](https://istio-ingressgateway.ingress.svc.cluster.local/) URL to access the dashboard.
 
 ### Use Terraform to destroy infrastructure
