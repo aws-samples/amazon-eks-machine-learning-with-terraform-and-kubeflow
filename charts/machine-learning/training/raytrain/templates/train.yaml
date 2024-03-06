@@ -56,7 +56,10 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   shutdownAfterJobFinishes: true
-  entrypoint: /etc/config/train-script.sh
+  entrypoint:  /etc/config/train-script.sh
+  {{- if .Values.ray.runtime_env_yaml }}
+  runtimeEnvYAML: {{ .Values.ray.runtime_env_yaml }}
+  {{- end }}
   rayClusterSpec:
     rayVersion: {{ .Values.ray.version }}
     headGroupSpec:
@@ -79,7 +82,7 @@ spec:
                 value: "{{ tpl $v.value $ }}"
               {{- end }} 
             image: {{ .Values.image }}
-            imagePullPolicy: IfNotPresent
+            imagePullPolicy: {{ .Values.image_pull_policy}}
             ports:
             {{- range $v := .Values.ray.ports }}
               - name: {{ $v.name }}
@@ -159,7 +162,7 @@ spec:
                 value: "{{ tpl $v.value $ }}"
               {{- end }} 
             image: {{ .Values.image }}
-            imagePullPolicy: IfNotPresent
+            imagePullPolicy: {{ .Values.image_pull_policy}}
             lifecycle:
               preStop:
                 exec:
@@ -234,7 +237,7 @@ spec:
                 value: "{{ tpl $v.value $ }}"
               {{- end }} 
             image: {{ .Values.image }}
-            imagePullPolicy: IfNotPresent
+            imagePullPolicy: {{ .Values.image_pull_policy}}
             volumeMounts:
               - mountPath: /etc/config
                 name: config

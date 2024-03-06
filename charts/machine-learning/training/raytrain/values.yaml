@@ -6,10 +6,11 @@ ray:
   resources:
     requests: {}
     limits: {}
+  runtime_env_yaml:
 image:
+image_pull_policy: IfNotPresent
 resources:
   nnodes: 1
-  nproc_per_node: 
   node_type:
   requests: {}
   limits: {}
