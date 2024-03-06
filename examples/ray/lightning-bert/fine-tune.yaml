@@ -1,0 +1,50 @@
+ray:
+  version: '2.9.3'
+  dashboard:
+    host: '0.0.0.0'
+  ports:
+    - name: gcs-server
+      port: 6379
+    - name: client
+      port: 10001
+    - name: dashboard
+      port: 8265
+  resources:
+    requests:
+      cpu: 300m 
+    limits:
+      cpu: 2
+  runtime_env_yaml: '"{ \"pip\": [ \"pytorch-lightning==2.2.1\", \"transformers==4.38.2\", \"datasets==2.18.0\", \"scikit-learn==1.4.0\" ]}"'
+image:
+image_pull_policy: Always
+resources:
+  requests:
+    "nvidia.com/gpu": 1 
+  limits:
+    "nvidia.com/gpu": 1 
+  nnodes: 1 
+  node_type: 'g5.xlarge' 
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+pvc:
+  - name: pv-efs
+    mount_path: /efs
+git:
+  repo_url: https://github.com/ray-project/kuberay.git 
+  branch: master 
+  commit: bab00be57c4f3b8b4f80134f5cb415354f459103 
+pre_script:
+  - export LOGS_DIR=$HOME/logs/$HOSTNAME
+  - mkdir -p $LOGS_DIR
+  - export OUTPUT_LOG=$LOGS_DIR/fine-tune.log
+train:
+  env:
+    - name: HOME
+      value: "/efs/home/{{ .Release.Name }}"
+  command:
+    - python
+  args:
+    - ray-operator/config/samples/pytorch-text-classifier/fine-tune-pytorch-text-classifier.py
+    - '2>&1 | tee $OUTPUT_LOG' 

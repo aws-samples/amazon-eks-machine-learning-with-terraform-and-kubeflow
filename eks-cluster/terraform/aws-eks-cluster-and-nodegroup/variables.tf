@@ -285,7 +285,7 @@ variable "cluster_issuer" {
 variable "kubeflow_platform_enabled" {
   description = "Install Kubeflow Components, if enabled"
   type        = bool
-  default = false
+  default = true
 }
 
 variable "system_group_desired" {

@@ -1,0 +1,84 @@
+image:
+resources:
+  requests:
+    "nvidia.com/gpu": 4
+  limits:
+    "nvidia.com/gpu": 4
+  nnodes: 2 
+  nproc_per_node: 4 
+  node_type: 'g5.12xlarge' 
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+git:
+  repo_url: 'https://github.com/microsoft/Megatron-DeepSpeed.git'
+  branch: main
+  commit: a9856ce0e75dbe69c96d4e241e8a191b344118d7
+pre_script: 
+  - pip3 install --upgrade pip
+  - pip3 install transformers==4.38.1 datasets==2.17.1
+  - export DISTRIBUTED_ARGS="--nproc_per_node $PET_NPROC_PER_NODE --nnodes $PET_NNODES --node_rank $PET_NODE_RANK --master_addr $PET_MASTER_ADDR --master_port $PET_MASTER_PORT"
+  - echo "DISTRIBUTED_ARGS=$DISTRIBUTED_ARGS"
+  - export LOGS_DIR=$HOME/logs/$PET_NODE_RANK
+  - mkdir -p $LOGS_DIR
+  - export OUTPUT_LOG=$LOGS_DIR/pretrain-ddp-zero1.log
+  - export SAVE_CHECKPOINT_PATH=$CKPT_ROOT/$PET_NODE_RANK
+  - mkdir -p $SAVE_CHECKPOINT_PATH
+  - export DATA_PATH="$DATA_ROOT/gpt2_text_document"
+  - export INDEX_CACHE_PATH="$DATA_ROOT/index-cache-ddp-zero1"
+  - bash dataset/download_vocab.sh
+  - VOCAB_FILE=gpt2-vocab.json 
+  - MERGE_FILE=gpt2-merges.txt
+  - "echo '{ 
+             \"fp16\": { \"enabled\": true }, 
+             \"zero_optimization\": { \"stage\": 1 },
+             \"train_micro_batch_size_per_gpu\": 4,
+             \"gradient_accumulation_steps\": 1
+           }'  > $HOME/ds_config.json"
+  - export GPT_ARGS="--num-layers 24 
+    --hidden-size 1024 
+    --num-attention-heads 16 
+    --seq-length 1024 
+    --max-position-embeddings 1024 
+    --micro-batch-size 4 
+    --lr 0.00015 
+    --train-iters 500000 
+    --lr-decay-iters 320000 
+    --lr-decay-style cosine 
+    --min-lr 1.0e-5 
+    --weight-decay 1e-2 
+    --lr-warmup-fraction .01 
+    --clip-grad 1.0 
+    --fp16"
+  - export DATA_ARGS="--data-path $DATA_PATH --data-cache-path $INDEX_CACHE_PATH --vocab-file $VOCAB_FILE --merge-file $MERGE_FILE --data-impl mmap --split 949,50,1"
+  - export OUTPUT_ARGS="--log-interval 100 --save-interval 10000 --eval-interval 1000 --eval-iters 10"
+train:
+  env:
+    - name: HOME
+      value: "/efs/home/{{ .Release.Name }}"
+    - name: DATA_ROOT
+      value: "/fsx/home/{{ .Release.Name }}/data/wikicorpus"
+    - name: CKPT_ROOT
+      value: "/fsx/home/{{ .Release.Name }}/checkpoints"
+    - name: CUDA_DEVICE_MAX_CONNECTIONS
+      value: "1"
+    - name: NCCL_IGNORE_DISABLED_P2P
+      value: "1"
+    - name: NCCL_SOCKET_IFNAME 
+      value: "^lo,docker0"
+    - name: NCCL_DEBUG 
+      value: "WARN"
+  command:
+    -  "torchrun" 
+  args: 
+  args: 
+    - $DISTRIBUTED_ARGS
+    - pretrain_gpt.py
+    - '--deepspeed --deepspeed_config $HOME/ds_config.json'
+    - $GPT_ARGS
+    - $DATA_ARGS
+    - $OUTPUT_ARGS
+    - '--distributed-backend nccl'
+    - '--save $SAVE_CHECKPOINT_PATH'
+    - '2>&1 | tee $OUTPUT_LOG' 

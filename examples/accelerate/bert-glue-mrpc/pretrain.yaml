@@ -1,0 +1,51 @@
+image: 'nvcr.io/nvidia/pytorch:24.01-py3' 
+backoff_limit: 2000
+resources:
+  requests:
+    "nvidia.com/gpu": 4 
+  limits:
+    "nvidia.com/gpu": 4 
+  nnodes: 1 
+  nproc_per_node: 4 
+  node_type: 'g5.12xlarge' 
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+elastic_policy:
+  rdzv_backend: c10d
+  rdzv_port: 44000
+  min_replicas: 1
+  max_replicas: 1
+git:
+  repo_url: 'https://github.com/huggingface/accelerate.git'
+  branch: main
+  commit: ee004674b9560976688e1a701b6d3650a09b2100
+pre_script: 
+  - pip3 install --upgrade pip
+  - pip3 install transformers==4.38.1 datasets==2.17.1 evaluate==0.4.1
+  - pip3 install -e ./
+  - export LOGS_DIR=$HOME/logs/$HOSTNAME
+  - mkdir -p $LOGS_DIR
+  - export OUTPUT_LOG=$LOGS_DIR/pretrain.log
+  - export CKPT_DIR=$HOME/checkpoints/$HOSTNAME
+  - mkdir -p $CKPT_DIR
+  - export PROJECT_DIR=$HOME/project/$HOSTNAME
+  - mkdir -p $PROJECT_DIR
+  - export DISTRIBUTED_ARGS="--nnodes $PET_NNODES --nproc_per_node $PET_NPROC_PER_NODE --rdzv_id $PET_RDZV_ID --rdzv_backend c10d --rdzv_endpoint $PET_RDZV_ENDPOINT"
+  - echo "DISTRIBUTED_ARGS=S$DISTRIBUTED_ARGS"
+train:
+  env:
+    - name: HOME
+      value: "/efs/home/{{ .Release.Name }}"
+  command:
+    - torchrun 
+  args:
+    - $DISTRIBUTED_ARGS
+    - 'examples/complete_nlp_example.py' 
+    - '--mixed_precision fp16' 
+    - '--checkpointing_steps epoch'
+    - '--with_tracking'
+    - '--output_dir $CKPT_DIR'
+    - '--project_dir $PROJECT_DIR'
+    - '2>&1 | tee $OUTPUT_LOG' 
