@@ -61,17 +61,15 @@ deploymentSpec:
           \ frame):\n            self.uninstall_release()\n            sys.exit(f\"\
           Signal: {signum}\")\n\n        @staticmethod\n        def run_cmd(cmd:str)\
           \ -> int:\n\n            print(f\"run command: {cmd}\")\n            exit_code\
-          \ = 0\n            try:\n                completed_process = subprocess.run(cmd,capture_output=True,check=True)\n\
-          \                if completed_process.stdout:\n                    print(completed_process.stdout)\n\
-          \                if completed_process.stderr:\n                    print(completed_process.stderr)\n\
-          \                exit_code = completed_process.returncode\n            except\
-          \ subprocess.CalledProcessError as e:\n                exit_code = e.returncode\n\
-          \                print(str(e))\n\n            return exit_code\n\n     \
-          \   def install_chart(self) -> int:\n\n            print(f\"Install chart:\
-          \ {self.chart_config}...\")\n\n            release_name = self.chart_config['release_name']\n\
-          \            namespace = self.chart_config.get('namespace', 'default')\n\
-          \            repo_url = self.chart_config['repo_url']\n\n            path\
-          \ = self.chart_config.get('path', None)\n            if path is not None:\n\
+          \ = 0\n            output = \"\"\n            try:\n                output\
+          \ = subprocess.check_output(cmd)\n            except subprocess.CalledProcessError\
+          \ as e:\n                exit_code = e.returncode\n                output\
+          \ = str(e)\n\n            return exit_code, output\n\n        def install_chart(self)\
+          \ -> int:\n\n            print(f\"Install chart: {self.chart_config}...\"\
+          )\n\n            release_name = self.chart_config['release_name']\n    \
+          \        namespace = self.chart_config.get('namespace', 'default')\n   \
+          \         repo_url = self.chart_config['repo_url']\n\n            path =\
+          \ self.chart_config.get('path', None)\n            if path is not None:\n\
           \                branch = self.chart_config.get('branch', 'master')\n  \
           \              local_chart_path = repo.git_clone(repo_url=repo_url, branch=branch,\
           \ path=path)\n            else:\n                chart = self.chart_config['chart']\n\
@@ -89,17 +87,18 @@ deploymentSpec:
           values\", suffix=\".yaml\", delete=False) as values_files:\n           \
           \         yaml.dump(values, values_files, default_flow_style=False)\n  \
           \                  values_files.close()\n\n                    cmd += [\
-          \ \"--values\", values_files.name]\n\n            exit_code = self.run_cmd(cmd=cmd)\n\
-          \            if exit_code == 0:\n                print(f\"Release {release_name}\
-          \ successful\")\n            else:\n                print(f\"Release {release_name}\
-          \ failed\")\n\n            return exit_code\n\n        def uninstall_release(self)\
-          \ -> int:\n            release_name = self.chart_config['release_name']\n\
-          \            namespace = self.chart_config.get('namespace', 'default')\n\
-          \n            print(f\"Uninstall release: {release_name} in {namespace}\"\
-          )\n\n            cmd = [\n                    \"helm\",\n              \
-          \      \"uninstall\",\n                    release_name,\n             \
-          \       \"--namespace\",\n                    namespace\n              \
-          \  ]\n\n            exit_code = self.run_cmd(cmd=cmd)\n            if exit_code\
+          \ \"--values\", values_files.name]\n\n            exit_code, output = self.run_cmd(cmd=cmd)\n\
+          \            print(output)\n\n            if exit_code == 0:\n         \
+          \       print(f\"Release {release_name} successful\")\n            else:\n\
+          \                print(f\"Release {release_name} failed\")\n\n         \
+          \   return exit_code\n\n        def uninstall_release(self) -> int:\n  \
+          \          release_name = self.chart_config['release_name']\n          \
+          \  namespace = self.chart_config.get('namespace', 'default')\n\n       \
+          \     print(f\"Uninstall release: {release_name} in {namespace}\")\n\n \
+          \           cmd = [\n                    \"helm\",\n                   \
+          \ \"uninstall\",\n                    release_name,\n                  \
+          \  \"--namespace\",\n                    namespace\n                ]\n\n\
+          \            exit_code = self.run_cmd(cmd=cmd)\n            if exit_code\
           \ == 0:\n                print(f\"Uninstall release: {release_name} successful\"\
           )\n            else:\n                print(f\"Uninstall release: {release_name}\
           \ failed\")\n\n            return exit_code\n\n        def wait_for_pods(self):\n\

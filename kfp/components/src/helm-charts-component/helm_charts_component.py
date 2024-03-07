@@ -48,18 +48,14 @@ def helm_charts_component(chart_configs: List[Dict]) -> str:
 
             print(f"run command: {cmd}")
             exit_code = 0
+            output = ""
             try:
-                completed_process = subprocess.run(cmd,capture_output=True,check=True)
-                if completed_process.stdout:
-                    print(completed_process.stdout)
-                if completed_process.stderr:
-                    print(completed_process.stderr)
-                exit_code = completed_process.returncode
+                output = subprocess.check_output(cmd)
             except subprocess.CalledProcessError as e:
                 exit_code = e.returncode
-                print(str(e))
+                output = str(e)
             
-            return exit_code
+            return exit_code, output
 
         def install_chart(self) -> int:
 
@@ -102,7 +98,9 @@ def helm_charts_component(chart_configs: List[Dict]) -> str:
 
                     cmd += [ "--values", values_files.name]
 
-            exit_code = self.run_cmd(cmd=cmd)
+            exit_code, output = self.run_cmd(cmd=cmd)
+            print(output)
+
             if exit_code == 0:
                 print(f"Release {release_name} successful")
             else:
