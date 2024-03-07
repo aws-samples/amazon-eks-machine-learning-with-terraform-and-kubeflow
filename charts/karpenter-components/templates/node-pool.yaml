@@ -11,7 +11,7 @@ spec:
   template:
     spec:
       nodeClassRef:
-        name: default
+        name: neuron
       requirements:
       - key: kubernetes.io/arch
         operator: In

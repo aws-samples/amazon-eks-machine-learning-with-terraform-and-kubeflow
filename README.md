@@ -96,6 +96,10 @@ Not all the AWS Availability Zones in an AWS Region have all the EC2 instance ty
 
     terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET/ml-platform"
 
+If need to use [AWS Trainium instances](https://aws.amazon.com/machine-learning/trainium/), you must specify an **AWS Availability Zone** for running Trainium instances using `neuron_az` variable, as shown below:
+
+    terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2d","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET/ml-platform" -var="neuron_az=us-west-2d"
+
 #### Retrieve static user password
 
 This step is only needed if you plan to use the Kubeflow Central Dashboard, which is not required for running any of the examples and tutorials in this project. The static user's password is marked `sensitive` in the Terraform output. To show your static password, execute:

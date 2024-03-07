@@ -29,10 +29,15 @@ variable "region" {
 }
 
 variable "azs" {
- description = "list of aws availabilty zones in aws region"
+ description = "list of aws availability zones in aws region"
  type = list
 }
 
+variable "neuron_az" {
+ description = "single aws availability zone in aws region for neuron"
+ type = string
+ default = "none"
+}
 
 variable "cidr_vpc" {
  description = "RFC 1918 CIDR range for EKS cluster VPC"

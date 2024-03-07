@@ -72,6 +72,7 @@ resource "aws_subnet" "private" {
     "kubernetes.io/cluster/${var.cluster_name}" = "shared",
     "kubernetes.io/role/internal-elb": "1",
     "karpenter.sh/discovery" = "${var.cluster_name}"
+    "karpenter.sh/discovery/neuron" = var.azs[count.index] == var.neuron_az ?  "${var.cluster_name}" : "nil"
   }
 
 }
@@ -313,6 +314,16 @@ resource "aws_eks_cluster" "eks_cluster" {
   }
 
 }
+
+resource "aws_security_group_rule" "eks_cluster" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 65535
+  protocol          = "all"
+  source_security_group_id = aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id
+  security_group_id = aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id
+}
+
 
 module "ebs_csi_driver_irsa" {
   source = "aws-ia/eks-blueprints-addon/aws"
@@ -880,7 +891,7 @@ resource "helm_release" "karpenter_components" {
 
   chart = "${var.local_helm_repo}/karpenter-components"
   name = "karpenter-components"
-  version = "1.0.0"
+  version = "1.0.1"
   namespace = var.karpenter_namespace
   
   set {
