@@ -31,11 +31,11 @@ def helm_charts_component(chart_configs: List[Dict]) -> str:
             try:
                 exit_code = self.install_chart()
                 if exit_code == 0:
-                    self.wait_for_pods()
+                    exit_code = self.wait_for_pods()
             except Exception as e:
                 print(str(e))
             finally:
-                exit_code = self.uninstall_release()
+                exit_code = self.uninstall_release() and exit_code
             
             return exit_code
         
@@ -122,7 +122,9 @@ def helm_charts_component(chart_configs: List[Dict]) -> str:
                     namespace
                 ]
             
-            exit_code = self.run_cmd(cmd=cmd)
+            exit_code, output = self.run_cmd(cmd=cmd)
+            print(output)
+
             if exit_code == 0:
                 print(f"Uninstall release: {release_name} successful")
             else:
@@ -157,8 +159,8 @@ def helm_charts_component(chart_configs: List[Dict]) -> str:
 
                     managed_by = annotations.get("app.kubernetes.io/managed-by", None)
                     if managed_by == 'Helm':
-                        release_name = annotations.get("app.kubernetes.io/instance", None)
-                        if release_name == release_name:
+                        pod_release_name = annotations.get("app.kubernetes.io/instance", None)
+                        if release_name == pod_release_name:
                             wait_pods.append(pod.metadata.name)
             
             if not wait_pods:
@@ -167,12 +169,12 @@ def helm_charts_component(chart_configs: List[Dict]) -> str:
                 print(f"Waiting for pods to complete: {wait_pods}")
 
             start = time.time()
-            pod_check_secs = self.chart_config.get('pod_check_secs', 300)
+            pod_check_secs = int(self.chart_config.get('pod_check_secs', 300))
         
             for name in wait_pods:
-                phase = "Running"
+                phase = "Pending"
                 while (phase == "Running" and (time.time() - start) < complete_timeout) or \
-                    (phase != "Completed" and (time.time() - start) < error_timeout):
+                    (phase == "Pending" and (time.time() - start) < error_timeout):
 
                     try:
                         print(f"read pod status: {name}")
@@ -182,17 +184,17 @@ def helm_charts_component(chart_configs: List[Dict]) -> str:
                         print(f"Pod {name} phase: {phase}")
                     except ApiException as e:
                         if e.reason == 'Not Found':
-                            print(f"Pod {name} Not Found")
-                            phase = "Deleted"
+                            phase = "Succeeded"
+                    
+                    if phase == "Failed" or phase == "Unknown":
+                        return 1
                     
                     if phase == "Running":
-                        print(f"Check pod in: {pod_check_secs} secs")
                         time.sleep(pod_check_secs)
-                    elif phase != "Deleted":
-                        print(f"Check pod in: 60 secs")
+                    elif phase == "Pending":
                         time.sleep(60)
 
-            print(f"Waiting for pod complete: {wait_pods}")
+            return 0
 
     for chart_config in chart_configs:
         helm_chart_handler = HelmChartHandler(chart_config)

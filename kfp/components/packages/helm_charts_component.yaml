@@ -54,11 +54,11 @@ deploymentSpec:
           \  signal.signal(signal.SIGTERM, self.__exit_gracefully)\n            signal.signal(signal.SIGABRT,\
           \ self.__exit_gracefully)\n\n        def __call__(self) -> int:\n      \
           \      exit_code = 0\n            try:\n                exit_code = self.install_chart()\n\
-          \                if exit_code == 0:\n                    self.wait_for_pods()\n\
+          \                if exit_code == 0:\n                    exit_code = self.wait_for_pods()\n\
           \            except Exception as e:\n                print(str(e))\n   \
-          \         finally:\n                exit_code = self.uninstall_release()\n\
-          \n            return exit_code\n\n        def __exit_gracefully(self, signum,\
-          \ frame):\n            self.uninstall_release()\n            sys.exit(f\"\
+          \         finally:\n                exit_code = self.uninstall_release()\
+          \ and exit_code\n\n            return exit_code\n\n        def __exit_gracefully(self,\
+          \ signum, frame):\n            self.uninstall_release()\n            sys.exit(f\"\
           Signal: {signum}\")\n\n        @staticmethod\n        def run_cmd(cmd:str)\
           \ -> int:\n\n            print(f\"run command: {cmd}\")\n            exit_code\
           \ = 0\n            output = \"\"\n            try:\n                output\
@@ -98,14 +98,14 @@ deploymentSpec:
           \           cmd = [\n                    \"helm\",\n                   \
           \ \"uninstall\",\n                    release_name,\n                  \
           \  \"--namespace\",\n                    namespace\n                ]\n\n\
-          \            exit_code = self.run_cmd(cmd=cmd)\n            if exit_code\
-          \ == 0:\n                print(f\"Uninstall release: {release_name} successful\"\
-          )\n            else:\n                print(f\"Uninstall release: {release_name}\
-          \ failed\")\n\n            return exit_code\n\n        def wait_for_pods(self):\n\
-          \n            release_name = self.chart_config['release_name']\n       \
-          \     namespace = self.chart_config.get('namespace', 'default')\n\n    \
-          \        print(f\"Wait for pods in release {release_name} in namespace {namespace}\"\
-          )\n\n            complete_timeout = self.chart_config.get('pod_complete_timeout',\
+          \            exit_code, output = self.run_cmd(cmd=cmd)\n            print(output)\n\
+          \n            if exit_code == 0:\n                print(f\"Uninstall release:\
+          \ {release_name} successful\")\n            else:\n                print(f\"\
+          Uninstall release: {release_name} failed\")\n\n            return exit_code\n\
+          \n        def wait_for_pods(self):\n\n            release_name = self.chart_config['release_name']\n\
+          \            namespace = self.chart_config.get('namespace', 'default')\n\
+          \n            print(f\"Wait for pods in release {release_name} in namespace\
+          \ {namespace}\")\n\n            complete_timeout = self.chart_config.get('pod_complete_timeout',\
           \ 7*24*3600)\n            error_timeout = self.chart_config.get('pod_error_timeout',\
           \ 1800)\n\n            config.load_incluster_config() # config.load_kube_config()\
           \ \n            v1 = client.CoreV1Api()\n\n            max_retries = 5\n\
@@ -116,33 +116,32 @@ deploymentSpec:
           \n                for pod in pods.items:\n                    annotations\
           \ = pod.metadata.annotations\n\n                    managed_by = annotations.get(\"\
           app.kubernetes.io/managed-by\", None)\n                    if managed_by\
-          \ == 'Helm':\n                        release_name = annotations.get(\"\
+          \ == 'Helm':\n                        pod_release_name = annotations.get(\"\
           app.kubernetes.io/instance\", None)\n                        if release_name\
-          \ == release_name:\n                            wait_pods.append(pod.metadata.name)\n\
+          \ == pod_release_name:\n                            wait_pods.append(pod.metadata.name)\n\
           \n            if not wait_pods:\n                print(\"No pods to wait\
           \ for...\")\n            else:\n                print(f\"Waiting for pods\
           \ to complete: {wait_pods}\")\n\n            start = time.time()\n     \
-          \       pod_check_secs = self.chart_config.get('pod_check_secs', 300)\n\n\
-          \            for name in wait_pods:\n                phase = \"Running\"\
+          \       pod_check_secs = int(self.chart_config.get('pod_check_secs', 300))\n\
+          \n            for name in wait_pods:\n                phase = \"Pending\"\
           \n                while (phase == \"Running\" and (time.time() - start)\
-          \ < complete_timeout) or \\\n                    (phase != \"Completed\"\
-          \ and (time.time() - start) < error_timeout):\n\n                    try:\n\
+          \ < complete_timeout) or \\\n                    (phase == \"Pending\" and\
+          \ (time.time() - start) < error_timeout):\n\n                    try:\n\
           \                        print(f\"read pod status: {name}\")\n         \
           \               pod = v1.read_namespaced_pod_status(name=name, namespace=namespace,\
           \ \n                                                            async_req=False,\
           \ _request_timeout=120)\n                        phase = pod.status.phase\n\
           \                        print(f\"Pod {name} phase: {phase}\")\n       \
           \             except ApiException as e:\n                        if e.reason\
-          \ == 'Not Found':\n                            print(f\"Pod {name} Not Found\"\
-          )\n                            phase = \"Deleted\"\n\n                 \
-          \   if phase == \"Running\":\n                        print(f\"Check pod\
-          \ in: {pod_check_secs} secs\")\n                        time.sleep(pod_check_secs)\n\
-          \                    elif phase != \"Deleted\":\n                      \
-          \  print(f\"Check pod in: 60 secs\")\n                        time.sleep(60)\n\
-          \n            print(f\"Waiting for pod complete: {wait_pods}\")\n\n    for\
-          \ chart_config in chart_configs:\n        helm_chart_handler = HelmChartHandler(chart_config)\n\
-          \        exit_code = helm_chart_handler()\n        if exit_code > 0:\n \
-          \           return \"Failure\"\n\n    return \"Success\"\n\n"
+          \ == 'Not Found':\n                            phase = \"Succeeded\"\n\n\
+          \                    if phase == \"Failed\" or phase == \"Unknown\":\n \
+          \                       return 1\n\n                    if phase == \"Running\"\
+          :\n                        time.sleep(pod_check_secs)\n                \
+          \    elif phase == \"Pending\":\n                        time.sleep(60)\n\
+          \n            return 0\n\n    for chart_config in chart_configs:\n     \
+          \   helm_chart_handler = HelmChartHandler(chart_config)\n        exit_code\
+          \ = helm_chart_handler()\n        if exit_code > 0:\n            return\
+          \ \"Failure\"\n\n    return \"Success\"\n\n"
         image: public.ecr.aws/w0d9j2p3/eks/universal-client:1.0.0
 pipelineInfo:
   name: helm-charts-component
