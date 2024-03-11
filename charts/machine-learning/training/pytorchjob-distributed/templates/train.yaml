@@ -8,9 +8,9 @@ data:
     #!/bin/bash
   
     {{- if .Values.git.repo_url }}
-    mkdir -p $HOME/tmp/{{ .Release.Name }}
-    GIT_CLONE_DIR=$HOME/tmp/{{ .Release.Name }}/$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 16 | head -n 1)
-
+    mkdir -p $HOME/tmp
+    GIT_CLONE_DIR=$HOME/tmp/$HOSTNAME
+    [[ -d $GIT_CLONE_DIR ]] && rm -rf $GIT_CLONE_DIR
     git clone {{ .Values.git.repo_url }} $GIT_CLONE_DIR
     cd $GIT_CLONE_DIR
 
