@@ -315,7 +315,7 @@ resource "aws_eks_cluster" "eks_cluster" {
 
 }
 
-resource "aws_security_group_rule" "eks_cluster" {
+resource "aws_security_group_rule" "eks_cluster_egress" {
   type              = "egress"
   from_port         = 0
   to_port           = 65535
@@ -324,6 +324,14 @@ resource "aws_security_group_rule" "eks_cluster" {
   security_group_id = aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id
 }
 
+resource "aws_security_group_rule" "eks_cluster_ingress" {
+  type              = "ingress"
+  from_port         = 0
+  to_port           = 65535
+  protocol          = "all"
+  cidr_blocks = [aws_vpc.vpc.cidr_block] 
+  security_group_id = aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id
+}
 
 module "ebs_csi_driver_irsa" {
   source = "aws-ia/eks-blueprints-addon/aws"
