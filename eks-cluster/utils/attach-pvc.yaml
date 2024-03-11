@@ -13,7 +13,12 @@ spec:
     volumeMounts:
     - name:  efs 
       mountPath: /efs
+    - name:  fsx 
+      mountPath: /fsx
   volumes:
   - name:  efs
     persistentVolumeClaim:
       claimName: pv-efs # k8s persistent-volume-claim name
+  - name:  fsx
+    persistentVolumeClaim:
+      claimName: pv-fsx # k8s persistent-volume-claim name
