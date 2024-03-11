@@ -36,13 +36,16 @@ To uninstall the Helm chart for pre-training job, execute:
 
     helm uninstall ray-bert  -n kubeflow-user-example-com
 
-## Fine-tuning job output
+## Output
 
-Fine-tuning job output is available on the EFS file-system under `/efs/home/ray-bert`. To access the EFS file-system, execute following commands:
+To access the output stored on EFS and FSx for Lustre file-systems, execute following commands:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     kubectl apply -f eks-cluster/utils/attach-pvc.yaml  -n kubeflow
     kubectl exec -it -n kubeflow attach-pvc -- /bin/bash
-    cd efs
 
-This will put you in a pod attached to the EFS file-system. Type `exit` to exit the pod attached to the EFS file-system.
+This will put you in a pod attached to the  EFS and FSx for Lustre file-systems, mounted at `/efs`, and `/fsx`, respectively. Type `exit` to exit the pod.
+
+### Logs
+
+Pre-training `logs` are available in `/efs/home/ray-bert/logs` folder. 

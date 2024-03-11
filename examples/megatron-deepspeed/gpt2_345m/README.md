@@ -25,8 +25,6 @@ Uninstall the Helm chart at completion:
 
     helm uninstall mds-gpt2-345m -n kubeflow-user-example-com
 
-Processed data is available on the FSx for Lustre file-system at `/fsx/home/mds-gpt2-345m/data/wikicorpus`.
-
 ## Launch DDP, ZeRO-1 pre-training 
 
 We define the runtime for pre-training in [pretrain-ddp-zero1.yaml](./pretrain-ddp-zero1.yaml) values file. 
@@ -42,7 +40,7 @@ To monitor the logs, execute:
 
     kubectl logs -f pytorchjob-mds-gpt2-345m-master-0  -n kubeflow-user-example-com
 
-To uninstall the Helm chart:
+Uninstall the Helm chart at completion::
 
     helm uninstall mds-gpt2-345m -n kubeflow-user-example-com
 
@@ -61,30 +59,32 @@ To monitor the logs, execute:
 
     kubectl logs -f pytorchjob-mds-gpt2-345m-master-0  -n kubeflow-user-example-com
 
-To uninstall the Helm chart:
+Uninstall the Helm chart at completion::
 
     helm uninstall mds-gpt2-345m -n kubeflow-user-example-com
 
 ## Output
 
-### Logs
-
-Pre-training `logs` are available on the EFS file-system `/efs/home/mds-gpt2-345m/logs` folder. To access the EFS file-system, execute following commands:
+To access the output stored on EFS and FSx for Lustre file-systems, execute following commands:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     kubectl apply -f eks-cluster/utils/attach-pvc.yaml  -n kubeflow
     kubectl exec -it -n kubeflow attach-pvc -- /bin/bash
-    cd /efs/home/mds-gpt2-345m/logs
 
-This will put you in a pod attached to the EFS file-system. Type `exit` to exit the pod attached to the EFS file-system.
+This will put you in a pod attached to the  EFS and FSx for Lustre file-systems, mounted at `/efs`, and `/fsx`, respectively. Type `exit` to exit the pod.
+
+### Data
+
+Pre-processed data is available in `/fsx/home/mds-gpt2-345m/data/wikicorpus` folder.
+
+### Logs
+
+Pre-training `logs` are available in `/efs/home/mds-gpt2-345m/logs` folder. 
 
 ### Checkpoints
 
-Pre-training `checkpoints`, if any, are available on the FSx for Lustre file-system `/fsx/home/mds-gpt2-345m/checkpoints` folder. To access the FSx for Lustre file-system, execute following commands:
+Pre-training `checkpoints`, if any, are available in `/fsx/home/mds-gpt2-345m/checkpoints` folder. 
 
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    kubectl apply -f eks-cluster/utils/attach-pvc-fsx.yaml  -n kubeflow
-    kubectl exec -it -n kubeflow attach-pvc-fsx -- /bin/bash
-    cd /fsx/home/mds-gpt2-345m/checkpoints
+### S3 Backup
 
-This will put you in a pod attached to the FSx for lustre file-system. Type `exit` to exit the pod attached to the FSx for Lustre file-system.
+Any content stored under `/fsx` is automatically backed up to your configured S3 bucket.

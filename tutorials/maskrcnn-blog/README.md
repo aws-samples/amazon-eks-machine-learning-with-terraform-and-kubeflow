@@ -60,21 +60,17 @@ This will show the live training log from the launcher pod.
 
 Model checkpoints and all training logs are also available on the `shared_fs` file-system  set in `values.yaml`, i.e. `fsx` (default), or `efs`.  For `fsx` (default), access your training logs as follows:
 
-    kubectl apply -f eks-cluster/utils/attach-pvc-fsx.yaml -n kubeflow
-    kubectl exec -it -n kubeflow attach-pvc-fsx -- /bin/bash
+    kubectl apply -f eks-cluster/utils/attach-pvc.yaml -n kubeflow
+    kubectl exec -it -n kubeflow attach-pvc -- /bin/bash
     cd /fsx
     ls -ltr maskrcnn-*
 
-Type `exit` to exit from the `attach-pvc-fsx` container. 
+Or,
 
-For `efs`,  access your training logs as follows:
-
-    kubectl apply -f eks-cluster/utils/attach-pvc.yaml  -n kubeflow
-    kubectl exec -it -n kubeflow attach-pvc -- /bin/bash
     cd /efs
     ls -ltr maskrcnn-*
 
-Type `exit` to exit from the `attach-pvc` container. 
+Type `exit` to exit from the `attach-pvc` pod. 
 
 ### Uninstall Helm charts after training
 When training is complete, you may uninstall an installed chart by executing `helm uninstall chart-name`, for example `helm uninstall maskrcnn`. The logs and trained models will be preserved on the shared file system used for training. 

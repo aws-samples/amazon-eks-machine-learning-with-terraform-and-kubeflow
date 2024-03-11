@@ -117,26 +117,20 @@ Besides building and pushing images to Amazon ECR, this step automatically updat
 
 ### Create `home` folder on shared file-systems
 
-For EFS file-system, execute following steps:
+Attach to the shared file-systems by executing following steps:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     kubectl apply -f eks-cluster/utils/attach-pvc.yaml  -n kubeflow
     kubectl exec -it -n kubeflow attach-pvc -- /bin/bash
 
-Inside the `attach-pvc` pod, execute:
+Inside the `attach-pvc` pod, for EFS file-system, execute:
 
     cd /efs
     mkdir home
     chown 1000:100 home
     exit
 
-For FSx Lustre file-system, execute following steps:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    kubectl apply -f eks-cluster/utils/attach-pvc-fsx.yaml  -n kubeflow
-    kubectl exec -it -n kubeflow attach-pvc-fsx -- /bin/bash
-
-Inside the `attach-pvc-fsx` pod, execute:
+For Fsx for Lustre file-system, execute:
 
     cd /fsx
     mkdir home
