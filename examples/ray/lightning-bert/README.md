@@ -26,6 +26,12 @@ Once Ray job pod is running, you can see the logs using following command (where
 
     kubectl logs -f rayjob-ray-bert-*  -n kubeflow-user-example-com
 
+If you run:
+
+    kubectl get pods -n kubeflow-user-example-com
+
+and see  `rayjob-ray-*` pod with status `Not Ready`, this is normal after your job has completed.
+
 To uninstall the Helm chart for pre-training job, execute:
 
     helm uninstall ray-bert  -n kubeflow-user-example-com
