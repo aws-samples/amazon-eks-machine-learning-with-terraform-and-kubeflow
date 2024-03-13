@@ -39,6 +39,13 @@ variable "neuron_az" {
  default = "none"
 }
 
+variable "cuda_efa_az" {
+ description = "single aws availability zone in aws region for cuda with efa"
+ type = string
+ default = "none"
+}
+
+
 variable "cidr_vpc" {
  description = "RFC 1918 CIDR range for EKS cluster VPC"
  default = "192.168.0.0/16"
@@ -309,6 +316,12 @@ variable "system_group_min" {
     description = "System group minimum size"
     default = 1
     type = number
+}
+
+variable fsx_storage_capacity {
+  description = "FSx Lustre storage capacity in multiples of 1200"
+  default = 1200
+  type = number
 }
 
 # END variables

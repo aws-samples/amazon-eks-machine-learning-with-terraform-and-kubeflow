@@ -6,14 +6,11 @@ The solution offers a simple, uniform approach to distributed training in PyTorc
 
 This project started as a companion to the [Mask R-CNN distributed training blog](https://aws.amazon.com/blogs/opensource/distributed-tensorflow-training-using-kubeflow-on-amazon-eks/), and that part of the project is documented in [this README](./tutorials/maskrcnn-blog/README.md). 
 
-
 ## How does the solution work
 
-
-The solution uses [Terraform](https://www.terraform.io/) to deploy [Kubeflow](https://www.kubeflow.org/) machine learning platform on top of [Amazon EKS](https://aws.amazon.com/eks/). [Amazon EFS](https://aws.amazon.com/efs/) and [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) file-systems are used to store various machine learning artifacts. Typically, code, configuration files, and logging files are stored on the EFS file-system. Data and model checkpoints are stored on the FSx for Lustre file system, which is automatically backed up to the specified Amazon S3 bucket.
+The solution uses [Terraform](https://www.terraform.io/) to deploy [Kubeflow](https://www.kubeflow.org/) machine learning platform on top of [Amazon EKS](https://aws.amazon.com/eks/). [Amazon EFS](https://aws.amazon.com/efs/) and [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) file-systems are used to store various machine learning artifacts. Typically, code, configuration files, and logging files are stored on the EFS file-system. Data and model checkpoints are stored on the FSx for Lustre file system. FSx for Lustre file-system is configured to automatically import and export content from and to the configured S3 bucket. 
 
 The deployed Kubeflow platform version is 1.8.0, and includes [Kubeflow Notebooks](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/notebooks/), [Kubeflow Tensorboard](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/tensorboard/). [Kubeflow Pipelines](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/pipelines/). [Kubeflow Katib](https://www.kubeflow.org/docs/components/katib/overview/), and [Kubeflow Central Dashboard](https://www.kubeflow.org/docs/components/central-dash/).
-
 
 The accelerator machines used for running the training jobs are automatically managed by [Karpenter](https://karpenter.sh/), which means, all machines used in data-preprocessing, and  training, are provisioned on-demand.
 
@@ -35,7 +32,7 @@ The YAML file is a [Helm values](https://helm.sh/docs/chart_template_guide/value
 
 1. [Create and activate an AWS Account](https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/)
 2. Select your AWS Region. For the tutorial below, we assume the region to be ```us-west-2```
-3. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) for required EC2 instances. Ensure your EC2 service limits in your selected AWS Region are set to at least 2 each for [p3.16xlarge, p3dn.24xlarge](https://aws.amazon.com/ec2/instance-types/p3/), [g5.12xlarge](https://aws.amazon.com/ec2/instance-types/g5/), and [g5.xlarge](https://aws.amazon.com/ec2/instance-types/g5/). If you use other EC2 instance types, ensure your EC2 service limits are set accordingly.
+3. [Manage your service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) for required EC2 instances. Ensure your EC2 service limits in your selected AWS Region are set to at least 8 each for [p3.16xlarge, p3dn.24xlarge, p4d.24xlarge](https://aws.amazon.com/ec2/instance-types/p3/), [g5.xlarge, g5.12xlarge, g5.48xlarge](https://aws.amazon.com/ec2/instance-types/g5/), [`trn1.2xlarge`, and `trn1.32xlarge`](https://aws.amazon.com/machine-learning/trainium/) instance types. If you use other EC2 instance types, ensure your EC2 service limits are set accordingly.
 
 ## Getting started
 
@@ -96,9 +93,15 @@ Not all the AWS Availability Zones in an AWS Region have all the EC2 instance ty
 
     terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET/ml-platform"
 
-If need to use [AWS Trainium instances](https://aws.amazon.com/machine-learning/trainium/), you must specify an **AWS Availability Zone** for running Trainium instances using `neuron_az` variable, as shown below:
+If you need to use [AWS GPU accelerated instances](https://aws.amazon.com/ec2/instance-types/) with [AWS Elastic Fabric Adapter (EFA)](https://aws.amazon.com/hpc/efa/), you must specify an **AWS Availability Zone** for running these instances using `cuda_efa_az` variable, as shown in the example below:
+
+    terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2d","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET/ml-platform" -var="cuda_efa_az=us-west-2c"
+
+If you need to use [AWS Trainium instances](https://aws.amazon.com/machine-learning/trainium/), you must specify an **AWS Availability Zone** for running Trainium instances using `neuron_az` variable, as shown in the example below:
 
     terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2d","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET/ml-platform" -var="neuron_az=us-west-2d"
+
+**Note:** Ensure that the AWS Availability Zone you specify for `neuron_az` or `cuda_efa_az` variable above supports requested instance types, and this zone is included in the `azs` variable.
 
 #### Retrieve static user password
 
@@ -136,6 +139,9 @@ For Fsx for Lustre file-system, execute:
     mkdir home
     chown 1000:100 home
     exit
+#### FSx for Lustre File-system Eventual Consistency with S3
+
+FSx for Lustre file-system is configured to automatically import and export content from and to the configured S3 bucket. By default, `/fsx` is mapped to `ml-platform` top-level S3 folder in the S3 bucket. This automatic importing and exporting of content maintains *eventual consistency* between the FSx for Lustre file-system and the configured S3 bucket.
 
 ### Access Kubeflow Central Dashboard (Optional)
 

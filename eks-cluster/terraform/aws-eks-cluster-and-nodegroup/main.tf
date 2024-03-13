@@ -73,6 +73,7 @@ resource "aws_subnet" "private" {
     "kubernetes.io/role/internal-elb": "1",
     "karpenter.sh/discovery" = "${var.cluster_name}"
     "karpenter.sh/discovery/neuron" = var.azs[count.index] == var.neuron_az ?  "${var.cluster_name}" : "nil"
+    "karpenter.sh/discovery/cudaefa" = var.azs[count.index] == var.cuda_efa_az ?  "${var.cluster_name}" : "nil"
   }
 
 }
@@ -257,7 +258,7 @@ resource "aws_security_group" "fsx_lustre_sg" {
 resource "aws_fsx_lustre_file_system" "fs" {
   file_system_type_version = "2.15"
 
-  storage_capacity = 1200
+  storage_capacity = var.fsx_storage_capacity
   subnet_ids       = [aws_subnet.private[0].id]
   deployment_type  = "SCRATCH_2"
 
@@ -899,7 +900,7 @@ resource "helm_release" "karpenter_components" {
 
   chart = "${var.local_helm_repo}/karpenter-components"
   name = "karpenter-components"
-  version = "1.0.1"
+  version = "1.0.2"
   namespace = var.karpenter_namespace
   
   set {
