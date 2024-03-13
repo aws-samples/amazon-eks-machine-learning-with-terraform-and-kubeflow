@@ -33,6 +33,8 @@ tensorflow:
   gpu_allocator: "cuda_malloc_async" # advanced setting
 mpirun:
   env:
+    - name: HOME
+      value: "/efs/home/{{ .Release.Name }}"
     - name: HOROVOD_AUTOTUNE
       value: "{{ .Values.horovod.autotune }}"
     - name: HOROVOD_LOG_LEVEL
