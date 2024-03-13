@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: test-gpu-efa
+  labels:
+    app: test-gpu-efa
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: test-gpu-efa
+  template:
+    metadata:
+      labels:
+        app: test-gpu-efa
+    spec:
+      containers:
+      - name: test-gpu-efa
+        image: '763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-training:2.2.0-gpu-py310-cu121-ubuntu20.04-ec2'
+        command: ["/bin/bash"]
+        securityContext:
+          privileged: true
+        args: ["-c", "trap : TERM INT; sleep infinity & wait"]
+        volumeMounts:
+        - name:  fsx 
+          mountPath: /fsx
+        resources:
+          requests:
+            "nvidia.com/gpu": 8 
+            "vpc.amazonaws.com/efa": 1
+          limits:
+            "nvidia.com/gpu": 8
+            "vpc.amazonaws.com/efa": 1
+      volumes:
+      - name:  fsx
+        persistentVolumeClaim:
+          claimName: pv-fsx # k8s persistent-volume-claim name
+      nodeSelector:
+        node.kubernetes.io/instance-type: "p3dn.24xlarge" 
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
