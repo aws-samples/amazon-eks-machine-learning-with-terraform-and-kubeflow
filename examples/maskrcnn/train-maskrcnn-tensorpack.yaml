@@ -1,0 +1,35 @@
+image: 
+pre_script:
+  - DATE=$(date '+%Y-%m-%d-%H-%M-%S')
+  - LOG_DIR=$HOME/logs/maskrcnn-tensorpack-$DATE
+  - cd /mask-rcnn-tensorflow
+resources:
+  gpu_nodes: 2
+  gpus_per_node: 8
+  gpu_instance_type: "p3.16xlarge"
+  requests:
+    "nvidia.com/gpu": 8
+  limits:
+    "nvidia.com/gpu": 8 
+tensorflow:
+  sys_memory_mb: "2560"
+train:
+  command:
+    - python3
+  args:
+    - /tensorpack/examples/FasterRCNN/train.py
+    - "--logdir $LOG_DIR"
+    - --config
+    - MODE_MASK='True'
+    - MODE_FPN='True'
+    - DATA.BASEDIR=/fsx/data/coco2017
+    - DATA.TRAIN='["coco_train2017"]'
+    - DATA.VAL='("coco_val2017")'
+    - TRAIN.EVAL_PERIOD=1
+    - TRAIN.STEPS_PER_EPOCH=7500
+    - TRAIN.LR_SCHEDULE='[240000,320000,360000]'
+    - TRAIN.BASE_LR=0.01
+    - BACKBONE.WEIGHTS=/fsx/data/coco2017/pretrained-models/ImageNet-R50-AlignPadding.npz
+    - BACKBONE.NORM=FreezeBN
+    - TRAINER=horovod
+    - TRAIN.CHECKPOINT_PERIOD=2 

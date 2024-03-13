@@ -1,0 +1,37 @@
+image:
+pre_script:
+  - DATE=$(date '+%Y-%m-%d-%H-%M-%S')
+  - LOG_DIR=$HOME/logs/maskrcnn-tensorflow-$DATE
+  - cd /mask-rcnn-tensorflow
+resources:
+  gpu_nodes: 2
+  gpus_per_node: 8
+  gpu_instance_type: "p3dn.24xlarge"
+  requests:
+    "nvidia.com/gpu": 8
+  limits:
+    "nvidia.com/gpu": 8 
+tensorflow:
+  sys_memory_mb: "4096"
+train:
+  command:
+    - python3
+  args:
+    - /mask-rcnn-tensorflow/MaskRCNN/train.py 
+    - "--logdir $LOG_DIR"
+    - "--images_per_epoch 120000"
+    - --config  
+    - MODE_MASK='True'
+    - MODE_FPN='True'
+    - DATA.BASEDIR=/fsx/data/coco2017
+    - DATA.TRAIN='["train2017"]' 
+    - DATA.VAL='("val2017")'
+    - TRAIN.BATCH_SIZE_PER_GPU=4
+    - TRAIN.EVAL_PERIOD=1
+    - TRAIN.LR_EPOCH_SCHEDULE="[(16, 0.1), (20, 0.01), (24, None)]"
+    - TRAIN.BASE_LR=0.0015625
+    - BACKBONE.WEIGHTS=/fsx/data/coco2017/pretrained-models/ImageNet-R50-AlignPadding.npz
+    - BACKBONE.NORM=FreezeBN
+    - PREPROC.PREDEFINED_PADDING=True
+    - TRAINER=horovod
+    - TRAIN.GRADIENT_CLIP=0.36 
