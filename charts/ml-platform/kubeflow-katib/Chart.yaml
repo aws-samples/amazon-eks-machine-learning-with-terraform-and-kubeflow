@@ -3,4 +3,4 @@ appVersion: v0.15.0
 description: A Helm chart for Kubeflow Katib
 name: kubeflow-katib
 type: application
-version: 1.0.0
+version: 1.0.1
