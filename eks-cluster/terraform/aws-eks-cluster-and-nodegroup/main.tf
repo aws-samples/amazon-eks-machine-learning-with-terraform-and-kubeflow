@@ -1218,7 +1218,8 @@ module "profiles-controller-irsa" {
 resource "helm_release" "ebs-sc" {
   name       = "ebs-sc"
   chart      = "${var.local_helm_repo}/ebs-sc"
-  version    = "1.0.0"
+  version    = "1.0.1"
+  wait       = "false"
 
   depends_on = [ module.eks_blueprints_addons ]
 }
