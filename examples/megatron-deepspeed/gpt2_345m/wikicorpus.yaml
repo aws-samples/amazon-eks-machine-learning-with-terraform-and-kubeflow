@@ -4,23 +4,25 @@ resources:
     "nvidia.com/gpu": 1
   limits:
     "nvidia.com/gpu": 1
+ebs:
+  storage: 100Gi
+  mount_path: /tmp
 git:
   repo_url: 'https://github.com/microsoft/Megatron-DeepSpeed.git'
   branch: main
   commit: a9856ce0e75dbe69c96d4e241e8a191b344118d7
-pre_script: 
+pre_script:
   - pip install --upgrade pip
   - pip install transformers==4.38.1 datasets==2.17.1
   - pip install nltk==3.8.1
   - python <<EOF
   - import os
   - from datasets import load_dataset
-  - dataset = load_dataset("wikicorpus", "raw_en", split="train", trust_remote_code=True)        
-  - data_root = os.getenv("DATA_ROOT")
-  - os.makedirs(data_root, exist_ok=True)
-  - dataset.to_json(os.path.join(data_root, "train.json")) 
+  - dataset = load_dataset("wikicorpus", "raw_en", split="train", trust_remote_code=True)
+  - dataset.to_json(os.path.join("/tmp", "train.json"))
   - EOF
   - bash dataset/download_vocab.sh
+  - mkdir -p $DATA_ROOT
 post_script: []
 process:
   env:
@@ -28,15 +30,17 @@ process:
       value: "/efs/home/{{ .Release.Name }}"
     - name: DATA_ROOT
       value: "/fsx/home/{{ .Release.Name }}/data/wikicorpus"
-  command: 
-    - python3 
+    - name: XDG_CACHE_HOME
+      value: "/tmp/.cache"
+  command:
+    - python3
   args:
     - tools/preprocess_data.py
-    - --input $DATA_ROOT/train.json
+    - --input /tmp/train.json
     - --output-prefix $DATA_ROOT/gpt2
     - --vocab-file gpt2-vocab.json
-    - --dataset-impl mmap 
-    - --tokenizer-type GPT2BPETokenizer 
+    - --dataset-impl mmap
+    - --tokenizer-type GPT2BPETokenizer
     - --merge-file gpt2-merges.txt
     - --append-eod
     - --workers 4
