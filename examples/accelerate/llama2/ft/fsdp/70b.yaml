@@ -1,0 +1,121 @@
+image: '763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-training:2.2.0-gpu-py310-cu121-ubuntu20.04-ec2' 
+backoff_limit: 2000
+ebs:
+  storage: 200Gi
+  mount_path: /tmp
+resources:
+  requests:
+    "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 1
+  limits:
+    "nvidia.com/gpu": 8 
+    "vpc.amazonaws.com/efa": 1
+  nnodes: 4
+  nproc_per_node: 8
+  node_type: 'p4d.24xlarge' 
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+elastic_policy:
+  rdzv_backend: c10d
+  rdzv_port: 44000
+  min_replicas: 4
+  max_replicas: 4
+git:
+  repo_url: 'https://github.com/pacman100/DHS-LLM-Workshop.git'
+  branch: main
+  commit: 88a84227c533a27eec5867e265774aee8de060ec
+pre_script: 
+  - pip3 install --upgrade pip
+  - pip3 install transformers==4.38.1 datasets==2.17.1 evaluate==0.4.1 accelerate==0.27.2
+  - pip3 install trl==0.7.11 peft==0.9.0 bitsandbytes==0.43.0
+  - LOGS_DIR=$LOG_ROOT/$HOSTNAME
+  - mkdir -p $LOGS_DIR
+  - export OUTPUT_LOG=$LOGS_DIR/fsdp-sft.log
+  - export CKPT_DIR=$CKPT_ROOT/checkpoints
+  - mkdir -p $CKPT_DIR
+  - export DISTRIBUTED_ARGS="--nnodes $PET_NNODES --nproc_per_node $PET_NPROC_PER_NODE --rdzv_id $PET_RDZV_ID --rdzv_backend c10d --rdzv_endpoint $PET_RDZV_ENDPOINT"
+  - echo "DISTRIBUTED_ARGS=S$DISTRIBUTED_ARGS"
+  - cd chat_assistant/sft/training
+train:
+  env:
+    - name: HOME
+      value: /tmp
+    - name: LOG_ROOT
+      value: "/efs/home/{{ .Release.Name }}/logs"
+    - name: MODEL_PATH
+      value: "/fsx/pretrained-models/meta-llama/Llama-2-70b-chat-hf"
+    - name: CKPT_ROOT
+      value: "/fsx/home/{{ .Release.Name }}"
+    - name: ACCELERATE_USE_FSDP
+      value: "true"
+    - name: FSDP_AUTO_WRAP_POLICY
+      value: "TRANSFORMER_BASED_WRAP"
+    - name: FSDP_BACKWARD_PREFETCH
+      value: "BACKWARD_PRE"
+    - name: FSDP_CPU_RAM_EFFICIENT_LOADING
+      value: "true"
+    - name: FSDP_FORWARD_PREFETCH
+      value: "false"
+    - name: FSDP_OFFLOAD_PARAMS
+      value: "false"
+    - name: FSDP_SHARDING_STRATEGY
+      value: "1"
+    - name: FSDP_STATE_DICT_TYPE
+      value: "SHARDED_STATE_DICT"
+    - name: FSDP_SYNC_MODULE_STATES
+      value: "true"
+    - name: FSDP_USE_ORIG_PARAMS
+      value: "true"
+    - name: NCCL_SOCKET_IFNAME 
+      value: "^lo,docker0"
+    - name: NCCL_DEBUG
+      value: "INFO"
+    - name: FI_EFA_USE_DEVICE_RDMA
+      value: "1"
+    - name: FI_PROVIDER
+      value: "efa"
+    - name: FI_EFA_FORK_SAFE
+      value: "1"
+    - name: "RDMAV_FORK_SAFE"
+      value: "1"
+  command:
+    - torchrun 
+  args:
+    - $DISTRIBUTED_ARGS
+    - train.py 
+    - --seed 100 
+    - --model_name_or_path "$MODEL_PATH" 
+    - --dataset_name "smangrul/code-chat-assistant-v1" 
+    - --chat_template_format "none" 
+    - --add_special_tokens False 
+    - --append_concat_token False 
+    - --splits "train,test" 
+    - --max_seq_len 2048 
+    - --max_steps 500 
+    - --logging_steps 25 
+    - --log_level "info" 
+    - --eval_steps 100 
+    - --save_steps 250 
+    - --logging_strategy "steps" 
+    - --evaluation_strategy "steps" 
+    - --save_strategy "steps"
+    - --bf16 True 
+    - --packing False 
+    - --learning_rate 5e-5 
+    - --lr_scheduler_type "cosine" 
+    - --weight_decay 0.01 
+    - --warmup_ratio 0.03 
+    - --max_grad_norm 1.0 
+    - --per_device_train_batch_size 1 
+    - --per_device_eval_batch_size 1 
+    - --gradient_accumulation_steps 1 
+    - --gradient_checkpointing True 
+    - --use_reentrant False 
+    - --dataset_text_field "content" 
+    - --use_flash_attn True 
+    - --ddp_timeout 36000 
+    - --optim paged_adamw_32bit 
+    - --output_dir $CKPT_DIR
+    - '2>&1 | tee $OUTPUT_LOG' 
