@@ -1,6 +1,6 @@
 # Pre-train GPT2 345M on Wikicorpus dataset using Megatron-DeepSpeed library
 
-This example shows how to use [pytorch-distributed](../../../charts/machine-learning/training/pytorchjob-elastic/Chart.yaml) Helm chart to pre-train GPT2-345M model on Wikicorpus dataset with [Megatron-DeepSpeed](https://github.com/microsoft/Megatron-DeepSpeed) library, using distributed data-parallel, tensor-parallel, pipeline-parallel, and [DeepSpeed ZeRO-1](https://www.deepspeed.ai/tutorials/zero/). 
+This example shows how to use [pytorch-distributed](../../../charts/machine-learning/training/pytorchjob-distributed/Chart.yaml) Helm chart to pre-train GPT2-345M model on Wikicorpus dataset with [Megatron-DeepSpeed](https://github.com/microsoft/Megatron-DeepSpeed) library, using distributed data-parallel, tensor-parallel, pipeline-parallel, and [DeepSpeed ZeRO-1](https://www.deepspeed.ai/tutorials/zero/). 
 
 The example also shows use of [data-process](../../../charts/machine-learning/data-prep/data-process/Chart.yaml) Helm chart to pre-process the [Hugging Face Wikicorpus](https://huggingface.co/datasets/wikicorpus) dataset for use with Megatron-DeepSpeed GPT2-345M model.
 
