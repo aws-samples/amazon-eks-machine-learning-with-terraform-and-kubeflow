@@ -4,6 +4,7 @@ pvc:
     mount_path: /fsx
   - name: pv-efs
     mount_path: /efs
+ebs: {}
 git:
   repo_url:
   branch:

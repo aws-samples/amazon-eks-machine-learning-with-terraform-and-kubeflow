@@ -1,3 +1,16 @@
+{{- if .Values.ebs  }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ebs-{{ .Release.Name }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ebs-sc-wait
+  resources:
+    requests:
+      storage: {{ .Values.ebs.storage | default "100Gi" }}
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -74,6 +87,11 @@ spec:
       claimName: {{ $pv.name }}
   {{- $pv_index = add $pv_index 1 }}
   {{- end }}
+  {{- if .Values.ebs }}
+  - name: ebs
+    persistentVolumeClaim:
+      claimName: ebs-{{ .Release.Name }}
+  {{- end }}
   containers:
   - name: data-process
     env:
@@ -93,6 +111,10 @@ spec:
     - mountPath: {{ $pv.mount_path }}
       name: pv-{{ $pv_index }}
     {{- $pv_index = add $pv_index 1 }}
+    {{- end }}
+    {{- if .Values.ebs }}
+    - name: ebs
+      mountPath: {{ .Values.ebs.mount_path | default "/tmp" }}
     {{- end }}
     resources:
       requests:
