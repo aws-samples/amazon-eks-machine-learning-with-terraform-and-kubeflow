@@ -2,4 +2,4 @@ apiVersion: v1
 appVersion: "gp3"
 description: A Helm chart for EBS storage class
 name: ebs-sc
-version: 1.0.0
+version: 1.0.1
