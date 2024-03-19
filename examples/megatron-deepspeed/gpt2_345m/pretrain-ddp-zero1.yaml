@@ -7,6 +7,9 @@ resources:
   nnodes: 2 
   nproc_per_node: 4 
   node_type: 'g5.12xlarge' 
+ebs:
+  storage: 100Gi
+  mount_path: /tmp
 tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"
@@ -20,7 +23,7 @@ pre_script:
   - pip3 install transformers==4.38.1 datasets==2.17.1
   - export DISTRIBUTED_ARGS="--nproc_per_node $PET_NPROC_PER_NODE --nnodes $PET_NNODES --node_rank $PET_NODE_RANK --master_addr $PET_MASTER_ADDR --master_port $PET_MASTER_PORT"
   - echo "DISTRIBUTED_ARGS=$DISTRIBUTED_ARGS"
-  - export LOGS_DIR=$HOME/logs/$PET_NODE_RANK
+  - export LOGS_DIR=$LOG_ROOT/$PET_NODE_RANK
   - mkdir -p $LOGS_DIR
   - export OUTPUT_LOG=$LOGS_DIR/pretrain-ddp-zero1.log
   - export SAVE_CHECKPOINT_PATH=$CKPT_ROOT/$PET_NODE_RANK
@@ -56,7 +59,9 @@ pre_script:
 train:
   env:
     - name: HOME
-      value: "/efs/home/{{ .Release.Name }}"
+      value: /tmp
+    - name: LOG_ROOT
+      value: "/efs/home/{{ .Release.Name }}/logs"
     - name: DATA_ROOT
       value: "/fsx/home/{{ .Release.Name }}/data/wikicorpus"
     - name: CKPT_ROOT
