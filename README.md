@@ -27,6 +27,7 @@ The YAML file is a [Helm values](https://helm.sh/docs/chart_template_guide/value
 * There is an optional `post-script` section for executing post training script.
 * The training launch command and arguments are defined in the `train` field, and the data processing launch command and arguments are defined in the `process` field.
 * The `pvc` field specifies the persistent volumes and their mount paths. EFS and Fsx for Lustre persistent volumes are available by default at `/efs` and `/fsx` mount paths, respectively, but these mount paths can be changed.
+* The `ebs` field specifies optional [Amazon EBS](https://aws.amazon.com/ebs/) volume storage capacity and mount path. By default, no EBS volume is attached.
 
 ## Prerequisites
 
