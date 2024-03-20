@@ -4,7 +4,18 @@ This example shows how to use [pytorch-distributed](../../../charts/machine-lear
 
 The example also shows use of [data-process](../../../charts/machine-learning/data-prep/data-process/Chart.yaml) Helm chart to pre-process the [Hugging Face Wikicorpus](https://huggingface.co/datasets/wikicorpus) dataset for use with Megatron-DeepSpeed GPT2-345M model.
 
+## Prerequisites
 Before proceeding, complete the [Prerequisites](../../../README.md#prerequisites) and [Getting started](../../../README.md#getting-started). See [What is in the YAML file](../../../README.md#what-is-in-the-yaml-file) to understand the common fields in the Helm values files. There are some fields that are specific to a machine learning chart.
+
+## Implicitly defined environment variables
+
+Following variables are implicitly defined by the [pytorch-distributed](../../../charts/machine-learning/training/pytorchjob-distributed/Chart.yaml) Helm chart for use with [Torch distributed run](https://github.com/pytorch/pytorch/blob/main/torch/distributed/run.py):
+
+1. `PET_NNODES` : Maps to `nnodes`
+2. `PET_NPROC_PER_NODE` : Maps to `nproc_per_node` 
+3. `PET_NODE_RANK` : Maps to `node_rank` 
+4. `PET_MASTER_ADDR`: Maps to `master_addr` 
+5. `PET_MASTER_PORT`: Maps to `master_port`
 
 ## Pre-process Wikicorpus dataset
 

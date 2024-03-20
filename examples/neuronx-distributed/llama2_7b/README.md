@@ -10,6 +10,17 @@ Before proceeding, complete the [Prerequisites](../../../README.md#prerequisites
 
 See [What is in the YAML file](../../../README.md#what-is-in-the-yaml-file) to understand the common fields in the Helm values files. There are some fields that are specific to a machine learning chart.
 
+
+## Implicitly defined environment variables
+
+Following variables are implicitly defined by the [pytorch-distributed](../../../charts/machine-learning/training/pytorchjob-distributed/Chart.yaml) Helm chart for use with [Torch distributed run](https://github.com/pytorch/pytorch/blob/main/torch/distributed/run.py):
+
+1. `PET_NNODES` : Maps to `nnodes`
+2. `PET_NPROC_PER_NODE` : Maps to `nproc_per_node` 
+3. `PET_NODE_RANK` : Maps to `node_rank` 
+4. `PET_MASTER_ADDR`: Maps to `master_addr` 
+5. `PET_MASTER_PORT`: Maps to `master_port`
+
 ## Download Meta LLama2 Tokenizer Model file
 
 [Download the Meta Llama2](https://llama.meta.com/llama2) model files. Upload the `tokenizer.model` file to your configured S3 bucket under the S3 path `ml-platform/llama2/tokenizer.model`. Once you upload it to the S3 bucket, it will be automatically imported to the FSx for Lustre file-system at the path `/fsx/llama2/tokenizer.model`.
