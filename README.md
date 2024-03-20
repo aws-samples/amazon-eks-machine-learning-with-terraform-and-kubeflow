@@ -14,7 +14,7 @@ The deployed Kubeflow platform version is 1.8.0, and includes [Kubeflow Notebook
 
 The accelerator machines used for running the training jobs are automatically managed by [Karpenter](https://karpenter.sh/), which means, all machines used in data-preprocessing, and  training, are provisioned on-demand.
 
-To launch a data pre-processing or training job, all you need to do is install one of the pre-defined [machine-learning charts](./charts/machine-learning/) with a YAML file that defines inputs to the chart. Here is a [very quick example](./examples/accelerate/bert-glue-mrpc/README.md) that pre-trains Bert model on Glue MRPC dataset using Hugging Face Accelerate. For a heavy weight example, try the example for [LLama2 fine-tuning using PyTorch FSDP](./examples/accelerate/llama2/ft/fsdp/README.md).
+To launch a data pre-processing or training job, all you need to do is install one of the pre-defined [machine-learning charts](./charts/machine-learning/) with a YAML file that defines inputs to the chart. Here is a [very quick example](./examples/accelerate/bert-glue-mrpc/README.md) that pre-trains Bert model on Glue MRPC dataset using Hugging Face Accelerate. For a heavy weight example, try the example for [Llama2 fine-tuning using PyTorch FSDP](./examples/accelerate/llama2/ft/fsdp/README.md).
 
 ## What is in the YAML file
 
