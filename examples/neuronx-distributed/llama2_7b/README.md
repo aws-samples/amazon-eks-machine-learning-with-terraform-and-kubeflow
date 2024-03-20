@@ -44,8 +44,6 @@ Uninstall the Helm chart at completion:
 
     helm uninstall nxd-llama2-7b -n kubeflow-user-example-com
 
-Processed data is available on EFS file-system at `/fsx/home/nxd-llama2-7b/data/wikicorpus`.
-
 ## Compile
 
 We define the runtime for the compile job in [compile.yaml](./compile.yaml) values file. 
