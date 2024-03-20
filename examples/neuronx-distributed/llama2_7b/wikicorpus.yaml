@@ -1,0 +1,40 @@
+image: '763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-inference-neuron:1.13.1-neuron-py310-sdk2.17.0-ubuntu20.04'
+backoff_limit: 2000
+ebs:
+  storage: 200Gi
+  mount_path: /tmp
+resources:
+  requests:
+    "aws.amazon.com/neuron": 1 
+  limits:
+    "aws.amazon.com/neuron": 1 
+tolerations:
+  - key: "aws.amazon.com/neuron"
+    operator: "Exists"
+    effect: "NoSchedule"
+git:
+  repo_url: "https://github.com/aws-neuron/neuronx-distributed.git"
+  commit: e9e61af6d4630383057a028b5238734a44601de0
+  branch: main
+pre_script: 
+  - pip3 install --upgrade pip
+  - mkdir -p $DATA_ROOT
+  - SCRIPT_DIR=$GIT_CLONE_DIR/examples/training/llama2/tp_zero1_llama2_7b_hf_pretrain
+  - cp $GIT_CLONE_DIR/examples/training/llama2/requirements.txt $SCRIPT_DIR
+  - cp $GIT_CLONE_DIR/examples/training/llama2/get_dataset.py $SCRIPT_DIR
+  - cp $GIT_CLONE_DIR/examples/training/llama2/modeling_llama_nxd.py $SCRIPT_DIR
+  - cp $TOKENIZER_MODEL $SCRIPT_DIR
+  - cd $SCRIPT_DIR
+  - pip3 install -r requirements.txt
+process:
+  env:
+    - name: HOME
+      value: /tmp
+    - name: DATA_ROOT
+      value: /fsx/home/{{ .Release.Name }}
+    - name: TOKENIZER_MODEL
+      value: /fsx/llama2/tokenizer.model
+  command:
+    -  HOME=$DATA_ROOT python3 
+  args:
+    - get_dataset.py 

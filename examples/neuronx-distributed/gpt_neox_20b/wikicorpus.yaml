@@ -1,0 +1,32 @@
+image: '763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-inference-neuron:1.13.1-neuron-py310-sdk2.17.0-ubuntu20.04'
+backoff_limit: 2000
+ebs:
+  storage: 200Gi
+  mount_path: /tmp
+resources:
+  requests:
+    "aws.amazon.com/neuron": 1 
+  limits:
+    "aws.amazon.com/neuron": 1 
+tolerations:
+  - key: "aws.amazon.com/neuron"
+    operator: "Exists"
+    effect: "NoSchedule"
+git:
+  repo_url: "https://github.com/aws-neuron/neuronx-distributed.git"
+  commit: e9e61af6d4630383057a028b5238734a44601de0
+  branch: main
+pre_script: 
+  - pip3 install --upgrade pip
+  - pip3 install -r $GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/common/requirements.txt 
+  - mkdir -p $DATA_ROOT
+process:
+  env:
+    - name: HOME
+      value: /tmp
+    - name: DATA_ROOT
+      value: /fsx/home/{{ .Release.Name }}
+  command:
+    -  HOME=$DATA_ROOT python3 
+  args:
+    - $GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/common/get_dataset.py 
