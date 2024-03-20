@@ -21,7 +21,7 @@ Following variables are implicitly defined by the [pytorch-distributed](../../..
 4. `PET_MASTER_ADDR`: Maps to `master_addr` 
 5. `PET_MASTER_PORT`: Maps to `master_port`
 
-## Download Meta LLama2 Tokenizer Model file
+## Download Meta Llama2 Tokenizer Model file
 
 [Download the Meta Llama2](https://llama.meta.com/llama2) model files. Upload the `tokenizer.model` file to your configured S3 bucket under the S3 path `ml-platform/llama2/tokenizer.model`. Once you upload it to the S3 bucket, it will be automatically imported to the FSx for Lustre file-system at the path `/fsx/llama2/tokenizer.model`.
 
