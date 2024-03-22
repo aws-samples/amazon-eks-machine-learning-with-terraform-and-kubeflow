@@ -39,7 +39,10 @@ spec:
       startupTaints:
       - key: fsx.csi.aws.com/agent-not-ready
         effect: NoExecute
-      
+      - key: ebs.csi.aws.com/agent-not-ready
+        effect: NoExecute
+      - key: efs.csi.aws.com/agent-not-ready
+        effect: NoExecute
   limits:
     aws.amazon.com/neuron: 512
     aws.amazon.com/neurondevice: 512
@@ -99,7 +102,10 @@ spec:
       startupTaints:
       - key: fsx.csi.aws.com/agent-not-ready
         effect: NoExecute
-      
+      - key: ebs.csi.aws.com/agent-not-ready
+        effect: NoExecute
+      - key: efs.csi.aws.com/agent-not-ready
+        effect: NoExecute
   limits:
     nvidia.com/gpu: 1024
 ---
@@ -142,6 +148,10 @@ spec:
         effect: NoSchedule
       startupTaints:
       - key: fsx.csi.aws.com/agent-not-ready
+        effect: NoExecute
+      - key: ebs.csi.aws.com/agent-not-ready
+        effect: NoExecute
+      - key: efs.csi.aws.com/agent-not-ready
         effect: NoExecute
       
   limits:

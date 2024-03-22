@@ -900,7 +900,7 @@ resource "helm_release" "karpenter_components" {
 
   chart = "${var.local_helm_repo}/karpenter-components"
   name = "karpenter-components"
-  version = "1.0.2"
+  version = "1.0.3"
   namespace = var.karpenter_namespace
   
   set {
