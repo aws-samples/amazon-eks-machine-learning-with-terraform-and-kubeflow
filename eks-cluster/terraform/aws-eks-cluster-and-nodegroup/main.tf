@@ -900,7 +900,7 @@ resource "helm_release" "karpenter_components" {
 
   chart = "${var.local_helm_repo}/karpenter-components"
   name = "karpenter-components"
-  version = "1.0.3"
+  version = "1.0.4"
   namespace = var.karpenter_namespace
   
   set {
@@ -926,6 +926,11 @@ resource "helm_release" "karpenter_components" {
   set {
     name  = "capacity_type"
     value = var.karpenter_capacity_type
+  }
+
+  set {
+    name  = "max_pods"
+    value = var.karpenter_max_pods
   }
 
   depends_on = [ helm_release.karpenter ]

@@ -251,6 +251,13 @@ variable "karpenter_consolidate_after" {
   type = string
   default = "600s"
 }
+
+variable "karpenter_max_pods" {
+  description = "Karpenter kubelet maxPods"
+  type = number
+  default = 20
+}
+
 variable "nvidia_plugin_version" {
   description = "NVIDIA Device Plugin Version"
   type = string

@@ -43,6 +43,8 @@ spec:
         effect: NoExecute
       - key: efs.csi.aws.com/agent-not-ready
         effect: NoExecute
+      kubelet:
+        maxPods: {{ .Values.max_pods }}
   limits:
     aws.amazon.com/neuron: 512
     aws.amazon.com/neurondevice: 512
@@ -106,6 +108,8 @@ spec:
         effect: NoExecute
       - key: efs.csi.aws.com/agent-not-ready
         effect: NoExecute
+      kubelet:
+        maxPods: {{ .Values.max_pods }}
   limits:
     nvidia.com/gpu: 1024
 ---
@@ -153,6 +157,8 @@ spec:
         effect: NoExecute
       - key: efs.csi.aws.com/agent-not-ready
         effect: NoExecute
+      kubelet:
+        maxPods: {{ .Values.max_pods }}
       
   limits:
     nvidia.com/gpu: 1024

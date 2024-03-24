@@ -3,3 +3,4 @@ role_name:
 cluster_id:
 consolidate_after: "600s"
 capacity_type: "on-demand"
+max_pods: 20
