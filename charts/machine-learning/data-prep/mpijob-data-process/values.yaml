@@ -1,0 +1,67 @@
+image:
+image_pull_policy: IfNotPresent
+backoff_limit: 2000
+resources:
+  num_nodes: 2
+  procs_per_node: 1
+  node_instance_type: "g4dn.xlarge"
+  requests:
+    "nvidia.com/gpu": 1
+  limits:
+    "nvidia.com/gpu": 1
+tolerations: []
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+ebs: {}
+git:
+  repo_url:
+  branch:
+  commit:
+pre_script: []
+post_script: []
+process:
+  command: [echo]
+  args: ["hello"]
+mpirun:
+  env:
+    - name: HOME
+      value: "/efs/home/{{ .Release.Name }}"
+    - name: LOG_ROOT
+      value: "/efs/home/{{ .Release.Name }}/logs"
+  args:
+    - "--output-filename" 
+    - "$LOG_ROOT/{{ .Release.Name }}-{{ date \"2006-01-02-15-04-05\" .Release.Time  }}"
+    - "--allow-run-as-root"
+    - "-np"
+    - "{{ mul .Values.resources.num_nodes  .Values.resources.procs_per_node }}"
+    - "-bind-to"
+    - "none"
+    - "-map-by"
+    - "slot"
+    - "-mca" 
+    - "btl_tcp_if_exclude" 
+    - "lo,docker0"
+    - "-mca" 
+    - "oob_tcp_if_exclude" 
+    - "lo,docker0"
+    - "-mca"
+    - "plm_rsh_no_tree_spawn"
+    - "1"
+    - "-x"
+    - HOME
+    - "-x"
+    - LD_LIBRARY_PATH
+    - "-x"
+    - PATH
+    - "-mca"
+    - "pml"
+    - "ob1"
+    - "-mca"
+    - "btl"
+    - "^openib"
+    - "--display-map"
+    - "--tag-output"
+    - "--timestamp-output"

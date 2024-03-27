@@ -1,0 +1,171 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dist-data-process-{{ .Release.Name }}
+data:
+  dist-data-process.sh: |
+    #!/bin/bash
+   
+    {{- if .Values.git.repo_url }}
+    mkdir -p $HOME/tmp
+    GIT_CLONE_DIR=$HOME/tmp/$HOSTNAME
+    [[ -d $GIT_CLONE_DIR ]] && rm -rf $GIT_CLONE_DIR
+    git clone {{ .Values.git.repo_url }} $GIT_CLONE_DIR
+    cd $GIT_CLONE_DIR
+
+    {{- if .Values.git.branch }}
+    git checkout {{ .Values.git.branch }}
+    {{- end }}
+
+    {{- if .Values.git.commit }}
+    git fetch origin {{ .Values.git.commit }}
+    git reset --hard {{ .Values.git.commit }}
+    {{- end }}
+    
+    {{- end }}
+    
+    {{- range .Values.pre_script }}
+    {{ . }}
+    {{- end }}
+    
+    {{- range .Values.process.command }}
+    {{ . }} \
+    {{- end }}
+    {{- range .Values.process.args }}
+    {{ . }} \
+    {{- end }}
+    && echo "Processing script done"
+
+    {{- range .Values.post_script }}
+    {{ . }}
+    {{- end }}
+
+    {{- if .Values.git.repo_url }}
+    cd $HOME
+    rm -rf $GIT_CLONE_DIR
+    {{- end }}
+---
+apiVersion: kubeflow.org/v2beta1
+kind: MPIJob
+metadata:
+  name: dist-data-process-{{ .Release.Name }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  runPolicy:
+    backoffLimit: {{ .Values.backoff_limit }}
+    cleanPodPolicy: Running
+  mpiImplementation: OpenMPI
+  mpiReplicaSpecs:
+    Launcher:
+      replicas: 1
+      template:
+        metadata:
+          annotations:
+            karpenter.sh/do-not-disrupt: "true"
+            sidecar.istio.io/inject: 'false'
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            app.kubernetes.io/managed-by: {{ .Release.Service }}
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: launcher 
+            env:
+            {{- range $v := .Values.mpirun.env }}
+            - name: {{ $v.name }}
+              value: "{{ tpl $v.value $ }}"
+            {{- end }} 
+            command: 
+            - mpirun
+            args:
+            {{- range .Values.mpirun.args }}
+            - "{{ tpl .  $ }}"
+            {{- end }}
+            - /etc/config/dist-data-process.sh
+            image: {{ .Values.image }} 
+            imagePullPolicy: {{ .Values.image_pull_policy }} 
+      
+    Worker:
+      replicas: {{ .Values.resources.num_nodes }}
+      template:
+        metadata:
+          annotations:
+            karpenter.sh/do-not-disrupt: "true"
+            sidecar.istio.io/inject: 'false'
+        spec:
+          restartPolicy: Never
+          volumes:
+          - name: config
+            configMap:
+              defaultMode: 420
+              items:
+              - key: dist-data-process.sh
+                mode: 365
+                path: dist-data-process.sh
+              name: dist-data-process-{{ .Release.Name }}
+          - name: shm
+            hostPath:
+              path: /dev/shm
+              type: Directory
+          {{- $pv_index := 1 }}
+          {{- range $pv := .Values.pvc }}
+          - name: pv-{{ $pv_index }}
+            persistentVolumeClaim:
+              claimName: {{ $pv.name }}
+          {{- $pv_index = add $pv_index 1 }}
+          {{- end }}
+          {{- if .Values.ebs }}
+          - name: ebs
+            ephemeral:
+              volumeClaimTemplate:
+                spec:
+                  accessModes:
+                    - ReadWriteOnce
+                  resources:
+                    requests:
+                      storage: {{ .Values.ebs.storage | default "100Gi" }}
+                  storageClassName: ebs-sc-wait
+          {{- end }}
+          tolerations:
+          {{- range $v := .Values.tolerations }}
+            - key: {{ $v.key }}
+              {{- if $v.operator }}
+              operator: "{{ $v.operator }}"
+              {{- end }}
+              {{- if $v.effect }}
+              effect: "{{ $v.effect }}"
+              {{- end }}
+          {{- end }} 
+          nodeSelector:
+            node.kubernetes.io/instance-type: {{ .Values.resources.node_instance_type }}
+          containers:
+          - name: worker
+            image: {{ .Values.image }}
+            imagePullPolicy: IfNotPresent
+            volumeMounts:
+            - mountPath: /etc/config
+              name: config
+            - mountPath: /dev/shm
+              name: shm
+            {{- $pv_index := 1 }}
+            {{- range $pv := .Values.pvc }}
+            - mountPath: {{ $pv.mount_path }}
+              name: pv-{{ $pv_index }}
+            {{- $pv_index = add $pv_index 1 }}
+            {{- end }}
+            {{- if .Values.ebs }}
+            - name: ebs
+              mountPath: {{ .Values.ebs.mount_path | default "/tmp" }}
+            {{- end }}
+            resources:
+              requests:
+              {{- range $k, $v := .Values.resources.requests }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
+              limits:
+              {{- range $k, $v := .Values.resources.limits }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
+  slotsPerWorker: {{ .Values.resources.procs_per_node }}
