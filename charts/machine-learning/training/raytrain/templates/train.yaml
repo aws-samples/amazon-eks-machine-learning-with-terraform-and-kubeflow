@@ -35,7 +35,7 @@ data:
     {{- range .Values.train.args }}
     {{ . }} \
     {{- end }}
-    {{- if .Values.train.args }}
+    {{- if .Values.train.command }}
     && echo "Training script done"
     {{- end }}
 

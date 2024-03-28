@@ -48,7 +48,9 @@ data:
     {{- range .Values.process.args }}
     {{ . }} \
     {{- end }}
+    {{- if .Values.process.command }}
     && echo "Processing script done"
+    {{- end }}
 
     {{- range .Values.post_script }}
     {{ . }}
