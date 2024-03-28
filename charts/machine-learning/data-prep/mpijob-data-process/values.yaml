@@ -23,8 +23,8 @@ git:
 pre_script: []
 post_script: []
 process:
-  command: [echo]
-  args: ["hello"]
+  command: []
+  args: []
 mpirun:
   env:
     - name: HOME
