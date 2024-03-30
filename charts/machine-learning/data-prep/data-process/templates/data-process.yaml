@@ -82,6 +82,10 @@ spec:
         mode: 365
         path: data-process.sh
       name: data-process-{{ .Release.Name }}
+  - name: shm
+    hostPath:
+      path: /dev/shm
+      type: Directory
   {{- $pv_index := 1 }}
   {{- range $pv := .Values.pvc }}
   - name: pv-{{ $pv_index }}
