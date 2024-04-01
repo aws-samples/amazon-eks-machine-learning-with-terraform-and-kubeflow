@@ -1,0 +1,58 @@
+image: 763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-training-neuronx:1.13.1-neuronx-py310-sdk2.17.0-ubuntu20.04
+backoff_limit: 2000
+ebs:
+  storage: 200Gi
+  mount_path: /tmp
+resources:
+  requests:
+    "aws.amazon.com/neuron": 8
+  limits:
+    "aws.amazon.com/neuron": 8
+tolerations:
+  - key: "aws.amazon.com/neuron"
+    operator: "Exists"
+    effect: "NoSchedule"
+git:
+  repo_url: "https://github.com/aws-neuron/neuronx-nemo-megatron.git"
+  commit: 6038bb80b5ae59d3f4a99ed38a4f68fa0e22665a
+  branch: main
+pre_script: 
+  - pip3 install --upgrade pip
+  - ./build.sh && pip3 install ./build/*.whl
+  - pip3 install Cython==3.0.9
+  - pip3 install -r requirements.txt torch==1.13.1 protobuf==3.20.3
+  - 'python3 -c "from nemo.collections.nlp.data.language_modeling.megatron.dataset_utils import compile_helper; compile_helper()"'
+  - mkdir -p $DATA_ROOT
+  - SCRIPT_DIR=$GIT_CLONE_DIR/nemo/scripts/nlp_language_modeling/
+  - cd $SCRIPT_DIR
+  - mkdir -p $LOG_ROOT
+  - OUTPUT_LOG=$LOG_ROOT/preprocess.log
+  - mkdir /tmp/datasets
+post_script:
+  - cp -r /tmp/datasets $DATA_ROOT/
+process:
+  env:
+    - name: HOME
+      value: /tmp
+    - name: LOG_ROOT
+      value: /efs/home/{{ .Release.Name }}/logs
+    - name: DATA_ROOT
+      value: /fsx/home/{{ .Release.Name }}
+    - name: INPUT_DATA_PATH
+      value: /fsx/data/redpajama/data.jsonl
+    - name: MODEL_PATH
+      value: /fsx/pretrained-models/meta-llama/Llama-2-7b-hf
+  command:
+    - python3
+  args:
+    - preprocess_data_for_megatron.py
+    - --input=$INPUT_DATA_PATH
+    - --json-keys=text
+    - --tokenizer-library=huggingface
+    - --tokenizer-type=$MODEL_PATH
+    - --dataset-impl=mmap
+    - --output-prefix=/tmp/datasets/tokenized
+    - --append-eod
+    - --need-pad-id
+    - --workers=32
+    - '2>&1 | tee $OUTPUT_LOG'
