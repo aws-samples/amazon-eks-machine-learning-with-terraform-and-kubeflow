@@ -18,15 +18,24 @@ git:
   branch: main
 pre_script: 
   - pip3 install --upgrade pip
-  - pip3 install -r $GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/common/requirements.txt 
   - mkdir -p $DATA_ROOT
+  - SCRIPT_DIR=$GIT_CLONE_DIR/examples/training/llama2/tp_pp_llama2_hf_pretrain
+  - cp $GIT_CLONE_DIR/examples/training/llama2/requirements.txt $SCRIPT_DIR
+  - cp $GIT_CLONE_DIR/examples/training/llama2/get_dataset.py $SCRIPT_DIR
+  - cp $GIT_CLONE_DIR/examples/training/llama2/modeling_llama_nxd.py $SCRIPT_DIR
+  - cp $SCRIPT_DIR/70B_config/config.json $SCRIPT_DIR
+  - cp $TOKENIZER_MODEL $SCRIPT_DIR
+  - cd $SCRIPT_DIR
+  - pip3 install -r requirements.txt
 process:
   env:
     - name: HOME
       value: /tmp
     - name: DATA_ROOT
       value: /fsx/home/{{ .Release.Name }}
+    - name: TOKENIZER_MODEL
+      value: /fsx/llama2/tokenizer.model
   command:
     -  HOME=$DATA_ROOT python3 
   args:
-    - $GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/common/get_dataset.py 
+    - get_dataset.py 

@@ -1,4 +1,4 @@
-image: '763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-training-neuronx:1.13.1-neuronx-py310-sdk2.17.0-ubuntu20.04'
+image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.1.2-neuronx-py310-sdk2.18.0-ubuntu20.04'
 backoff_limit: 2000
 ebs:
   storage: 200Gi
@@ -20,10 +20,12 @@ tolerations:
 git:
   repo_url: "https://github.com/aws-neuron/neuronx-distributed.git"
   branch: main
-  commit: e9e61af6d4630383057a028b5238734a44601de0
+  commit: 8520967d0a39e703e03ba0edbe595230f7e16bde
 pre_script: 
   - pip3 install --upgrade pip
   - SCRIPT_DIR=$GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/tp_dp_gpt_neox_6.9b_hf_pretrain
+  - cp $GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/tp_dp_gpt_neox_20b_hf_pretrain/modeling_gpt_neox_nxd.py $SCRIPT_DIR/
+  - cp $GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/tp_dp_gpt_neox_20b_hf_pretrain/utils.py $SCRIPT_DIR/
   - cp $GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/common/adamw_fp32_optim_params.py $SCRIPT_DIR/
   - cp $GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/common/requirements.txt $SCRIPT_DIR/
   - cd $SCRIPT_DIR
@@ -36,7 +38,6 @@ pre_script:
   - export DATA_PATH="$DATA_ROOT/examples_datasets/wikicorpus_gpt_neox_tokenized_2k"
   - export DISTRIBUTED_ARGS="--nproc_per_node $PET_NPROC_PER_NODE --nnodes $PET_NNODES --node_rank $PET_NODE_RANK --master_addr $PET_MASTER_ADDR --master_port $PET_MASTER_PORT"
   - echo "DISTRIBUTED_ARGS=$DISTRIBUTED_ARGS"
-  - export NEURON_CC_FLAGS="--model-type=transformer -O1 --enable-saturate-infinity --cache_dir=$CACHE_DIR"
   - TP_DEGREE=8
   - GBS=256
   - MBS=1
@@ -56,7 +57,10 @@ pre_script:
   - sysctl -w net.ipv4.ip_local_reserved_ports=48620
   - export NEURON_RT_ROOT_COMM_ID=$HOSTNAME:48620
   - echo "NEURON_RT_ROOT_COMM_ID=$NEURON_RT_ROOT_COMM_ID"
-  - NEURON_COMPILE_CACHE_URL=$CACHE_DIR neuron_parallel_compile --command clear-locks
+  - TMP_CACHE_DIR=/tmp/cache
+  - cp -r $CACHE_DIR $TMP_CACHE_DIR
+  - export NEURON_CC_FLAGS="--model-type=transformer -O1 --enable-saturate-infinity --cache_dir=$TMP_CACHE_DIR"
+  - NEURON_COMPILE_CACHE_URL=$TMP_CACHE_DIR neuron_parallel_compile --command clear-locks
 train:
   env:
     - name: HOME
@@ -68,7 +72,7 @@ train:
     - name: CACHE_ROOT
       value: /efs/home/{{ .Release.Name }}/cache
     - name: CKPT_ROOT
-      value: "/fsx/home/{{ .Release.Name }}/checkpoints"
+      value: "/efs/home/{{ .Release.Name }}/checkpoints"
     - name: CCOM_SOCKET_IFNAME
       value: "eth0"
     - name: FI_EFA_USE_DEVICE_RDMA

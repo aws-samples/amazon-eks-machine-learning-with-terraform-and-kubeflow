@@ -1,4 +1,4 @@
-image: '763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-inference-neuron:1.13.1-neuron-py310-sdk2.17.0-ubuntu20.04'
+image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.1.2-neuronx-py310-sdk2.18.0-ubuntu20.04'
 backoff_limit: 2000
 ebs:
   storage: 200Gi
@@ -14,7 +14,7 @@ tolerations:
     effect: "NoSchedule"
 git:
   repo_url: "https://github.com/aws-neuron/neuronx-distributed.git"
-  commit: e9e61af6d4630383057a028b5238734a44601de0
+  commit: 8520967d0a39e703e03ba0edbe595230f7e16bde
   branch: main
 pre_script: 
   - pip3 install --upgrade pip

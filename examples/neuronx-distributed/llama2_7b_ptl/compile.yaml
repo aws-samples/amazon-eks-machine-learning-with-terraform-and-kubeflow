@@ -23,19 +23,23 @@ git:
   commit: 8520967d0a39e703e03ba0edbe595230f7e16bde
 pre_script: 
   - pip3 install --upgrade pip
-  - SCRIPT_DIR=$GIT_CLONE_DIR/examples/training/llama2/tp_zero1_llama2_7b_hf_pretrain
-  - cp $GIT_CLONE_DIR/examples/training/llama2/requirements.txt $SCRIPT_DIR
-  - cp $GIT_CLONE_DIR/examples/training/llama2/*.py $SCRIPT_DIR
+  - SCRIPT_DIR=$GIT_CLONE_DIR/examples/training/llama2/lightning
+  - cp $GIT_CLONE_DIR/examples/training/llama2/tp_zero1_llama2_7b_hf_pretrain/config.json $SCRIPT_DIR
+  - cp $GIT_CLONE_DIR/examples/training/llama2/*.* $SCRIPT_DIR
   - cd $SCRIPT_DIR
   - pip3 install -r requirements.txt
+  - pip3 install -r requirements_ptl.txt
   - LOGS_DIR=$LOG_ROOT/$PET_NODE_RANK
+  - 'if [ -d $LOGS_DIR ]; then rm -rf $LOGS_DIR; fi'
   - mkdir -p $LOGS_DIR 
-  - OUTPUT_LOG=$LOGS_DIR/pretrain.log
+  - OUTPUT_LOG=$LOGS_DIR/compile.log
   - CACHE_DIR=$CACHE_ROOT/$PET_NODE_RANK
+  - 'if [ -d $CACHE_DIR ]; then rm -rf $CACHE_DIR; fi'
   - mkdir -p $CACHE_DIR
+  - TMP_CACHE_DIR=/tmp/cache
   - mkdir -p $CKPT_ROOT
   - DATA_PATH="$DATA_ROOT/examples_datasets/wikicorpus_llama2_7B_tokenized_4k"
-  - export DISTRIBUTED_ARGS="--nproc_per_node $PET_NPROC_PER_NODE --nnodes $PET_NNODES --node_rank $PET_NODE_RANK --master_addr $PET_MASTER_ADDR --master_port $PET_MASTER_PORT"
+  - DISTRIBUTED_ARGS="--nproc_per_node $PET_NPROC_PER_NODE --nnodes $PET_NNODES --node_rank $PET_NODE_RANK --master_addr $PET_MASTER_ADDR --master_port $PET_MASTER_PORT"
   - TP_DEGREE=8
   - USE_MIX_PRECISION=1
   - USE_ZERO_1=1
@@ -47,33 +51,31 @@ pre_script:
   - SEQ_LEN=4096
   - DP=$(($PET_NPROC_PER_NODE * $PET_NNODES / $TP_DEGREE))
   - ACC_STEPS=$(($GBS / $MBS / $DP)) 
-  - STEPS_THIS_RUN=-1
-  - export LLAMA2_ARGS="--model_path $SCRIPT_DIR 
+  - STEPS_THIS_RUN=2
+  - LLAMA2_ARGS="--model_path $SCRIPT_DIR 
     --data_dir $DATA_PATH 
-    --tensor_parallel_size $TP_DEGREE 
-    --batch_size $MBS 
+    --tensor_parallel_size $TP_DEGREE
+    --train_batch_size $MBS
     --steps_this_run $STEPS_THIS_RUN
-    --max_steps $TOTAL_STEPS 
-    --warmup_steps $WARMUP_STEPS 
-    --lr $LR 
-    --grad_accum_usteps $ACC_STEPS 
-    --seq_len $SEQ_LEN 
-    --sequence_parallel_enabled 
-    --selective_checkpoint_enabled 
-    --logging_interval 10
-    --use_mix_precision
-    --use_zero_1
-    --checkpoint_freq=100
-    --num_kept_checkpoint=10"
-  - export TPU_NUM_DEVICES=$PET_NPROC_PER_NODE
-  - export TPU_CHIPS_PER_HOST_BOUNDS=$PET_NPROC_PER_NODE
-  - TMP_CACHE_DIR=/tmp/cache
-  - cp -r $CACHE_DIR $TMP_CACHE_DIR
-  - export NEURON_CC_FLAGS="--model-type transformer --distribution-strategy=llm-training --cache_dir=$TMP_CACHE_DIR"
-  - sysctl -w net.ipv4.ip_local_reserved_ports=48620
-  - export NEURON_RT_ROOT_COMM_ID=$HOSTNAME:48620
-  - echo "NEURON_RT_ROOT_COMM_ID=$NEURON_RT_ROOT_COMM_ID"
-  - NEURON_COMPILE_CACHE_URL=$TMP_CACHE_DIR neuron_parallel_compile --command clear-locks
+    --max_steps $TOTAL_STEPS
+    --warmup_steps $WARMUP_STEPS
+    --lr $LR
+    --grad_accum_usteps $ACC_STEPS
+    --seq_len $SEQ_LEN
+    --use_sequence_parallel 1
+    --use_selective_checkpoint 1
+    --use_fp32_optimizer 1
+    --use_zero1_optimizer 1
+    --scheduler_type linear"
+  - echo DISTRIBUTED_ARGS=$DISTRIBUTED_ARGS
+  - echo "#!/bin/bash" >  compile.sh
+  - echo "export TPU_NUM_DEVICES=$PET_NPROC_PER_NODE" >> ./compile.sh
+  - echo "export TPU_CHIPS_PER_HOST_BOUNDS=$PET_NPROC_PER_NODE" >> ./compile.sh
+  - echo export NEURON_CC_FLAGS=\"--model-type transformer --distribution-strategy=llm-training --retry_failed_compilation --cache_dir=$TMP_CACHE_DIR\" >> ./compile.sh
+  - echo "torchrun  $DISTRIBUTED_ARGS run_llama_nxd_ptl.py $LLAMA2_ARGS --checkpoint_dir $CKPT_ROOT 2>&1 | tee $OUTPUT_LOG"  >> compile.sh 
+  - chmod u+x ./compile.sh
+post_script:
+  - cp -r $TMP_CACHE_DIR/* $CACHE_DIR
 train:
   env:
     - name: HOME
@@ -85,7 +87,7 @@ train:
     - name: CACHE_ROOT
       value: /efs/home/{{ .Release.Name }}/cache
     - name: CKPT_ROOT
-      value: "/efs/home/{{ .Release.Name }}/checkpoints"
+      value: "/tmp/checkpoints"
     - name: CCOM_SOCKET_IFNAME
       value: "eth0"
     - name: FI_EFA_USE_DEVICE_RDMA
@@ -103,10 +105,7 @@ train:
     - name: MALLOC_ARENA_MAX
       value: "64"
   command:
-    -  torchrun 
-  args: 
-    - $DISTRIBUTED_ARGS  
-    - tp_zero1_llama2_7b_hf_pretrain.py
-    - $LLAMA2_ARGS
-    - '--checkpoint_dir $CKPT_ROOT'
-    - '2>&1 | tee $OUTPUT_LOG'
+    -  neuron_parallel_compile
+  args:
+    - './compile.sh'
+    - '2>&1 | tee $LOGS_DIR/neuron_parallel_compile.log'

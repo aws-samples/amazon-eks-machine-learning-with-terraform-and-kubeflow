@@ -41,7 +41,7 @@ process:
     - name: INPUT_DATA_PATH
       value: /fsx/data/redpajama/data.jsonl
     - name: MODEL_PATH
-      value: /fsx/pretrained-models/meta-llama/Llama-2-13b-hf
+      value: /fsx/pretrained-models/meta-llama/Llama-2-70b-hf
   command:
     - python3
   args:

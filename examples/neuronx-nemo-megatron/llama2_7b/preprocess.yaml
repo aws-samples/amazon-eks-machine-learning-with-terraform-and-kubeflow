@@ -1,4 +1,4 @@
-image: 763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-training-neuronx:1.13.1-neuronx-py310-sdk2.17.0-ubuntu20.04
+image: public.ecr.aws/neuron/pytorch-training-neuronx:2.1.2-neuronx-py310-sdk2.18.0-ubuntu20.04
 backoff_limit: 2000
 ebs:
   storage: 200Gi
@@ -14,13 +14,13 @@ tolerations:
     effect: "NoSchedule"
 git:
   repo_url: "https://github.com/aws-neuron/neuronx-nemo-megatron.git"
-  commit: 6038bb80b5ae59d3f4a99ed38a4f68fa0e22665a
+  commit: 1f3bbcc8774ff9b07e6f3151951a52ddef19cbbf
   branch: main
 pre_script: 
   - pip3 install --upgrade pip
   - ./build.sh && pip3 install ./build/*.whl
   - pip3 install Cython==3.0.9
-  - pip3 install -r requirements.txt torch==1.13.1 protobuf==3.20.3
+  - pip3 install -r requirements.txt protobuf==3.20.3
   - 'python3 -c "from nemo.collections.nlp.data.language_modeling.megatron.dataset_utils import compile_helper; compile_helper()"'
   - mkdir -p $DATA_ROOT
   - SCRIPT_DIR=$GIT_CLONE_DIR/nemo/scripts/nlp_language_modeling/

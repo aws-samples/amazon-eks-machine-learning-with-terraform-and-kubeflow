@@ -2,3 +2,4 @@
 **/terraform.tfstate*
 **/Dockerfile.*
 **/.ipynb_checkpoints/*
+**/.DS_Store

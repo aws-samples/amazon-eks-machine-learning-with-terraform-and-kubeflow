@@ -67,7 +67,7 @@ train:
     - name: DATA_ROOT
       value: "/fsx/home/{{ .Release.Name }}/data/wikicorpus"
     - name: CKPT_ROOT
-      value: "/fsx/home/{{ .Release.Name }}/checkpoints"
+      value: "/efs/home/{{ .Release.Name }}/checkpoints"
     - name: CUDA_DEVICE_MAX_CONNECTIONS
       value: "1"
     - name: NCCL_IGNORE_DISABLED_P2P

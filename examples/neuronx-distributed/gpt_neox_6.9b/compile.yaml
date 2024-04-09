@@ -1,4 +1,4 @@
-image: '763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-training-neuronx:1.13.1-neuronx-py310-sdk2.17.0-ubuntu20.04'
+image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.1.2-neuronx-py310-sdk2.18.0-ubuntu20.04'
 backoff_limit: 2000
 ebs:
   storage: 200Gi
@@ -20,20 +20,22 @@ tolerations:
 git:
   repo_url: "https://github.com/aws-neuron/neuronx-distributed.git"
   branch: main
-  commit: e9e61af6d4630383057a028b5238734a44601de0
+  commit: 8520967d0a39e703e03ba0edbe595230f7e16bde
 pre_script:
   - pip3 install --upgrade pip
   - SCRIPT_DIR=$GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/tp_dp_gpt_neox_6.9b_hf_pretrain
+  - cp $GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/tp_dp_gpt_neox_20b_hf_pretrain/modeling_gpt_neox_nxd.py $SCRIPT_DIR/
+  - cp $GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/tp_dp_gpt_neox_20b_hf_pretrain/utils.py $SCRIPT_DIR/
   - cp $GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/common/adamw_fp32_optim_params.py $SCRIPT_DIR/
   - cp $GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/common/requirements.txt $SCRIPT_DIR/
   - cd $SCRIPT_DIR
   - pip3 install -r requirements.txt
   - LOGS_DIR=$LOG_ROOT/$PET_NODE_RANK
-  - '[[ -d $LOGS_DIR ]] && rm -rf $LOGS_DIR'
+  - 'if [ -d $LOGS_DIR ]; then rm -rf $LOGS_DIR; fi'
   - mkdir -p $LOGS_DIR 
   - OUTPUT_LOG=$LOGS_DIR/compile.log
   - CACHE_DIR=$CACHE_ROOT/$PET_NODE_RANK
-  - '[[ -d $CACHE_DIR ]] && rm -rf $CACHE_DIR'
+  - 'if [ -d $CACHE_DIR ]; then rm -rf $CACHE_DIR; fi'
   - mkdir -p $CACHE_DIR
   - TMP_CACHE_DIR=/tmp/cache
   - mkdir -p $TMP_CACHE_DIR
@@ -58,6 +60,8 @@ pre_script:
     --grad_accum_usteps $ACC_STEPS"
   - echo DISTRIBUTED_ARGS=$DISTRIBUTED_ARGS
   - echo "#!/bin/bash" >  compile.sh
+  - echo "sysctl -w net.ipv4.ip_local_reserved_ports=48620" >> compile.sh
+  - echo "export NEURON_RT_ROOT_COMM_ID=$HOSTNAME:48620" >> compile.sh
   - echo export NEURON_CC_FLAGS=\"--model-type=transformer -O1 --enable-saturate-infinity --cache_dir=$TMP_CACHE_DIR\" >> ./compile.sh
   - echo "torchrun  $DISTRIBUTED_ARGS tp_dp_gpt_neox_6.9b_hf_pretrain.py --data_dir $DATA_PATH --output_dir $CKPT_ROOT $GPT_ARGS 2>&1 | tee $OUTPUT_LOG"  >> compile.sh 
   - chmod u+x ./compile.sh
@@ -75,7 +79,7 @@ train:
       value: /efs/home/{{ .Release.Name }}/cache
     - name: CKPT_ROOT
       value: "/tmp/checkpoints"
-    - name: CCOM_SOCKET_IFNAMETMP_CACHE_DIR
+    - name: CCOM_SOCKET_IFNAME
       value: "eth0"
     - name: FI_EFA_USE_DEVICE_RDMA
       value: "1"

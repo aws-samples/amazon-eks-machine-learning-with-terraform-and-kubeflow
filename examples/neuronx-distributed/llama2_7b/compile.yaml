@@ -1,4 +1,4 @@
-image: '763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-training-neuronx:1.13.1-neuronx-py310-sdk2.17.0-ubuntu20.04'
+image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.1.2-neuronx-py310-sdk2.18.0-ubuntu20.04'
 backoff_limit: 2000
 ebs:
   storage: 200Gi
@@ -20,20 +20,20 @@ tolerations:
 git:
   repo_url: "https://github.com/aws-neuron/neuronx-distributed.git"
   branch: main
-  commit: e9e61af6d4630383057a028b5238734a44601de0
+  commit: 8520967d0a39e703e03ba0edbe595230f7e16bde
 pre_script: 
   - pip3 install --upgrade pip
   - SCRIPT_DIR=$GIT_CLONE_DIR/examples/training/llama2/tp_zero1_llama2_7b_hf_pretrain
   - cp $GIT_CLONE_DIR/examples/training/llama2/requirements.txt $SCRIPT_DIR
-  - cp $GIT_CLONE_DIR/examples/training/llama2/modeling_llama_nxd.py $SCRIPT_DIR
+  - cp $GIT_CLONE_DIR/examples/training/llama2/*.py $SCRIPT_DIR
   - cd $SCRIPT_DIR
   - pip3 install -r requirements.txt
   - LOGS_DIR=$LOG_ROOT/$PET_NODE_RANK
-  - '[[ -d $LOGS_DIR ]] && rm -rf $LOGS_DIR'
+  - 'if [ -d $LOGS_DIR ]; then rm -rf $LOGS_DIR; fi'
   - mkdir -p $LOGS_DIR 
   - OUTPUT_LOG=$LOGS_DIR/compile.log
   - CACHE_DIR=$CACHE_ROOT/$PET_NODE_RANK
-  - '[[ -d $CACHE_DIR ]] && rm -rf $CACHE_DIR'
+  - 'if [ -d $CACHE_DIR ]; then rm -rf $CACHE_DIR; fi'
   - mkdir -p $CACHE_DIR
   - TMP_CACHE_DIR=/tmp/cache
   - mkdir -p $CKPT_ROOT
