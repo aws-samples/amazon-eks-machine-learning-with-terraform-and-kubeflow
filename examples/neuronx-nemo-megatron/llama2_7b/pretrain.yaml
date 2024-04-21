@@ -110,24 +110,26 @@ pre_script:
     model.activations_checkpoint_granularity=full 
     model.activations_checkpoint_method=uniform 
     model.activations_checkpoint_num_layers=1
-    model.convert_to_hf=True
+    model.convert_to_hf=False
     model.output_dir=$LOGS_DIR
+    model.config_path=$MODEL_PATH/config.json
     +model.save_xser=True
     +model.load_xser=True
+    exp_manager.name=$EXP_NAME
     exp_manager.create_tensorboard_logger=$CREATE_TB_LOGGER 
-    exp_manager.resume_if_exists=False 
-    exp_manager.resume_ignore_no_checkpoint=False 
+    exp_manager.resume_if_exists=True 
+    exp_manager.resume_ignore_no_checkpoint=True 
     exp_manager.create_checkpoint_callback=$CHECKPOINT_CALLBACK 
-    exp_manager.explicit_log_dir=$LOGS_DIR 
-    +exp_manager.checkpoint_callback_params.train_time_interval=3600000 
+    exp_manager.explicit_log_dir=$LOG_ROOT/nemo_experiments/$EXP_NAME
+    exp_manager.checkpoint_callback_params.save_top_k=1
+    exp_manager.checkpoint_callback_params.save_last=False
+    +exp_manager.checkpoint_callback_params.every_n_train_steps=100
     model.use_cpu_initialization=True"
   - echo DISTRIBUTED_ARGS=$DISTRIBUTED_ARGS
   - TMP_CACHE_DIR=/tmp/cache
   - cp -r $CACHE_DIR $TMP_CACHE_DIR
   - export NEURON_CC_FLAGS="--model-type transformer --distribution-strategy=llm-training --enable-mixed-precision-accumulation --cache_dir=$TMP_CACHE_DIR"
   - NEURON_COMPILE_CACHE_URL=$TMP_CACHE_DIR neuron_parallel_compile --command clear-locks
-post_script:
-  - 'if [ -d $PWD/nemo_experiments ]; then cp -r $PWD/nemo_experiments  $LOG_ROOT; fi'
 train:
   env:
     - name: HOME
@@ -148,8 +150,6 @@ train:
       value: "efa"
     - name: FI_EFA_FORK_SAFE
       value: "1"
-    - name: SLURM_JOB_ID
-      value: ""
     - name: EXP_NAME
       value: "pretrain"
   command:
