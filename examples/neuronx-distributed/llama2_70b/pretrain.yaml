@@ -73,7 +73,7 @@ pre_script:
     --tb_dir $tb_dir
     --save_checkpoint
     --checkpoint_freq=100
-    --num_kept_checkpoint=10
+    --num_kept_checkpoint=1
     --save_load_xser 1"
   - TMP_CACHE_DIR=/tmp/cache
   - cp -r $CACHE_DIR $TMP_CACHE_DIR

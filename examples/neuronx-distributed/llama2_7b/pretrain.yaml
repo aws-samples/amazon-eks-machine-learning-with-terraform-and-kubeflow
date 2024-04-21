@@ -64,7 +64,7 @@ pre_script:
     --use_mix_precision
     --use_zero_1
     --checkpoint_freq=100
-    --num_kept_checkpoint=10"
+    --num_kept_checkpoint=1"
   - export TPU_NUM_DEVICES=$PET_NPROC_PER_NODE
   - export TPU_CHIPS_PER_HOST_BOUNDS=$PET_NPROC_PER_NODE
   - TMP_CACHE_DIR=/tmp/cache
