@@ -45,7 +45,7 @@ train:
     - name: MODEL_PATH
       value: "/fsx/pretrained-models/meta-llama/Llama-2-7b-chat-hf"
     - name: CKPT_ROOT
-      value: "/fsx/home/{{ .Release.Name }}"
+      value: "/efs/home/{{ .Release.Name }}"
     - name: ACCELERATE_USE_FSDP
       value: "true"
     - name: FSDP_AUTO_WRAP_POLICY
