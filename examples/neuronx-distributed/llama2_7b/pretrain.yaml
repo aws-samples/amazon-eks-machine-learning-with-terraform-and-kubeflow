@@ -63,6 +63,7 @@ pre_script:
     --logging_interval 10
     --use_mix_precision
     --use_zero_1
+    --loading_step latest_if_exists
     --checkpoint_freq=100
     --num_kept_checkpoint=1"
   - export TPU_NUM_DEVICES=$PET_NPROC_PER_NODE

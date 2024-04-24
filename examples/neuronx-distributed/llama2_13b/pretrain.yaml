@@ -71,6 +71,7 @@ pre_script:
     --use_selective_checkpoint 1 
     --tb_dir $tb_dir
     --save_checkpoint
+    --loading_step latest_if_exists
     --checkpoint_freq=100
     --num_kept_checkpoint=1
     --save_load_xser 1"
