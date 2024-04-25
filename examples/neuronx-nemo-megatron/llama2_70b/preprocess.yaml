@@ -1,13 +1,13 @@
 image: public.ecr.aws/neuron/pytorch-training-neuronx:2.1.2-neuronx-py310-sdk2.18.0-ubuntu20.04
 backoff_limit: 2000
 ebs:
-  storage: 200Gi
+  storage: 400Gi
   mount_path: /tmp
 resources:
   requests:
-    "aws.amazon.com/neuron": 8
+    "aws.amazon.com/neuron": 16
   limits:
-    "aws.amazon.com/neuron": 8
+    "aws.amazon.com/neuron": 16
 tolerations:
   - key: "aws.amazon.com/neuron"
     operator: "Exists"

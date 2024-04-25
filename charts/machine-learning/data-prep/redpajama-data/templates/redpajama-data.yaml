@@ -13,7 +13,7 @@ data:
     mkdir -p $DATA_DIR
     echo "Data dir: $DATA_DIR"
     
-    wget -O $DATA_DIR/data.jsonl https://data.together.xyz/redpajama-data-1T/v1.0.0/book/book.jsonl
+    wget -O $DATA_DIR/data.jsonl https://data.together.xyz/redpajama-data-1T/v1.0.0/wikipedia/wiki.jsonl
 ---
 apiVersion: v1
 kind: Pod
