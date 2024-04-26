@@ -1,0 +1,6 @@
+apiVersion: v2
+name: databricks-dolly-15k
+description: A Helm chart for downloading databricks/databricks-dolly-15k data
+type: application
+version: 1.0.0
+appVersion: "v1"

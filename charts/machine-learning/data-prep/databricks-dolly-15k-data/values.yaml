@@ -1,0 +1,4 @@
+pvc:
+  name: pv-fsx
+  mount_path: /fsx
+  data_path: data/databricks-dolly-15k # relative to mount_path
