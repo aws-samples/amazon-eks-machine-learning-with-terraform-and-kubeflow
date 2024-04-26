@@ -1,0 +1,17 @@
+image: public.ecr.aws/docker/library/python:slim-bullseye
+ebs:
+  storage: 400Gi
+  mount_path: /tmp
+resources:
+  requests:
+    cpu: "1000m"
+    memory: "512Mi"
+  limits:
+    cpu: "2000m"
+    memory: "8192Mi"
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+env: []

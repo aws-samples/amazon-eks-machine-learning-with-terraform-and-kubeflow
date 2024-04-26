@@ -1,0 +1,6 @@
+apiVersion: v2
+name: hugging-face-snapshot
+description: A Helm chart for downloading Hugging Face snapshot
+type: application
+version: 1.0.0
+appVersion: "v1"
