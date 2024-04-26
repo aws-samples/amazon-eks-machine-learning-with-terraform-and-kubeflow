@@ -1,4 +1,4 @@
-image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.1.2-neuronx-py310-sdk2.18.0-ubuntu20.04'
+image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.1.2-neuronx-py310-sdk2.18.2-ubuntu20.04'
 backoff_limit: 2000
 ebs:
   storage: 200Gi
@@ -18,6 +18,7 @@ git:
   branch: main
 pre_script: 
   - pip3 install --upgrade pip
+  - 'if [ -d $DATA_ROOT ]; then echo "$DATA_ROOT exists" && exit 0; fi'
   - mkdir -p $DATA_ROOT
   - SCRIPT_DIR=$GIT_CLONE_DIR/examples/training/llama2/lightning
   - cp $GIT_CLONE_DIR/examples/training/llama2/lightning/finetune_config/config.json $SCRIPT_DIR
@@ -30,10 +31,12 @@ process:
   env:
     - name: HOME
       value: /tmp
+    - name: XDG_CACHE_HOME
+      value: /tmp
     - name: DATA_ROOT
       value: /fsx/home/{{ .Release.Name }}
     - name: TOKENIZER_MODEL
-      value: /fsx/llama2/tokenizer.model
+      value: /fsx/pretrained-models/meta-llama/Llama-2-7b-hf/tokenizer.model
   command:
     -  HOME=$DATA_ROOT python3 
   args:

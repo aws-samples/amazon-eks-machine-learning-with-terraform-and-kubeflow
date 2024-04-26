@@ -19,13 +19,19 @@ Following variables are implicitly defined by the [pytorch-distributed](../../..
 4. `PET_MASTER_ADDR`: Maps to `master_addr` 
 5. `PET_MASTER_PORT`: Maps to `master_port`
 
-## Hugging Face Llama2 7B pre-trained model weights
+## Hugging Face Llama2 7B model
 
-Below, we show sample commands for downloading and uploading the pre-trained model weights for Hugging Face Llama2 7B model using [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/en/guides/cli) (replace HF_TOKEN with your Hugging Face CLI token, and S3_BUCKET with your configured S3 bucket), below:
+To download Hugging Face Llama2 7B model configuration (without model weights, since we are pre-training from scratch), replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
 
-    huggingface-cli download --repo-type model --revision 8a0442e81540efaeb1a0fe3e95477b5e0edfd423 --local-dir ./meta-llama/Llama-2-7b-hf --token HF_TOKEN  meta-llama/Llama-2-7b-hf
+cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+helm install --debug nx-nemo-megatron-llama2-7b     \
+    charts/machine-learning/data-prep/hf-snapshot    \
+    --set-json='env=[{"name":"HF_MODEL_ID","value":"meta-llama/Llama-2-7b-hf"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"},{"name": "HF_TENSORS", "value": "false"}]' \
+    -n kubeflow-user-example-com
 
-    aws s3 cp --recursive meta-llama/Llama-2-7b-hf s3://S3_BUCKET/ml-platform/pretrained-models/meta-llama/Llama-2-7b-hf
+Uninstall the Helm chart at completion:
+
+    helm uninstall nx-nemo-megatron-llama2-7b -n kubeflow-user-example-com
 
 ## Download Redpajama dataset 
 

@@ -21,9 +21,19 @@ Following variables are implicitly defined by the [pytorch-distributed](../../..
 4. `PET_MASTER_ADDR`: Maps to `master_addr` 
 5. `PET_MASTER_PORT`: Maps to `master_port`
 
-## Download Meta Llama2 Tokenizer Model file
+## Hugging Face Llama2 13B model
 
-[Download the Meta Llama2](https://llama.meta.com/llama2) model files. Upload the `tokenizer.model` file to your configured S3 bucket under the S3 path `ml-platform/llama2/tokenizer.model`. Once you upload it to the S3 bucket, it will be automatically imported to the FSx for Lustre file-system at the path `/fsx/llama2/tokenizer.model`.
+To download Hugging Face Llama2 13B model configuration (without model weights, since we are pre-training from scratch), replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug nxd-llama2-13b-ptl     \
+        charts/machine-learning/data-prep/hf-snapshot    \
+        --set-json='env=[{"name":"HF_MODEL_ID","value":"meta-llama/Llama-2-13b-hf"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"},{"name": "HF_TENSORS", "value": "false"}]' \
+        -n kubeflow-user-example-com
+
+Uninstall the Helm chart at completion:
+
+    helm uninstall nxd-llama2-13b-ptl -n kubeflow-user-example-com
 
 ## Pre-process Wikicorpus dataset
 
