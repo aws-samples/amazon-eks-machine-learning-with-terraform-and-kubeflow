@@ -10,26 +10,49 @@ See [What is in the YAML file](../../../../../README.md#what-is-in-the-yaml-file
 
 ## Hugging Face Llama 2 pre-trained model weights
 
-Since we are fine-tuning Llama 2 models, we need to download Hugging Face Llama 2 pre-trained model weights, and upload them to your configured S3 bucket. To download the model weights, you will need your Hugging Face CLI token. Below, we show sample commands for downloading and uploading the pre-trained model weights for 7B, 13B, and 70B models using [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/en/guides/cli) (replace HF_TOKEN with your Hugging Face CLI token, and S3_BUCKET with your configured S3 bucket), below:
+Since we are fine-tuning Llama 2 models, we need to download Hugging Face Llama 2 pre-trained model weights.
 
 ### Llama 2 7B model weights
 
-    huggingface-cli download --repo-type model --revision 09bd0f49e16738cdfaa6e615203e126038736eb0 --local-dir ./meta-llama/Llama-2-7b-chat-hf --token HF_TOKEN  meta-llama/Llama-2-7b-chat-hf
+To download Hugging Face Llama2 7B Chat model weights, replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
 
-    aws s3 cp --recursive meta-llama/Llama-2-7b-chat-hf s3://S3_BUCKET/ml-platform/pretrained-models/meta-llama/Llama-2-7b-chat-hf
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug accel-llama2-7b     \
+        charts/machine-learning/data-prep/hf-snapshot    \
+        --set-json='env=[{"name":"HF_MODEL_ID","value":"meta-llama/Llama-2-7b-chat-hf"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
+        -n kubeflow-user-example-com
+
+Uninstall the Helm chart at completion:
+
+    helm uninstall accel-llama2-7b  -n kubeflow-user-example-com
 
 ### Llama 2 13B model weights
 
-    huggingface-cli download --repo-type model --revision c2f3ec81aac798ae26dcc57799a994dfbf521496 --local-dir ./meta-llama/Llama-2-13b-chat-hf --token HF_TOKEN  meta-llama/Llama-2-13b-chat-hf
+To download Hugging Face Llama2 13B Chat model weights, replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
 
-    aws s3 cp --recursive meta-llama/Llama-2-13b-chat-hf s3://S3_BUCKET/ml-platform/pretrained-models/meta-llama/Llama-2-13b-chat-hf
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug accel-llama2-13b     \
+        charts/machine-learning/data-prep/hf-snapshot    \
+        --set-json='env=[{"name":"HF_MODEL_ID","value":"meta-llama/Llama-2-13b-chat-hf"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
+        -n kubeflow-user-example-com
+
+Uninstall the Helm chart at completion:
+
+    helm uninstall accel-llama2-13b  -n kubeflow-user-example-com
 
 ### Llama 2 70B model weights
 
-    huggingface-cli download --repo-type model --revision e4b287212771ce25f782ed8636cbea2d7c5ac7e2 --local-dir ./meta-llama/Llama-2-70b-chat-hf --token HF_TOKEN  meta-llama/Llama-2-70b-chat-hf
+To download Hugging Face Llama2 70B Chat model weights, replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
 
-    aws s3 cp --recursive meta-llama/Llama-2-70b-chat-hf s3://S3_BUCKET/ml-platform/pretrained-models/meta-llama/Llama-2-70b-chat-hf
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug accel-llama2-70b     \
+        charts/machine-learning/data-prep/hf-snapshot    \
+        --set-json='env=[{"name":"HF_MODEL_ID","value":"meta-llama/Llama-2-70b-chat-hf"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
+        -n kubeflow-user-example-com
 
+Uninstall the Helm chart at completion:
+
+    helm uninstall accel-llama2-70b  -n kubeflow-user-example-com
 
 ## Implicitly defined environment variables
 
@@ -49,7 +72,7 @@ To launch fine-tuning job,  execute:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug accel-llama2-7b \
         ./charts/machine-learning/training/pytorchjob-elastic/ \
-        -f examples/accelerate/llama2/ft/fsdp/7b.yaml -n kubeflow-user-example-com
+        -f examples/accelerate/llama2-ft-fsdp/7b.yaml -n kubeflow-user-example-com
 
 You can tail the logs using following command:
 
@@ -69,7 +92,7 @@ To launch fine-tuning job,  execute:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug accel-llama2-13b \
         ./charts/machine-learning/training/pytorchjob-elastic/ \
-        -f examples/accelerate/llama2/ft/fsdp/13b.yaml -n kubeflow-user-example-com
+        -f examples/accelerate/llama2-ft-fsdp/13b.yaml -n kubeflow-user-example-com
 
 You can tail the logs using following command:
 
@@ -89,7 +112,7 @@ To launch fine-tuning job,  execute:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug accel-llama2-70b \
         ./charts/machine-learning/training/pytorchjob-elastic/ \
-        -f examples/accelerate/llama2/ft/fsdp/70b.yaml -n kubeflow-user-example-com
+        -f examples/accelerate/llama2-ft-fsdp/70b.yaml -n kubeflow-user-example-com
 
 You can tail the logs using following command:
 
