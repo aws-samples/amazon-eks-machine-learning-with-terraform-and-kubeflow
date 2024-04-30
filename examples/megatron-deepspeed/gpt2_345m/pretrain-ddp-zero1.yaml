@@ -77,7 +77,6 @@ train:
   command:
     -  "torchrun" 
   args: 
-  args: 
     - $DISTRIBUTED_ARGS
     - pretrain_gpt.py
     - '--deepspeed --deepspeed_config $HOME/ds_config.json'
