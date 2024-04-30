@@ -36,7 +36,6 @@ pre_script:
   - mkdir -p $CACHE_DIR
   - mkdir -p $CKPT_ROOT
   - tb_dir=$LOG_ROOT/tb/pretrain
-  - '[[ -d $tb_dir ]] && rm -rf $tb_dir'
   - mkdir -p $tb_dir
   - DATA_PATH="$DATA_ROOT/examples_datasets/wikicorpus_llama2_7B_tokenized_4k"
   - DISTRIBUTED_ARGS="--nproc_per_node $PET_NPROC_PER_NODE --nnodes $PET_NNODES --node_rank $PET_NODE_RANK --master_addr $PET_MASTER_ADDR --master_port $PET_MASTER_PORT"
