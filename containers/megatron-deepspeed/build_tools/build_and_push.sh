@@ -58,9 +58,11 @@ aws ecr get-login-password --region ${region} \
 docker push ${fullname}
 if [ $? -eq 0 ]; then
 	echo "Amazon ECR URI: ${fullname}"
-    sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../../examples/megatron-deepspeed/gpt2_345m/pretrain-ddp-zero1.yaml
-	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../../examples/megatron-deepspeed/gpt2_345m/pretrain-ddp-tp-pp-zero1.yaml
-    sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../../examples/megatron-deepspeed/gpt2_345m/wikicorpus.yaml
+    files=$(find $DIR/../../../examples/megatron-deepspeed/ -name "*.yaml")
+    for file in $files
+    do
+        sed -i -e "s|image:.*$|image: ${fullname}|g" $file
+    done
 else
 	echo "Error: Image build and push failed"
 	exit 1
