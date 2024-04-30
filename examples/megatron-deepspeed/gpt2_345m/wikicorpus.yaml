@@ -4,6 +4,10 @@ resources:
     "nvidia.com/gpu": 1
   limits:
     "nvidia.com/gpu": 1
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
 ebs:
   storage: 100Gi
   mount_path: /tmp
