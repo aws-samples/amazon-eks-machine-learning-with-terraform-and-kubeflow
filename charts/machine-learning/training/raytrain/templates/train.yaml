@@ -24,7 +24,11 @@ data:
     {{- end }}
     
     {{- end }}
-        
+    
+    {{- range .Values.inline_script }}
+    {{ . | indent 4 }}
+    {{- end }}
+
     {{- range .Values.pre_script }}
     {{ . }}
     {{- end }}

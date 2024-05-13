@@ -13,7 +13,7 @@ To launch fine-tuning,  execute:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug ray-bert \
         charts/machine-learning/training/raytrain/ \
-        -f examples/ray/lightning-bert/fine-tune.yaml -n kubeflow-user-example-com
+        -f examples/raytrain/lightning-bert/fine-tune.yaml -n kubeflow-user-example-com
 
 The sequence of Ray training pod startup is as follows:
 
