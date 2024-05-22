@@ -16,5 +16,7 @@ RUN cd /NeMo && pip install -r /NeMo/requirements/requirements_lightning.txt
 RUN cd /NeMo && pip install -r /NeMo/requirements/requirements_nlp.txt
 
 RUN pip3 install git+https://github.com/NVIDIA/Megatron-LM.git@0d983e64afcd84cab83124e0b7ca89a3d8ec9655
+RUN pip3 install transformers==4.40.1
+RUN pip3 install datasets==2.19.0
 
 CMD ["/bin/bash"]
