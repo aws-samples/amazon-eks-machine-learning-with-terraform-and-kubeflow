@@ -84,6 +84,40 @@ Uninstall the Helm chart at completion:
 
     helm uninstall nemo-llama2-7b-peft -n kubeflow-user-example-com
 
+## Evaluate 
+
+To evaluate peft trained model over test dataset:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug nemo-llama2-7b-peft \
+       charts/machine-learning/training/pytorchjob-distributed \
+        -f examples/nemo-megatron/llama2-7b-peft/peft_eval.yaml -n kubeflow-user-example-com
+
+To monitor the logs, execute:
+
+    kubectl logs -f data-process-nemo-llama2-7b-peft -n kubeflow-user-example-com
+
+Uninstall the Helm chart at completion:
+
+    helm uninstall nemo-llama2-7b-peft -n kubeflow-user-example-com
+
+## Accuracy 
+
+To compute test accuracy of peft trained model over the test dataset:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug nemo-llama2-7b-peft \
+        charts/machine-learning/data-prep/data-process \
+        -f examples/nemo-megatron/llama2-7b-peft/peft_accuracy.yaml -n kubeflow-user-example-com
+
+To monitor the logs, execute:
+
+    kubectl logs -f data-process-nemo-llama2-7b-peft -n kubeflow-user-example-com
+
+Uninstall the Helm chart at completion:
+
+    helm uninstall nemo-llama2-7b-peft -n kubeflow-user-example-com
+
 ## Output
 
 To access the output stored on EFS and FSx for Lustre file-systems, execute following commands:

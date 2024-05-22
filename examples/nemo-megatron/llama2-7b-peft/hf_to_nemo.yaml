@@ -12,13 +12,13 @@ tolerations:
     operator: "Exists"
     effect: "NoSchedule"
 pre_script: 
-  - 'if [ -f $MODEL_PATH/nemo ]; then echo "$MODEL_PATH/nemo exists" && exit 0; fi'
+  - 'if [ -f $MODEL_PATH/ckpt.nemo ]; then echo "$MODEL_PATH/ckpt.nemo exists" && exit 0; fi'
   - SCRIPT_DIR=/NeMo/scripts/checkpoint_converters
   - cd $SCRIPT_DIR
   - mkdir -p $LOG_ROOT
   - OUTPUT_LOG=$LOG_ROOT/hf_to_nemo.log
 post_script:
-  - cp -r /tmp/nemo $MODEL_PATH/
+  - cp -r /tmp/ckpt.nemo $MODEL_PATH/
 process:
   env:
     - name: LOG_ROOT
@@ -30,5 +30,5 @@ process:
   args:
     - convert_llama_hf_to_nemo.py
     - --input_name_or_path=$MODEL_PATH/ 
-    - --output_path=/tmp/nemo 
+    - --output_path=/tmp/ckpt.nemo 
     - '2>&1 | tee $OUTPUT_LOG'
