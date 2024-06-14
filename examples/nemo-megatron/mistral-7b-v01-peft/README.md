@@ -35,7 +35,7 @@ Uninstall the Helm chart at completion:
 
 ## Convert HuggingFace Checkpoint to Nemo Checkpoint
 
-To covert checkpoint:
+To convert checkpoint:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-mistral-7b-v01-peft \
@@ -109,6 +109,23 @@ To compute test accuracy of peft trained model over the test dataset:
     helm install --debug nemo-mistral-7b-v01-peft \
         charts/machine-learning/data-prep/data-process \
         -f examples/nemo-megatron/mistral-7b-v01-peft/peft_accuracy.yaml -n kubeflow-user-example-com
+
+To monitor the logs, execute:
+
+    kubectl logs -f data-process-nemo-mistral-7b-v01-peft -n kubeflow-user-example-com
+
+Uninstall the Helm chart at completion:
+
+    helm uninstall nemo-mistral-7b-v01-peft -n kubeflow-user-example-com
+
+## Convert Nemo Checkpoint to Hugging Face Checkpoint
+
+To convert checkpoint:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug nemo-mistral-7b-v01-peft \
+        charts/machine-learning/data-prep/data-process \
+        -f examples/nemo-megatron/mistral-7b-v01-peft/nemo_to_hf.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
