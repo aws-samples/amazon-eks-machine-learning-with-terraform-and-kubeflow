@@ -118,6 +118,23 @@ Uninstall the Helm chart at completion:
 
     helm uninstall nemo-mistral-7b-v01-peft -n kubeflow-user-example-com
 
+## Merge PEFT Model to Base Model
+
+To merge PEFT model to base model:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug nemo-mistral-7b-v01-peft \
+        charts/machine-learning/data-prep/data-process \
+        -f examples/nemo-megatron/mistral-7b-v01-peft/merge_peft.yaml -n kubeflow-user-example-com
+
+To monitor the logs, execute:
+
+    kubectl logs -f data-process-nemo-mistral-7b-v01-peft -n kubeflow-user-example-com
+
+Uninstall the Helm chart at completion:
+
+    helm uninstall nemo-mistral-7b-v01-peft -n kubeflow-user-example-com
+
 ## Convert Nemo Checkpoint to Hugging Face Checkpoint
 
 To convert checkpoint:

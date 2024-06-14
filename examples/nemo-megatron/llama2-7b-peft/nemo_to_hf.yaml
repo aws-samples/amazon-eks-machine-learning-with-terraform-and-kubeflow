@@ -17,6 +17,8 @@ pre_script:
   - mkdir -p $LOG_ROOT
   - OUTPUT_LOG=$LOG_ROOT/nemo_to_hf.log
   - TMP_OUTPUT_PATH=/tmp/hf_peft_model
+  - PATH_TO_MERGED_MODEL=$LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints/merged_model.nemo
+  - echo "PATH_TO_MERGED_MODEL=$PATH_TO_MERGED_MODEL"
 post_script:
   - cp -r $TMP_OUTPUT_PATH $MODEL_PATH/
 process:
@@ -25,11 +27,13 @@ process:
       value: /efs/home/{{ .Release.Name }}/logs
     - name: MODEL_PATH
       value: /fsx/pretrained-models/meta-llama/Llama-2-7b-hf
+    - name: EXP_NAME
+      value: peft_pubmedqa
   command:
     - python3
   args:
     - convert_llama_nemo_to_hf.py
-    - --input_name_or_path=$MODEL_PATH/ckpt.nemo
+    - --input_name_or_path=$PATH_TO_MERGED_MODEL
     - --output_path=$TMP_OUTPUT_PATH/model.bin
     - --hf_input_path=$MODEL_PATH
     - --hf_output_path=$TMP_OUTPUT_PATH
