@@ -843,6 +843,28 @@ resource "kubectl_manifest" "aws_auth" {
 }
 
 
+resource "helm_release" "prometheus" {
+  count = var.prometheus_enabled ? 1 : 0
+  
+  name       = "prometheus"
+  chart      = "kube-prometheus-stack"
+  cleanup_on_fail = true
+  create_namespace = true
+  repository  = "https://prometheus-community.github.io/helm-charts"
+  version    = var.prometheus_version
+  namespace  = var.prometheus_namespace
+  timeout = 300
+  wait = true
+
+  set {
+    name  = "prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues"
+    value = false
+  }
+
+  depends_on = [  helm_release.cluster-autoscaler ]
+
+}
+
 resource "helm_release" "karpenter" {
   count = var.karpenter_enabled ? 1 : 0
   

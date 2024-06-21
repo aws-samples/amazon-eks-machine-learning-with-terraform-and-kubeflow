@@ -239,7 +239,6 @@ variable "karpenter_version" {
   type = string
   default = "v0.33.2"
 }
-
 variable "karpenter_capacity_type" {
   description = "Karpenter capacity type: 'on-demand' or 'spot'"
   type = string
@@ -256,6 +255,24 @@ variable "karpenter_max_pods" {
   description = "Karpenter kubelet maxPods"
   type = number
   default = 20
+}
+
+variable "prometheus_enabled" {
+  description = "Prometheus kube stack enabled"
+  type = bool
+  default = false
+}
+
+variable "prometheus_namespace" {
+  description = "Prometheus name space"
+  type = string
+  default = "kube-system"
+}
+
+variable "prometheus_version" {
+  description = "Prometheus community kube-prometheus-stack chart version"
+  type = string
+  default = "60.3.0"
 }
 
 variable "nvidia_plugin_version" {
@@ -309,7 +326,7 @@ variable "kubeflow_platform_enabled" {
 
 variable "system_group_desired" {
     description = "System group desired size"
-    default = 4
+    default = 5
     type = number
 }
 
