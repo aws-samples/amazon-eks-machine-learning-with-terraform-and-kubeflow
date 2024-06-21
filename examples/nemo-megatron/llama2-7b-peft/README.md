@@ -25,7 +25,7 @@ To download Hugging Face Llama2 7B pre-trained model weights, replace `YourHuggi
 
 cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
 helm install --debug nemo-llama2-7b-peft     \
-    charts/machine-learning/data-prep/hf-snapshot    \
+    charts/machine-learning/model-prep/hf-snapshot    \
     --set-json='env=[{"name":"HF_MODEL_ID","value":"meta-llama/Llama-2-7b-hf"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
     -n kubeflow-user-example-com
 

@@ -27,7 +27,7 @@ To download Hugging Face Llama2 13B model configuration (without model weights, 
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nxd-llama2-13b-ptl     \
-        charts/machine-learning/data-prep/hf-snapshot    \
+        charts/machine-learning/model-prep/hf-snapshot    \
         --set-json='env=[{"name":"HF_MODEL_ID","value":"meta-llama/Llama-2-13b-hf"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"},{"name": "HF_TENSORS", "value": "false"}]' \
         -n kubeflow-user-example-com
 

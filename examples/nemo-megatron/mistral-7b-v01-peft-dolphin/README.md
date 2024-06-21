@@ -25,7 +25,7 @@ To download Hugging Face Mistral 7B pre-trained model weights, replace `YourHugg
 
 cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
 helm install --debug nemo-mistral-7b-v01-peft-dolphin     \
-    charts/machine-learning/data-prep/hf-snapshot    \
+    charts/machine-learning/model-prep/hf-snapshot    \
     --set-json='env=[{"name":"HF_MODEL_ID","value":"mistralai/Mistral-7B-v0.1"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
     -n kubeflow-user-example-com
 

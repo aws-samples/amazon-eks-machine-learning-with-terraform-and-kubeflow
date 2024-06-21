@@ -18,7 +18,7 @@ To download Hugging Face Llama2 7B Chat model weights, replace `YourHuggingFaceT
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug accel-llama2-7b     \
-        charts/machine-learning/data-prep/hf-snapshot    \
+        charts/machine-learning/model-prep/hf-snapshot    \
         --set-json='env=[{"name":"HF_MODEL_ID","value":"meta-llama/Llama-2-7b-chat-hf"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
         -n kubeflow-user-example-com
 
@@ -32,7 +32,7 @@ To download Hugging Face Llama2 13B Chat model weights, replace `YourHuggingFace
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug accel-llama2-13b     \
-        charts/machine-learning/data-prep/hf-snapshot    \
+        charts/machine-learning/model-prep/hf-snapshot    \
         --set-json='env=[{"name":"HF_MODEL_ID","value":"meta-llama/Llama-2-13b-chat-hf"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
         -n kubeflow-user-example-com
 
@@ -46,7 +46,7 @@ To download Hugging Face Llama2 70B Chat model weights, replace `YourHuggingFace
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug accel-llama2-70b     \
-        charts/machine-learning/data-prep/hf-snapshot    \
+        charts/machine-learning/model-prep/hf-snapshot    \
         --set-json='env=[{"name":"HF_MODEL_ID","value":"meta-llama/Llama-2-70b-chat-hf"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
         -n kubeflow-user-example-com
 
