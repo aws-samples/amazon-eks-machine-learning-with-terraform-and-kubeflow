@@ -1,0 +1,64 @@
+image: 
+  name: nvcr.io/nvidia/tritonserver:24.05-trtllm-python-py3
+resources:
+  instance_type: g5.48xlarge
+  requests:
+    "nvidia.com/gpu": 8
+  limits:
+    "nvidia.com/gpu": 8
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+git:
+  repo_url: "https://github.com/triton-inference-server/tensorrtllm_backend.git"
+  commit: 76464e9be06600f3979acad9c14857938a66ff9f
+  branch: main
+pre_script: 
+  - mkdir -p $LOG_ROOT
+  - TP_SIZE=8
+  - PP_SIZE=1
+  - OUTPUT_LOG="$LOG_ROOT/triton_server_tp_${TP_SIZE}_pp_${PP_SIZE}.log"
+  - MODEL_REPO=$OUTPUT_ROOT/inflight_batcher_llm_tp_${TP_SIZE}_pp_${PP_SIZE}
+server:
+  ports:
+    http: 8000
+    grpc: 8001
+    metrics: 8002
+  readiness_probe:
+    period_secs: 5
+    failure_threshold: 3
+  startup_probe:
+    period_secs: 10
+    failure_threshold: 30
+  liveness_probe:
+    period_secs: 10
+    failure_threshold: 3
+  env:
+    - name: HOME
+      value: /tmp
+    - name: LOG_ROOT
+      value: /efs/home/{{ .Release.Name }}/logs
+    - name: OUTPUT_ROOT
+      value: /efs/home/{{ .Release.Name }}/trtllm
+  command:
+    - python3
+  args:
+    - scripts/launch_triton_server.py
+    - --world_size=$((TP_SIZE * PP_SIZE))
+    - --model_repo=${MODEL_REPO}
+    - --grpc_port=8001
+    - --http_port=8000
+    - --metrics_port=8002
+    - --log-file=$OUTPUT_LOG
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 4
+    metrics:
+      - type: Pods
+        pods:
+          metric:
+            name: avg_time_queue_us
+          target:
+            type: AverageValue
+            averageValue: 50

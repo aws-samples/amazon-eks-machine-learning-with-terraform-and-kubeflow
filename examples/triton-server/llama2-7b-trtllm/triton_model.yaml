@@ -1,0 +1,44 @@
+image: nvcr.io/nvidia/tritonserver:24.05-trtllm-python-py3
+resources:
+  requests:
+    "nvidia.com/gpu": 1
+  limits:
+    "nvidia.com/gpu": 1
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+git:
+  repo_url: "https://github.com/triton-inference-server/tensorrtllm_backend.git"
+  commit: 76464e9be06600f3979acad9c14857938a66ff9f
+  branch: main
+pre_script: 
+  - mkdir -p $LOG_ROOT
+  - TP_SIZE=8
+  - PP_SIZE=1
+  - OUTPUT_LOG=$LOG_ROOT/triton_model_tp_${TP_SIZE}_pp_${PP_SIZE}.log
+  - TOKENIZER_DIR=$MODEL_PATH
+  - TOKENIZER_TYPE=auto
+  - DECOUPLED_MODE=false
+  - MODEL_REPO=$OUTPUT_ROOT/inflight_batcher_llm_tp_${TP_SIZE}_pp_${PP_SIZE}
+  - MAX_BATCH_SIZE=8
+  - INSTANCE_COUNT=1
+  - MAX_QUEUE_DELAY_MS=100
+  - FILL_TEMPLATE_SCRIPT=tools/fill_template.py
+  - ENGINE_DIR=$OUTPUT_ROOT/engine_tp_${TP_SIZE}_pp_${PP_SIZE}
+  - mkdir -p $MODEL_REPO
+  - rm -rf $MODEL_REPO/*
+  - cp -r all_models/inflight_batcher_llm/* $MODEL_REPO/
+  - python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${MAX_BATCH_SIZE},preprocessing_instance_count:${INSTANCE_COUNT} 2>&1 | tee $OUTPUT_LOG
+  - python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${MAX_BATCH_SIZE},postprocessing_instance_count:${INSTANCE_COUNT} 2>&1 | tee -a $OUTPUT_LOG
+  - python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},bls_instance_count:${INSTANCE_COUNT} 2>&1 | tee -a $OUTPUT_LOG
+  - python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/ensemble/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE} 2>&1 | tee -a $OUTPUT_LOG
+  - python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/tensorrt_llm/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},engine_dir:${ENGINE_DIR},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MS},batching_strategy:inflight_fused_batching 2>&1 | tee -a $OUTPUT_LOG
+process:
+  env:
+    - name: LOG_ROOT
+      value: /efs/home/{{ .Release.Name }}/logs
+    - name: OUTPUT_ROOT
+      value: /efs/home/{{ .Release.Name }}/trtllm
+    - name: MODEL_PATH
+      value: /fsx/pretrained-models/meta-llama/Llama-2-7b-hf
