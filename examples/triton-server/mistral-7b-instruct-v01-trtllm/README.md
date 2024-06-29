@@ -1,6 +1,6 @@
 # Serve Mistral 7B Instruct v0.1 using triton Inference Server
 
-This example shows how to serve [mistral-7b-instruct-v01](https://huggingface.co/meta-llama/Llama-2-7b-hf) model using triton Inference server.  
+This example shows how to serve [mistral-7b-instruct-v01](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1) model using triton Inference server.  
 
 ## Prerequisites
 
