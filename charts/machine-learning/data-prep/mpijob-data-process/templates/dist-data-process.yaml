@@ -76,6 +76,20 @@ spec:
             app.kubernetes.io/managed-by: {{ .Release.Service }}
         spec:
           restartPolicy: OnFailure
+          tolerations:
+          {{- range $v := .Values.tolerations }}
+            - key: {{ tpl $v.key  $ }}
+              {{- if $v.operator }}
+              operator: "{{ $v.operator }}"
+              {{- end }}
+              {{- if $v.effect }}
+              effect: "{{ $v.effect }}"
+              {{- end }}
+          {{- end }} 
+          {{- if.Values.resources.node_type }}
+          nodeSelector:
+            node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
+          {{- end}}
           containers:
           - name: launcher 
             env:

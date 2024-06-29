@@ -102,6 +102,20 @@ spec:
     persistentVolumeClaim:
       claimName: ebs-{{ .Release.Name }}
   {{- end }}
+  tolerations:
+    {{- range $v := .Values.tolerations }}
+      - key: {{ tpl $v.key  $ }}
+        {{- if $v.operator }}
+        operator: "{{ $v.operator }}"
+        {{- end }}
+        {{- if $v.effect }}
+        effect: "{{ $v.effect }}"
+        {{- end }}
+    {{- end }} 
+  {{- if.Values.resources.node_type }}
+  nodeSelector:
+    node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
+  {{- end}}
   containers:
   - name: data-process
     env:
@@ -116,6 +130,8 @@ spec:
     volumeMounts:
     - mountPath: /etc/config
       name: config
+    - mountPath: /dev/shm
+      name: shm
     {{- $pv_index := 1 }}
     {{- range $pv := .Values.pvc }}
     - mountPath: {{ $pv.mount_path }}
