@@ -1,6 +1,6 @@
-# Serve Llama2 7B using triton Inference Server
+# Serve Llama2 7B using Triton Inference Server with TensorRT-LLM
 
-This example shows how to serve [Llama2-7B](https://huggingface.co/meta-llama/Llama-2-7b-hf) model using triton Inference server.  
+This example shows how to serve [Llama2-7B](https://huggingface.co/meta-llama/Llama-2-7b-hf) model using [Triton Inference Server](https://github.com/triton-inference-server) with [TensorRT-LLM backend](https://github.com/triton-inference-server/tensorrtllm_backend/tree/main).   
 
 ## Prerequisites
 

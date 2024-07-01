@@ -13,10 +13,6 @@ tolerations:
 ebs:
   storage: 400Gi
   mount_path: /tmp
-git:
-  repo_url: "https://github.com/triton-inference-server/tensorrtllm_backend.git"
-  commit: 76464e9be06600f3979acad9c14857938a66ff9f
-  branch: main
 inline_script:
 - |+
   cat > /tmp/config.pbtxt <<EOF

@@ -1,6 +1,6 @@
-# Serve Mistral 7B Instruct v0.1 using triton Inference Server
+# Serve Mistral 7B Instruct v0.1 using Triton Inference Server with TensorRT-LLM
 
-This example shows how to serve [mistral-7b-instruct-v01](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1) model using triton Inference server.  
+This example shows how to serve [mistral-7b-instruct-v01](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1) model using [Triton Inference Server](https://github.com/triton-inference-server) with [TensorRT-LLM backend](https://github.com/triton-inference-server/tensorrtllm_backend/tree/main).  
 
 ## Prerequisites
 

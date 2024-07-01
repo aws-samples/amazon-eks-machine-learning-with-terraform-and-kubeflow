@@ -1,6 +1,6 @@
-# Serve Mistral 7B Instruct v0.1 using triton Inference Server
+# Serve Mistral 7B Instruct v0.1 using Triton Inference Server with vLLM
 
-This example shows how to serve [mistral-7b-instruct-v01](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1) model using vLLM with triton Inference server.  
+This example shows how to serve [mistral-7b-instruct-v01](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1) model using [Triton Inference Server](https://github.com/triton-inference-server) with [vLLM backend](https://github.com/triton-inference-server/vllm_backend/tree/main). 
 
 ## Prerequisites
 
