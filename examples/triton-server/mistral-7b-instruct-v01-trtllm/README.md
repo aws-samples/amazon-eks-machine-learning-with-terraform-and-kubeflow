@@ -13,11 +13,11 @@ See [What is in the YAML file](../../../README.md#what-is-in-the-yaml-file) to u
 
 To download Hugging Face Mistral 7B Instruct v0.1 pre-trained model weights, replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
 
-cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-helm install --debug triton-server-mistral-7b-instruct-v01-trtllm     \
-    charts/machine-learning/model-prep/hf-snapshot    \
-    --set-json='env=[{"name":"HF_MODEL_ID","value":"mistralai/Mistral-7B-Instruct-v0.1"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
-    -n kubeflow-user-example-com
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug triton-server-mistral-7b-instruct-v01-trtllm     \
+        charts/machine-learning/model-prep/hf-snapshot    \
+        --set-json='env=[{"name":"HF_MODEL_ID","value":"mistralai/Mistral-7B-Instruct-v0.1"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
+        -n kubeflow-user-example-com
 
 Uninstall the Helm chart at completion:
 

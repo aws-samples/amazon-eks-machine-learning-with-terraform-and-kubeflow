@@ -13,11 +13,11 @@ See [What is in the YAML file](../../../README.md#what-is-in-the-yaml-file) to u
 
 To download Hugging Face Llama2 7B pre-trained model weights, replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
 
-cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-helm install --debug triton-server-llama2-7b-trtllm     \
-    charts/machine-learning/model-prep/hf-snapshot    \
-    --set-json='env=[{"name":"HF_MODEL_ID","value":"meta-llama/Llama-2-7b-hf"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
-    -n kubeflow-user-example-com
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug triton-server-llama2-7b-trtllm     \
+        charts/machine-learning/model-prep/hf-snapshot    \
+        --set-json='env=[{"name":"HF_MODEL_ID","value":"meta-llama/Llama-2-7b-hf"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
+        -n kubeflow-user-example-com
 
 Uninstall the Helm chart at completion:
 
