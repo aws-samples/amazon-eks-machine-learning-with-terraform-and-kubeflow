@@ -84,9 +84,6 @@ To launch Triton server:
         charts/machine-learning/serving/triton-inference-server \
         -f examples/triton-server/llama2-7b-trtllm/triton_server.yaml -n kubeflow-user-example-com
 
-To monitor the logs, execute:
-
-    kubectl logs -f data-process-triton-server-llama2-7b-trtllm -n kubeflow-user-example-com
 
 Uninstall the Helm chart at completion:
 

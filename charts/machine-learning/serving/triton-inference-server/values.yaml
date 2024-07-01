@@ -18,8 +18,6 @@ git:
   commit:
 pre_script: []
 post_script: []
-mpirun:
-  args: []
 server:
   name: triton-inference-server 
   args: []

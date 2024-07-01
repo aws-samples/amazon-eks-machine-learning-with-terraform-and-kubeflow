@@ -41,4 +41,4 @@ process:
     - name: OUTPUT_ROOT
       value: /efs/home/{{ .Release.Name }}/trtllm
     - name: MODEL_PATH
-      value: /fsx/pretrained-models/meta-llama/Llama-2-7b-hf
+      value: /fsx/pretrained-models/mistralai/Mistral-7B-Instruct-v0.1
