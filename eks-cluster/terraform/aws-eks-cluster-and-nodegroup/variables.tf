@@ -260,7 +260,7 @@ variable "karpenter_max_pods" {
 variable "prometheus_enabled" {
   description = "Prometheus kube stack enabled"
   type = bool
-  default = false
+  default = true
 }
 
 variable "prometheus_namespace" {
