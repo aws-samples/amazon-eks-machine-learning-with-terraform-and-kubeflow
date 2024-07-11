@@ -85,29 +85,6 @@ To launch Triton server:
         -f examples/triton-server/llama2-7b-trtllm/triton_server.yaml -n kubeflow-user-example-com
 
 
-Uninstall the Helm chart at completion:
-
-    helm uninstall triton-server-llama2-7b-trtllm -n kubeflow-user-example-com
-
-## Output
-
-To access the output stored on EFS and FSx for Lustre file-systems, execute following commands:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    kubectl apply -f eks-cluster/utils/attach-pvc.yaml  -n kubeflow
-    kubectl exec -it -n kubeflow attach-pvc -- /bin/bash
-
-
-This will put you in a pod attached to the  EFS and FSx for Lustre file-systems, mounted at `/efs`, and `/fsx`, respectively. Type `exit` to exit the pod.
-
-### Data
-
-Pre-processed data is available in `/fsx/home/triton-server-llama2-7b-trtllm/data/` folder.
-
 ### Logs
 
-Pre-training `logs` are available in `/efs/home/triton-server-llama2-7b-trtllm/logs` folder. 
-
-### S3 Backup
-
-Any content stored under `/fsx` is automatically backed up to your configured S3 bucket.
+Triton server logs are available in `/efs/home/triton-server-llama2-7b-trtllm/logs` folder. 
