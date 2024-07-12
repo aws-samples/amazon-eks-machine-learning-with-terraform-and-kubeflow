@@ -14,7 +14,13 @@ ray:
       cpu: 300m 
     limits:
       cpu: 2
-  runtime_env_yaml: '"{ \"pip\": [ \"pytorch-lightning==2.2.1\", \"transformers==4.38.2\", \"datasets==2.18.0\", \"scikit-learn==1.4.0\" ]}"'
+  runtime_env_yaml:
+    runtimeEnvYAML: |
+      pip:
+        - pytorch-lightning==2.2.1
+        - transformers==4.38.2
+        - datasets==2.18.0
+        - scikit-learn==1.4.0
 image:
 image_pull_policy: Always
 resources:

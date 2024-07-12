@@ -64,7 +64,7 @@ spec:
   shutdownAfterJobFinishes: true
   entrypoint:  /etc/config/train-script.sh
   {{- if .Values.ray.runtime_env_yaml }}
-  runtimeEnvYAML: {{ .Values.ray.runtime_env_yaml }}
+  {{- .Values.ray.runtime_env_yaml| toYaml | nindent 2 }}
   {{- end }}
   rayClusterSpec:
     rayVersion: {{ .Values.ray.version }}
