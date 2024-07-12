@@ -40,6 +40,13 @@ To launch Triton server:
         -f examples/triton-server/llama3-8b-instruct-tnx/triton_server_neuronx.yaml -n kubeflow-user-example-com
 
 
+## Stop Service
+
+To stop the service:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm uninstall triton-server-llama3-8b-instruct-tnx -n kubeflow-user-example-com
+
 ### Logs
 
 Triton server logs are available in `/efs/home/triton-server-llama3-8b-instruct-tnx/logs` folder. 

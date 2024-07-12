@@ -34,6 +34,13 @@ To launch Triton server:
         -f examples/triton-server/mistral-7b-instruct-v01-vllm/triton_server.yaml -n kubeflow-user-example-com
 
 
+## Stop Service
+
+To stop the service:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm uninstall triton-server-mistral-7b-instruct-v01-vllm -n kubeflow-user-example-com
+
 ## Logs
 
 Triton server logs are available in `/efs/home/triton-server-mistral-7b-instruct-v01-vllm/logs` folder. 
