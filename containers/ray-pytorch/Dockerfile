@@ -1,4 +1,4 @@
-FROM rayproject/ray:2.22.0.a8ab7b-py311-cu121
+FROM rayproject/ray:2.32.0-py311-cu123
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DEBCONF_NONINTERACTIVE_SEEN=true

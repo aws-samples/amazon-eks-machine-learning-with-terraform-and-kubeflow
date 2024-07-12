@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
 export IMAGE_NAME=ray-pytorch-cuda
-export IMAGE_TAG=ray2.22.0.a8ab7b-py311-cu121-pt230
+export IMAGE_TAG=ray2.32.0-py311-cu123-pt230
