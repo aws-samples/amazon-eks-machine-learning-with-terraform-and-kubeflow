@@ -1,0 +1,147 @@
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: rayservice-{{ .Release.Name }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  serviceUnhealthySecondThreshold: {{ .Values.ray.service_unhealthy_threshold_secs }}
+  deploymentUnhealthySecondThreshold: {{ .Values.ray.deployment_unhealthy_threshold_secs }}
+  {{- .Values.ray.serve_config_v2 | toYaml | nindent 2 }}
+  rayClusterConfig:
+    rayVersion: {{ .Values.ray.version }}
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: {{ .Values.ray.dashboard.host }}
+      template:
+        metadata:
+          annotations:
+            karpenter.sh/do-not-disrupt: "true"
+            sidecar.istio.io/inject: 'false'
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            app.kubernetes.io/managed-by: {{ .Release.Service }}
+        spec:
+          restartPolicy: {{  .Values.ray.restart_policy.head | default "OnFailure" }}
+          containers:
+          - name: ray-head
+            image: {{ .Values.image }}
+            imagePullPolicy: {{ .Values.image_pull_policy}} 
+            ports:
+            {{- range $v := .Values.ray.ports }}
+              - name: {{ $v.name }}
+                containerPort: {{ $v.port }}
+            {{- end }}
+            volumeMounts:
+              {{- $pv_index := 1 }}
+              {{- range $pv := .Values.pvc }}
+              - mountPath: {{ $pv.mount_path }}
+                name: pv-{{ $pv_index }}
+              {{- $pv_index = add $pv_index 1 }}
+              {{- end }}
+            resources:
+              requests:
+              {{- range $k, $v := .Values.ray.resources.requests }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
+              limits:
+              {{- range $k, $v := .Values.ray.resources.limits }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
+          volumes:
+            - name: shm
+              hostPath:
+                path: /dev/shm
+                type: Directory
+            {{- $pv_index := 1 }}
+            {{- range $pv := .Values.pvc }}
+            - name: pv-{{ $pv_index }}
+              persistentVolumeClaim:
+                claimName: {{ $pv.name }}
+            {{- $pv_index = add $pv_index 1 }}
+            {{- end }}
+          tolerations:
+          {{- range $v := .Values.tolerations }}
+            - key: {{ $v.key }}
+              {{- if $v.operator }}
+              operator: "{{ $v.operator }}"
+              {{- end }}
+              {{- if $v.effect }}
+              effect: "{{ $v.effect }}"
+              {{- end }}
+          {{- end }}
+          nodeSelector:
+            node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
+
+    workerGroupSpecs:
+    - replicas: {{ .Values.resources.min_replicas }}
+      minReplicas: {{ .Values.resources.min_replicas }}
+      maxReplicas: {{ .Values.resources.max_replicas }}
+      groupName: serving
+      rayStartParams: {}
+      template:
+        metadata:
+          annotations:
+            karpenter.sh/do-not-disrupt: "true"
+            sidecar.istio.io/inject: 'false'
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            app.kubernetes.io/managed-by: {{ .Release.Service }}
+        spec:
+          restartPolicy: {{  .Values.ray.restart_policy.worker | default "OnFailure" }}
+          containers:
+          - name: ray-worker
+            image: {{ .Values.image }}
+            imagePullPolicy: {{ .Values.image_pull_policy}}
+            lifecycle:
+              preStop:
+                exec:
+                  command: [ "/bin/sh","-c","ray stop" ]
+            env:
+              {{- range $v := .Values.ray.env }}
+              - name: {{ $v.name }}
+                value: "{{ tpl $v.value $ }}"
+              {{- end }} 
+            volumeMounts:
+              - mountPath: /dev/shm
+                name: shm
+
+              {{- $pv_index := 1 }}
+              {{- range $pv := .Values.pvc }}
+              - mountPath: {{ $pv.mount_path }}
+                name: pv-{{ $pv_index }}
+              {{- $pv_index = add $pv_index 1 }}
+              {{- end }}
+            resources:
+              requests:
+              {{- range $k, $v := .Values.resources.requests }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
+              limits:
+              {{- range $k, $v := .Values.resources.limits }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
+          volumes:
+            - name: shm
+              hostPath:
+                path: /dev/shm
+                type: Directory
+            {{- $pv_index := 1 }}
+            {{- range $pv := .Values.pvc }}
+            - name: pv-{{ $pv_index }}
+              persistentVolumeClaim:
+                claimName: {{ $pv.name }}
+            {{- $pv_index = add $pv_index 1 }}
+            {{- end }}
+          tolerations:
+          {{- range $v := .Values.tolerations }}
+            - key: {{ $v.key }}
+              {{- if $v.operator }}
+              operator: "{{ $v.operator }}"
+              {{- end }}
+              {{- if $v.effect }}
+              effect: "{{ $v.effect }}"
+              {{- end }}
+          {{- end }}
+          nodeSelector:
+            node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}   

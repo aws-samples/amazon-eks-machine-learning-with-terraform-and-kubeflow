@@ -1,0 +1,25 @@
+ray:
+  version: '2.32.0'
+  dashboard:
+    host: '0.0.0.0'
+  ports: []
+  resources:
+    requests: {}
+    limits: {}
+  serve_config_v2:
+  service_unhealthy_threshold_secs: 900
+  deployment_unhealthy_threshold_secs: 300
+  env: 
+  restart_policy:
+    head: OnFailure
+    worker: OnFailure
+image:
+image_pull_policy: IfNotPresent
+resources:
+  min_replicas: 1
+  max_replicas: 4
+  node_type:
+  requests: {}
+  limits: {}
+tolerations: []
+pvc: []

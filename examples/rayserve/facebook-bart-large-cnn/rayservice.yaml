@@ -1,0 +1,41 @@
+ray:
+  version: '2.32.0'
+  dashboard:
+    host: '0.0.0.0'
+  ports:
+    - name: gcs
+      port: 6379
+    - name: client
+      port: 10001
+    - name: dashboard
+      port: 8265
+    - name: serve
+      port: 8000
+  resources:
+    requests:
+      cpu: 300m 
+    limits:
+      cpu: 2
+  serve_config_v2: 
+    serveConfigV2: |
+      applications:
+        - name: text_summarizer
+          import_path: text_summarizer.text_summarizer:deployment
+          runtime_env:
+            working_dir: "https://github.com/ray-project/serve_config_examples/archive/refs/heads/master.zip"
+            pip:
+              - "transformers==4.42.4"
+  service_unhealthy_threshold_secs: 900
+  deployment_unhealthy_threshold_secs: 300
+image:
+image_pull_policy: IfNotPresent
+resources:
+  requests:
+    "nvidia.com/gpu": 1 
+  limits:
+    "nvidia.com/gpu": 1 
+  node_type: 'g5.xlarge' 
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
