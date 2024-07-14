@@ -1,0 +1,114 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rayserve-vllm-asyncllmengine-{{ .Release.Name }}
+data:
+  rayserve-vllm-asyncllmengine.sh: |
+    #!/bin/bash
+
+    apt-get update
+    apt-get install -y zip 
+    
+    cat > /tmp/vllm_asyncllmengine.py <<EOF
+    import os
+
+    from fastapi import FastAPI
+    from ray import serve
+
+    from vllm.engine.arg_utils import AsyncEngineArgs
+    from vllm.engine.async_llm_engine import AsyncLLMEngine
+    from vllm.sampling_params import SamplingParams
+    from vllm.utils import random_uuid
+
+    app = FastAPI()
+
+    @serve.deployment()
+    @serve.ingress(app)
+    class VLLMDeployment:
+        def __init__(self):
+
+          engine_args = AsyncEngineArgs(
+            model=os.getenv("MODEL_PATH"),
+            tokenizer=os.getenv("TOKENIZER_PATH"),
+            tensor_parallel_size=int(os.getenv("TENSOR_PARALLEL_DEGREE")),
+            disable_log_requests=True)
+
+          self.engine = AsyncLLMEngine.from_engine_args(engine_args)
+
+        @app.post("/generate")
+        async def generate(self, prompt: str, **sampling_params):
+
+            sampling_params = SamplingParams(**sampling_params)
+            request_id = random_uuid()
+            generator = self.engine.generate(prompt, sampling_params, request_id)
+            return generator
+    
+    deployment = VLLMDeployment.bind()
+
+    EOF
+
+    cd /tmp
+    if [ -z "${ENGINE_PATH}" ]; then  echo "ENGINE_PATH env variable is required" && exit 1; fi
+    ENGINE_DIR="$(dirname "${ENGINE_PATH}")"
+    mkdir -p $ENGINE_DIR
+    zip $ENGINE_PATH vllm_asyncllmengine.py
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rayserve-vllm-asyncllmengine-{{ .Release.Name }}
+  annotations:
+    karpenter.sh/do-not-disrupt: "true"
+    sidecar.istio.io/inject: 'false'
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  restartPolicy: Never
+  volumes:
+  {{- $pv_index := 1 }}
+  {{- range $pv := .Values.pvc }}
+  - name: pv-{{ $pv_index }}
+    persistentVolumeClaim:
+      claimName: {{ $pv.name }}
+  {{- $pv_index = add $pv_index 1 }}
+  {{- end }}
+  - name: config
+    configMap:
+      defaultMode: 420
+      items:
+      - key: rayserve-vllm-asyncllmengine.sh
+        mode: 365
+        path: rayserve-vllm-asyncllmengine.sh
+      name: rayserve-vllm-asyncllmengine-{{ .Release.Name }}
+  containers:
+  - name: rayserve-vllm-asyncllmengine
+    env:
+    - name: ENGINE_PATH
+      value: {{ .Values.engine_path }}
+    {{- range $v := .Values.env }}
+    - name: {{ $v.name }}
+      value: "{{ tpl $v.value $ }}"
+    {{- end }}
+    command:
+    -  sh 
+    - /etc/config/rayserve-vllm-asyncllmengine.sh
+    image: public.ecr.aws/docker/library/python:slim-bullseye
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+    - mountPath: /etc/config
+      name: config
+    {{- $pv_index := 1 }}
+    {{- range $pv := .Values.pvc }}
+    - mountPath: {{ $pv.mount_path }}
+      name: pv-{{ $pv_index }}
+    {{- $pv_index = add $pv_index 1 }}
+    {{- end }}
+    resources:
+      requests:
+      {{- range $k, $v := .Values.resources.requests }}
+        {{ $k }}: {{ $v }}
+      {{- end }}
+      limits:
+      {{- range $k, $v := .Values.resources.limits }}
+        {{ $k }}: {{ $v }}
+      {{- end }}
