@@ -39,6 +39,8 @@ ray:
               min_replicas: 1
               max_replicas: 2
               target_ongoing_requests: 32
+            ray_actor_options:
+              num_gpus: 8
   service_unhealthy_threshold_secs: 900
   deployment_unhealthy_threshold_secs: 300
 image:
