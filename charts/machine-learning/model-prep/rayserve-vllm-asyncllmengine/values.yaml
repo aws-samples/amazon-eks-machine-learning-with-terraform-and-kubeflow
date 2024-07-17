@@ -12,4 +12,4 @@ pvc:
   - name: pv-efs
     mount_path: /efs
 env: []
-engine_path: /fsx/rayserver/engines/vllm_asyncllmengine.zip
+engine_path: /fsx/rayserve/engines/vllm_asyncllmengine.zip
