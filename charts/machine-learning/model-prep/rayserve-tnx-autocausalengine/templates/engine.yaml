@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rayserve-tnx-autocausal-{{ .Release.Name }}
+data:
+  rayserve-tnx-autocausal.sh: |
+    #!/bin/bash
+
+    apt-get update
+    apt-get install -y zip 
+
+    cat > /tmp/tnx_autocausal.py <<EOF
+    import os
+
+    from fastapi import FastAPI
+    from ray import serve
+
+    import torch
+    from transformers_neuronx import NeuronAutoModelForCausalLM
+    from transformers import AutoTokenizer
+    
+    app = FastAPI()
+
+    _MAX_MODEL_LEN = 2048
+
+    @serve.deployment()
+    @serve.ingress(app)
+    class TNXAutoCausalDeployment:
+
+      def __init__(self):
+        amp=os.getenv("DTYPE", "f16")
+        tp_degree = int(os.getenv("TENSOR_PARALLEL_DEGREE"))
+        n_positions = int(os.getenv("MAX_MODEL_LEN", _MAX_MODEL_LEN))
+
+        tokenizer_location = os.getenv("TOKENIZER_PATH")
+        assert tokenizer_location, f"Tokenizer location is not valid: {tokenizer_location}"
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_location)
+
+        model_location = os.getenv("MODEL_PATH")
+        assert model_location, f"Model location is not valid: {model_location}"
+
+        self.model = NeuronAutoModelForCausalLM.from_pretrained(model_location,
+                                                        batch_size=1,
+                                                        n_positions=n_positions, 
+                                                        tp_degree=tp_degree, 
+                                                        amp=amp)
+
+      
+        self.model.to_neuron()
+
+    @app.post("/generate")
+    def generate(self, prompt: str, **sampling_params) -> str:
+      with torch.inference_mode():
+        input_ids = self.tokenizer.encode_plus(prompt, return_tensors="pt")['input_ids']
+        generated_token_seqs = self.model.sample(input_ids, **sampling_params)
+        text_output_seqs = [self.tokenizer.decode(seq, skip_special_tokens=True) for seq in generated_token_seqs]
+
+      return text_output_seqs[0]
+
+    deployment = TNXAutoCausalDeployment.bind() 
+
+    EOF
+
+    cd /tmp
+    if [ -z "${ENGINE_PATH}" ]; then  echo "ENGINE_PATH env variable is required" && exit 1; fi
+    ENGINE_DIR="$(dirname "${ENGINE_PATH}")"
+    mkdir -p $ENGINE_DIR
+    zip $ENGINE_PATH tnx_autocausal.py
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rayserve-tnx-autocausal-{{ .Release.Name }}
+  annotations:
+    karpenter.sh/do-not-disrupt: "true"
+    sidecar.istio.io/inject: 'false'
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  restartPolicy: Never
+  volumes:
+  {{- $pv_index := 1 }}
+  {{- range $pv := .Values.pvc }}
+  - name: pv-{{ $pv_index }}
+    persistentVolumeClaim:
+      claimName: {{ $pv.name }}
+  {{- $pv_index = add $pv_index 1 }}
+  {{- end }}
+  - name: config
+    configMap:
+      defaultMode: 420
+      items:
+      - key: rayserve-tnx-autocausal.sh
+        mode: 365
+        path: rayserve-tnx-autocausal.sh
+      name: rayserve-tnx-autocausal-{{ .Release.Name }}
+  containers:
+  - name: rayserve-tnx-autocausal
+    env:
+    - name: ENGINE_PATH
+      value: {{ .Values.engine_path }}
+    {{- range $v := .Values.env }}
+    - name: {{ $v.name }}
+      value: "{{ tpl $v.value $ }}"
+    {{- end }}
+    command:
+    -  sh 
+    - /etc/config/rayserve-tnx-autocausal.sh
+    image: public.ecr.aws/docker/library/python:slim-bullseye
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+    - mountPath: /etc/config
+      name: config
+    {{- $pv_index := 1 }}
+    {{- range $pv := .Values.pvc }}
+    - mountPath: {{ $pv.mount_path }}
+      name: pv-{{ $pv_index }}
+    {{- $pv_index = add $pv_index 1 }}
+    {{- end }}
+    resources:
+      requests:
+      {{- range $k, $v := .Values.resources.requests }}
+        {{ $k }}: {{ $v }}
+      {{- end }}
+      limits:
+      {{- range $k, $v := .Values.resources.limits }}
+        {{ $k }}: {{ $v }}
+      {{- end }}

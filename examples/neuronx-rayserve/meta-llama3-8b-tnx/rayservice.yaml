@@ -1,0 +1,63 @@
+ray:
+  version: '2.32.0'
+  dashboard:
+    host: '0.0.0.0'
+  ports:
+    - name: gcs
+      port: 6379
+    - name: client
+      port: 10001
+    - name: dashboard
+      port: 8265
+    - name: serve
+      port: 8000
+  resources:
+    requests:
+      cpu: 8
+    limits:
+      cpu: 64
+  env:
+    - name: MODEL_PATH
+      value: /fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct
+    - name: TOKENIZER_PATH
+      value: /fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct
+    - name: TENSOR_PARALLEL_DEGREE
+      value: '8'
+    - name:   NEURON_CC_FLAGS
+      value: "--model-type transformer"
+  serve_config_v2: 
+    serveConfigV2: |
+      applications:
+        - name: meta-llama3-8b-instruct
+          import_path: tnx_autocausal:deployment
+          runtime_env:
+            working_dir: file:///fsx/rayserve/engines/tnx_autocausalengine.zip
+          deployments:
+          - name: TNXAutoCausalDeployment
+            max_ongoing_requests: 72
+            autoscaling_config:
+              min_replicas: 1
+              max_replicas: 2
+              target_ongoing_requests: 24
+            ray_actor_options:
+              resources: 
+                "neuron_cores": 24
+  service_unhealthy_threshold_secs: 900
+  deployment_unhealthy_threshold_secs: 300
+image:
+image_pull_policy: Always
+resources:
+  min_replicas: 1
+  max_replicas: 2
+  requests:
+    "aws.amazon.com/neuron": 12 
+  limits:
+    "aws.amazon.com/neuron": 12
+  node_type: 'inf2.48xlarge' 
+tolerations:
+  - key: "aws.amazon.com/neuron"
+    operator: "Exists"
+    effect: "NoSchedule"
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx

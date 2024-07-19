@@ -1,0 +1,6 @@
+apiVersion: v2
+name: rayserve-tnx-engine
+description: A Helm chart for Ray Serve Transformers Neuronx Auto Causal LLM Engine
+type: application
+version: 1.0.0
+appVersion: "v1"
