@@ -15,9 +15,9 @@ This example uses a custom Docker container for Tritonserver Neuronx. Build and 
      cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
      ./containers/tritonserver-neuronx/build_tools/build_and_push.sh aws-region
 
-## Hugging Face Mistral 7B Instruct v0.1 pre-trained model weights
+## Hugging Face Meta Llama 3 8B Instruct  pre-trained model weights
 
-To download Hugging Face Mistral 7B Instruct v0.1 pre-trained model weights, replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
+To download Hugging Face Meta Llama 3 8B Instruct  pre-trained model weights, replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug triton-server-llama3-8b-instruct-tnx     \
