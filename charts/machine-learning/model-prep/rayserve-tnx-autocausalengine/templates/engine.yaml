@@ -11,6 +11,7 @@ data:
 
     cat > /tmp/tnx_autocausal.py <<EOF
     import os
+    import json
 
     from fastapi import FastAPI
     from ray import serve
@@ -21,41 +22,36 @@ data:
     
     app = FastAPI()
 
-    _MAX_MODEL_LEN = 2048
-
     @serve.deployment()
     @serve.ingress(app)
     class TNXAutoCausalDeployment:
 
       def __init__(self):
-        amp=os.getenv("DTYPE", "f16")
-        tp_degree = int(os.getenv("TENSOR_PARALLEL_DEGREE"))
-        n_positions = int(os.getenv("MAX_MODEL_LEN", _MAX_MODEL_LEN))
 
-        tokenizer_location = os.getenv("TOKENIZER_PATH")
-        assert tokenizer_location, f"Tokenizer location is not valid: {tokenizer_location}"
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_location)
+        config = os.getenv("ENGINE_CONFIG")
+        assert config, "ENGINE_CONFIG env variable for engine config path is required"
+        assert os.path.isfile(config), f"ENGINE_CONFIG {config} does not exist"
 
-        model_location = os.getenv("MODEL_PATH")
-        assert model_location, f"Model location is not valid: {model_location}"
+        # Load engine args from config file
+        with open(config, "r") as f:
+          engine_config = json.load(f)
 
-        self.model = NeuronAutoModelForCausalLM.from_pretrained(model_location,
-                                                        batch_size=1,
-                                                        n_positions=n_positions, 
-                                                        tp_degree=tp_degree, 
-                                                        amp=amp)
+        pretrained_model_name_or_path = engine_config.get("pretrained_model_name_or_path")
+        assert pretrained_model_name_or_path, "pretrained_model_name_or_path is required in engine config"
+        assert os.path.isdir(pretrained_model_name_or_path), f"model {pretrained_model_name_or_path} does not exist"
 
-      
+        self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)
+        self.model = NeuronAutoModelForCausalLM.from_pretrained(**engine_config)
         self.model.to_neuron()
 
-    @app.post("/generate")
-    def generate(self, prompt: str, **sampling_params) -> str:
-      with torch.inference_mode():
-        input_ids = self.tokenizer.encode_plus(prompt, return_tensors="pt")['input_ids']
-        generated_token_seqs = self.model.sample(input_ids, **sampling_params)
-        text_output_seqs = [self.tokenizer.decode(seq, skip_special_tokens=True) for seq in generated_token_seqs]
+      @app.post("/generate")
+      def generate(self, prompt: str, **sampling_params) -> str:
+        with torch.inference_mode():
+          input_ids = self.tokenizer.encode_plus(prompt, return_tensors="pt")['input_ids']
+          generated_token_seqs = self.model.sample(input_ids, **sampling_params)
+          text_output_seqs = [self.tokenizer.decode(seq, skip_special_tokens=True) for seq in generated_token_seqs]
 
-      return text_output_seqs[0]
+        return text_output_seqs[0]
 
     deployment = TNXAutoCausalDeployment.bind() 
 

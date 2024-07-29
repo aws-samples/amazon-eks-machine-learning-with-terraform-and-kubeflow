@@ -26,6 +26,21 @@ Uninstall the Helm chart at completion:
 
     helm uninstall neuronx-rayserve-llama3-8b-instruct  -n kubeflow-user-example-com
 
+## Build Ray Serve Engine Config
+
+To build Ray Serve engine config:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug neuronx-rayserve-llama3-8b-instruct     \
+            charts/machine-learning/data-prep/data-process   \
+            -f examples/neuronx-rayserve/meta-llama3-8b-tnx/engine_config.yaml \
+            --set 'image=public.ecr.aws/docker/library/python:slim-bullseye' \
+            -n kubeflow-user-example-com
+
+Uninstall the Helm chart at completion:
+
+    helm uninstall neuronx-rayserve-llama3-8b-instruct -n kubeflow-user-example-com
+
 ## Build Ray Serve Engine
 
 To build Ray Serve engine:
