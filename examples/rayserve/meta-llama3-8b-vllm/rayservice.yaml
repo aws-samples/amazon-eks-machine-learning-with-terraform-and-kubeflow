@@ -17,12 +17,8 @@ ray:
     limits:
       cpu: 2
   env:
-    - name: MODEL_PATH
-      value: /fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct
-    - name: TOKENIZER_PATH
-      value: /fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct
-    - name: TENSOR_PARALLEL_DEGREE
-      value: '8'
+    - name: ENGINE_CONFIG
+      value: /efs/home/{{ .Release.Name }}/config/engine.json
   serve_config_v2: 
     serveConfigV2: |
       applications:
@@ -60,3 +56,5 @@ tolerations:
 pvc:
   - name: pv-fsx
     mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs

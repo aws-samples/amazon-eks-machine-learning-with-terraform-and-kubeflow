@@ -11,6 +11,7 @@ data:
     
     cat > /tmp/vllm_asyncllmengine.py <<EOF
     import os
+    import json
 
     from fastapi import FastAPI
     from ray import serve
@@ -27,12 +28,15 @@ data:
     class VLLMDeployment:
         def __init__(self):
 
-          engine_args = AsyncEngineArgs(
-            model=os.getenv("MODEL_PATH"),
-            tokenizer=os.getenv("TOKENIZER_PATH"),
-            tensor_parallel_size=int(os.getenv("TENSOR_PARALLEL_DEGREE")),
-            disable_log_requests=True)
+          config = os.getenv("ENGINE_CONFIG")
+          assert config, "ENGINE_CONFIG env variable for engine config path is required"
+          assert os.path.isfile(config), f"ENGINE_CONFIG {config} does not exist"
 
+          # Load engine args from config file
+          with open(config, "r") as f:
+            engine_config = json.load(f)
+
+          engine_args = AsyncEngineArgs(**engine_config)
           self.engine = AsyncLLMEngine.from_engine_args(engine_args)
 
         @app.post("/generate")
