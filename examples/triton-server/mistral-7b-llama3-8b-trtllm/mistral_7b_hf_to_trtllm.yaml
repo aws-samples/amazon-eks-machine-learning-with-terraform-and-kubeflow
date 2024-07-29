@@ -1,0 +1,52 @@
+image: nvcr.io/nvidia/tritonserver:24.05-trtllm-python-py3
+resources:
+  node_type: g5.48xlarge
+  requests:
+    "nvidia.com/gpu": 8
+  limits:
+    "nvidia.com/gpu": 8
+ebs:
+  storage: 400Gi
+  mount_path: /tmp
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+git:
+  repo_url: "https://github.com/NVIDIA/TensorRT-LLM.git"
+  commit: 250d9c293d5edbc2a45c20775b3150b1eb68b364
+  branch: main
+pre_script: 
+  - mkdir -p $LOG_ROOT
+  - mkdir -p $OUTPUT_ROOT
+  - TP_SIZE=8
+  - PP_SIZE=1
+  - MODEL_NAME=mistral_7b_instruct
+  - OUTPUT_LOG=$LOG_ROOT/${MODEL_NAME}_hf_to_trtllm_tp_${TP_SIZE}_pp_${PP_SIZE}.log
+  - TMP_OUTPUT_PATH=/tmp/${MODEL_NAME}_ckpt_tp_${TP_SIZE}_pp_${PP_SIZE}
+  - SCRIPT_DIR=examples/llama
+  - cd $SCRIPT_DIR
+  - pip install --upgrade pip
+  - pip install datasets==2.20.0
+  - pip install evaluate~=0.4.2
+  - pip install rouge_score~=0.1.2
+  - pip install sentencepiece~=0.2.0
+post_script:
+  - cp -r $TMP_OUTPUT_PATH $OUTPUT_ROOT/
+process:
+  env:
+    - name: LOG_ROOT
+      value: /efs/home/{{ .Release.Name }}/logs
+    - name: OUTPUT_ROOT
+      value: /efs/home/{{ .Release.Name }}/trtllm
+    - name: MODEL_PATH
+      value: /fsx/pretrained-models/mistralai/Mistral-7B-Instruct-v0.1
+  command:
+    - python3
+  args:
+    - convert_checkpoint.py 
+    - --model_dir=$MODEL_PATH
+    - --output_dir=$TMP_OUTPUT_PATH
+    - --dtype=float16
+    - --tp_size=$TP_SIZE
+    - '2>&1 | tee $OUTPUT_LOG'
