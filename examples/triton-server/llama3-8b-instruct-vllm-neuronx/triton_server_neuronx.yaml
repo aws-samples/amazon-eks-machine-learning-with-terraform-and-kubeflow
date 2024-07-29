@@ -1,0 +1,164 @@
+image: 
+  name:
+  pull_policy: Always
+resources:
+  node_type: inf2.24xlarge
+  resources:
+  requests:
+    "aws.amazon.com/neuron": 4
+  limits:
+    "aws.amazon.com/neuron": 4
+tolerations:
+  - key: "aws.amazon.com/neuron"
+    operator: "Exists"
+    effect: "NoSchedule"
+ebs:
+  storage: 400Gi
+  mount_path: /tmp
+git:
+  repo_url: "https://github.com/vllm-project/vllm.git"
+  commit: 8f89d72090da70895d77d32248ea8504f7daba50
+  branch: main
+inline_script:
+- |+
+  cat > /tmp/config.pbtxt <<EOF
+  backend: "vllm"
+  max_batch_size: 0
+  model_transaction_policy {
+    decoupled: true
+  }
+
+  input [ 
+    {
+      name: "text_input"
+      data_type: TYPE_STRING
+      dims: [1]
+    },
+    {
+        name: "stream"
+        data_type: TYPE_BOOL
+        dims: [1]
+        optional: true
+    },
+    {
+        name: "sampling_parameters"
+        data_type: TYPE_STRING
+        dims: [1]
+        optional: true
+    },
+    {
+        name: "exclude_input_in_output"
+        data_type: TYPE_BOOL
+        dims: [1]
+        optional: true
+    }
+  ] 
+  output [
+    {
+      name: "text_output"
+      data_type: TYPE_STRING
+      dims: [-1]
+    }
+  ]
+
+  instance_group [
+    {
+      count: 1
+      kind: KIND_MODEL
+    }
+  ]
+  
+  EOF
+- |+
+  cat > /tmp/model.json <<EOF
+  {
+    "model": "/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct",
+    "tokenizer": "/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct",
+    "tokenizer_mode": "auto",
+    "disable_log_requests": true,
+    "dtype": "float16",
+    "tensor_parallel_size": 8,
+    "max_num_seqs": 8
+  }
+
+  EOF
+- |+
+  cat > $GIT_CLONE_DIR/vllm_v0.5.0_neuron.patch <<EOF
+  diff --git a/vllm/executor/neuron_executor.py b/vllm/executor/neuron_executor.py
+  index e7f0e887..87564b76 100644
+  --- a/vllm/executor/neuron_executor.py
+  +++ b/vllm/executor/neuron_executor.py
+  @@ -48,9 +48,9 @@ class NeuronExecutor(ExecutorBase):
+      def execute_model(
+              self,
+              execute_model_req: ExecuteModelRequest) -> List[SamplerOutput]:
+  -        assert (execute_model_req.blocks_to_swap_in == {}
+  -                and execute_model_req.blocks_to_swap_out == {}
+  -                and execute_model_req.blocks_to_copy == {}), (
+  +        assert (not execute_model_req.blocks_to_swap_in
+  +                and not execute_model_req.blocks_to_swap_out
+  +                and not execute_model_req.blocks_to_copy), (
+                      "Cache operations are not supported for Neuron backend.")
+          assert execute_model_req.num_lookahead_slots == 0, (
+              "lookahead not supported for Neuron backend.")
+  
+  EOF
+
+
+pre_script: 
+  - mkdir -p $LOG_ROOT
+  - OUTPUT_LOG="$LOG_ROOT/triton_server.log"
+  - mkdir -p $MODEL_REPO
+  - VERSION=1
+  - MODEL_NAME=llama3-8b
+  - mkdir -p $MODEL_REPO/$MODEL_NAME/$VERSION
+  - cp /tmp/model.json $MODEL_REPO/$MODEL_NAME/$VERSION/model.json
+  - cp /tmp/config.pbtxt $MODEL_REPO/$MODEL_NAME/config.pbtxt
+  - git apply --ignore-space-change --ignore-whitespace vllm_v0.5.0_neuron.patch
+  - pip3 install -U -r requirements-neuron.txt 
+  - pip3 install .
+  - mkdir -p /opt/tritonserver/backends/vllm
+  - wget -P /opt/tritonserver/backends/vllm https://raw.githubusercontent.com/triton-inference-server/vllm_backend/main/src/model.py
+  - export NEURON_CC_FLAGS="--model-type transformer"
+  - export NEURON_COMPILE_CACHE_URL="/tmp"
+server:
+  ports:
+    http: 8000
+    grpc: 8001
+    metrics: 8002
+  readiness_probe:
+    period_secs: 30
+    failure_threshold: 10
+  startup_probe:
+    period_secs: 60
+    failure_threshold: 30
+  liveness_probe:
+    period_secs: 30
+    failure_threshold: 10
+  env:
+    - name: HOME
+      value: /tmp
+    - name: LOG_ROOT
+      value: /efs/home/{{ .Release.Name }}/logs
+    - name: MODEL_REPO
+      value: /efs/home/{{ .Release.Name }}/model_repository
+  command:
+    - tritonserver
+  args:
+    - --model-repository=${MODEL_REPO}
+    - --grpc-port=8001
+    - --http-port=8000
+    - --metrics-port=8002
+    - --disable-auto-complete-config
+    - --log-file=$OUTPUT_LOG
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 4
+    metrics:
+      - type: Pods
+        pods:
+          metric:
+            name: avg_time_queue_us
+          target:
+            type: AverageValue
+            averageValue: 50
