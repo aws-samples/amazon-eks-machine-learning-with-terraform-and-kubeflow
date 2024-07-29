@@ -1,0 +1,64 @@
+ray:
+  version: '2.32.0'
+  dashboard:
+    host: '0.0.0.0'
+  restart_policy:
+    head: Never
+    worker: Never
+  ports:
+    - name: gcs
+      port: 6379
+    - name: client
+      port: 10001
+    - name: dashboard
+      port: 8265
+    - name: serve
+      port: 8000
+  resources:
+    requests:
+      cpu: 4
+    limits:
+      cpu: 16
+  env:
+    - name: ENGINE_CONFIG
+      value: /efs/home/{{ .Release.Name }}/config/engine.json
+    - name: NEURON_CC_FLAGS
+      value: "--model-type transformer"
+  serve_config_v2: 
+    serveConfigV2: |
+      applications:
+        - name: meta-llama3-8b-instruct
+          import_path: vllm_asyncllmengine:deployment
+          runtime_env:
+            working_dir: file:///fsx/rayserve/engines/vllm_neuronx_asyncllmengine.zip
+          deployments:
+          - name: VLLMDeployment
+            max_ongoing_requests: 8
+            autoscaling_config:
+              min_replicas: 1
+              max_replicas: 2
+              target_ongoing_requests: 4
+            ray_actor_options:
+              resources: 
+                "neuron_cores": 8
+  service_unhealthy_threshold_secs: 900
+  deployment_unhealthy_threshold_secs: 900
+image:
+image_pull_policy: IfNotPresent
+resources:
+  min_replicas: 1
+  max_replicas: 2
+  requests:
+    "aws.amazon.com/neuron": 6
+  limits:
+    "aws.amazon.com/neuron": 6
+  node_type: 'inf2.24xlarge' 
+tolerations:
+  - key: "aws.amazon.com/neuron"
+    operator: "Exists"
+    effect: "NoSchedule"
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
