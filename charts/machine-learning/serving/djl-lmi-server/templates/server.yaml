@@ -1,0 +1,203 @@
+{{- if .Values.ebs  }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ebs-{{ .Release.Name }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ebs-sc-wait
+  resources:
+    requests:
+      storage: {{ .Values.ebs.storage | default "100Gi" }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: launcher-{{ .Release.Name }}
+data:
+  launcher.sh: |
+    #!/bin/bash
+   
+    {{- if .Values.git.repo_url }}
+    mkdir -p $HOME/tmp
+    GIT_CLONE_DIR=$HOME/tmp/$HOSTNAME
+    [[ -d $GIT_CLONE_DIR ]] && rm -rf $GIT_CLONE_DIR
+    git clone {{ .Values.git.repo_url }} $GIT_CLONE_DIR
+    cd $GIT_CLONE_DIR
+
+    {{- if .Values.git.branch }}
+    git checkout {{ .Values.git.branch }}
+    {{- end }}
+
+    {{- if .Values.git.commit }}
+    git fetch origin {{ .Values.git.commit }}
+    git reset --hard {{ .Values.git.commit }}
+    {{- end }}
+    
+    {{- end }}
+
+    {{- range .Values.inline_script }}
+    {{ . | indent 4 }}
+    {{- end }}
+
+    {{- range .Values.pre_script }}
+    {{ . }}
+    {{- end }}
+    
+    {{- range .Values.server.command }}
+    {{ . }} \
+    {{- end }}
+    {{- range .Values.server.args }}
+    {{ . }} \
+    {{- end }}
+    
+    {{- if .Values.git.repo_url }}
+    cd $HOME
+    rm -rf $GIT_CLONE_DIR
+    {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.server.autoscaling.minReplicas }}
+  selector:
+    matchLabels:
+     app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+      annotations:
+        karpenter.sh/do-not-disrupt: "true"
+        sidecar.istio.io/inject: 'false'
+    spec:
+      volumes:
+        - name: config
+          configMap:
+            defaultMode: 420
+            items:
+            - key: launcher.sh
+              mode: 365
+              path: launcher.sh
+            name: launcher-{{ .Release.Name }}
+        - name: shm
+          hostPath:
+            path: /dev/shm
+            type: Directory
+        {{- $pv_index := 1 }}
+        {{- range $pv := .Values.pvc }}
+        - name: pv-{{ $pv_index }}
+          persistentVolumeClaim:
+            claimName: {{ $pv.name }}
+        {{- $pv_index = add $pv_index 1 }}
+        {{- end }}
+        {{- if .Values.ebs }}
+        - name: ebs
+          persistentVolumeClaim:
+            claimName: ebs-{{ .Release.Name }}
+        {{- end }}
+      tolerations:
+      {{- range $v := .Values.tolerations }}
+        - key: {{ tpl $v.key  $ }}
+          {{- if $v.operator }}
+          operator: "{{ $v.operator }}"
+          {{- end }}
+          {{- if $v.effect }}
+          effect: "{{ $v.effect }}"
+          {{- end }}
+      {{- end }} 
+      nodeSelector:
+        node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
+      containers:
+        - name: {{ .Values.server.name }}
+          env:
+            {{- range $env := .Values.server.env }}
+            - name: {{ $env.name }}
+              value: "{{ tpl $env.value $ }}"
+            {{- end }}
+          command: 
+            - /etc/config/launcher.sh
+          image: "{{ .Values.image.name }}"
+          imagePullPolicy: {{ .Values.image.pull_policy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.server.ports.http }}
+          livenessProbe:
+            initialDelaySeconds: 15
+            failureThreshold: {{ .Values.server.liveness_probe.failure_threshold }}
+            periodSeconds: {{ .Values.server.liveness_probe.period_secs }}
+            httpGet:
+              path: /ping
+              port: http
+          readinessProbe:
+            initialDelaySeconds: 5
+            periodSeconds: {{ .Values.server.readiness_probe.period_secs }}
+            failureThreshold: {{ .Values.server.readiness_probe.failure_threshold }}
+            httpGet:
+              path: /ping
+              port: http
+          startupProbe:
+            periodSeconds: {{ .Values.server.startup_probe.period_secs }}
+            failureThreshold: {{ .Values.server.startup_probe.failure_threshold }}
+            httpGet:
+              path: /ping
+              port: http
+          volumeMounts:
+            - mountPath: /etc/config
+              name: config
+            - mountPath: /dev/shm
+              name: shm
+            {{- $pv_index := 1 }}
+            {{- range $pv := .Values.pvc }}
+            - mountPath: {{ $pv.mount_path }}
+              name: pv-{{ $pv_index }}
+            {{- $pv_index = add $pv_index 1 }}
+            {{- end }}
+            {{- if .Values.ebs }}
+            - name: ebs
+              mountPath: {{ .Values.ebs.mount_path | default "/tmp" }}
+            {{- end }}
+          resources:
+            requests:
+            {{- range $k, $v := .Values.resources.requests }}
+              {{ $k }}: {{ $v }}
+            {{- end }}
+            limits:
+            {{- range $k, $v := .Values.resources.limits }}
+              {{ $k }}: {{ $v }}
+            {{- end }}
+---
+{{- if gt .Values.server.autoscaling.maxReplicas .Values.server.autoscaling.minReplicas }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ .Release.Name }}
+  minReplicas: {{ .Values.server.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.server.autoscaling.maxReplicas }} 
+  metrics: {{ toYaml .Values.server.autoscaling.metrics | nindent 2}}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  ports:
+  - protocol: TCP
+    name: http
+    port: {{ .Values.server.ports.http }}
+    targetPort:  {{ .Values.server.ports.http }}
+  selector:
+    app: {{ .Release.Name }}
+  type: ClusterIP
