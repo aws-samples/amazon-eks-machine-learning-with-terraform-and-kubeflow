@@ -21,6 +21,8 @@ ray:
       value: /efs/home/{{ .Release.Name }}/config/engine.json
     - name:   NEURON_CC_FLAGS
       value: "--model-type transformer"
+    - name: NEURON_RT_VISIBLE_CORES
+      value: "0,1,2,3,4,5,6,7"
   serve_config_v2: 
     serveConfigV2: |
       applications:
@@ -46,9 +48,9 @@ resources:
   min_replicas: 1
   max_replicas: 2
   requests:
-    "aws.amazon.com/neuron": 6 
+    "aws.amazon.com/neuron": 4 
   limits:
-    "aws.amazon.com/neuron": 6
+    "aws.amazon.com/neuron": 4
   node_type: 'inf2.24xlarge' 
 tolerations:
   - key: "aws.amazon.com/neuron"

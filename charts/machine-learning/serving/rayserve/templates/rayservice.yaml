@@ -28,6 +28,11 @@ spec:
           - name: ray-head
             image: {{ .Values.image }}
             imagePullPolicy: {{ .Values.image_pull_policy}} 
+            env:
+              {{- range $v := .Values.ray.env }}
+              - name: {{ $v.name }}
+                value: "{{ tpl $v.value $ }}"
+              {{- end }} 
             ports:
             {{- range $v := .Values.ray.ports }}
               - name: {{ $v.name }}
@@ -82,6 +87,8 @@ spec:
       rayStartParams: {}
       template:
         metadata:
+          labels:
+            autoscaling-group: {{ .Release.Name }}
           annotations:
             karpenter.sh/do-not-disrupt: "true"
             sidecar.istio.io/inject: 'false'
@@ -89,6 +96,16 @@ spec:
             app.kubernetes.io/managed-by: {{ .Release.Service }}
         spec:
           restartPolicy: {{  .Values.ray.restart_policy.worker | default "OnFailure" }}
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                  - key: autoscaling-group
+                    operator: In
+                    values:
+                    - {{ .Release.Name }}
+                topologyKey: kubernetes.io/hostname
           containers:
           - name: ray-worker
             image: {{ .Values.image }}
