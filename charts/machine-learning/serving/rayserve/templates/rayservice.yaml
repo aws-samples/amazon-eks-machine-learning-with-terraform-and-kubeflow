@@ -74,23 +74,25 @@ spec:
           nodeSelector:
             node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
 
+    {{- $worker_group_count := .Values.worker_group_count | default 1 | int }}
+    {{- range $worker_group_index := until $worker_group_count }}
     workerGroupSpecs:
-    - replicas: {{ .Values.resources.min_replicas }}
-      minReplicas: {{ .Values.resources.min_replicas }}
-      maxReplicas: {{ .Values.resources.max_replicas }}
-      groupName: serving
+    - replicas: {{ $.Values.resources.min_replicas }}
+      minReplicas: {{ $.Values.resources.min_replicas }}
+      maxReplicas: {{ $.Values.resources.max_replicas }}
+      groupName: serving-{{ $worker_group_index }}
       rayStartParams: {}
       template:
         metadata:
           labels:
-            autoscaling-group: {{ .Release.Name }}
+            autoscaling-group: {{ $.Release.Name }}-{{ $worker_group_index }}
           annotations:
             karpenter.sh/do-not-disrupt: "true"
             sidecar.istio.io/inject: 'false'
-            app.kubernetes.io/instance: {{ .Release.Name }}
-            app.kubernetes.io/managed-by: {{ .Release.Service }}
+            app.kubernetes.io/instance: {{ $.Release.Name }}
+            app.kubernetes.io/managed-by: {{ $.Release.Service }}
         spec:
-          restartPolicy: {{  .Values.ray.restart_policy.worker | default "OnFailure" }}
+          restartPolicy: {{  $.Values.ray.restart_policy.worker | default "OnFailure" }}
           affinity:
             podAntiAffinity:
               requiredDuringSchedulingIgnoredDuringExecution:
@@ -99,20 +101,22 @@ spec:
                   - key: autoscaling-group
                     operator: In
                     values:
-                    - {{ .Release.Name }}
+                    - {{ $.Release.Name }}-{{ $worker_group_index }}
                 topologyKey: kubernetes.io/hostname
           containers:
           - name: ray-worker
-            image: {{ .Values.image }}
-            imagePullPolicy: {{ .Values.image_pull_policy}}
+            image: {{ $.Values.image }}
+            imagePullPolicy: {{ $.Values.image_pull_policy}}
             securityContext:
-              privileged: {{ .Values.privileged | default false }}
+              privileged: {{ $.Values.privileged | default false }}
             lifecycle:
               preStop:
                 exec:
                   command: [ "/bin/sh","-c","ray stop" ]
             env:
-              {{- range $v := .Values.ray.env }}
+              - name: BASE_INDEX
+                value: "{{ $worker_group_index }}"
+              {{- range $v := $.Values.ray.env }}
               - name: {{ $v.name }}
                 value: "{{ tpl $v.value $ }}"
               {{- end }} 
@@ -121,18 +125,18 @@ spec:
                 name: shm
 
               {{- $pv_index := 1 }}
-              {{- range $pv := .Values.pvc }}
+              {{- range $pv := $.Values.pvc }}
               - mountPath: {{ $pv.mount_path }}
                 name: pv-{{ $pv_index }}
               {{- $pv_index = add $pv_index 1 }}
               {{- end }}
             resources:
               requests:
-              {{- range $k, $v := .Values.resources.requests }}
+              {{- range $k, $v := $.Values.resources.requests }}
                 {{ $k }}: {{ $v }}
               {{- end }}
               limits:
-              {{- range $k, $v := .Values.resources.limits }}
+              {{- range $k, $v := $.Values.resources.limits }}
                 {{ $k }}: {{ $v }}
               {{- end }}
           volumes:
@@ -141,14 +145,14 @@ spec:
                 path: /dev/shm
                 type: Directory
             {{- $pv_index := 1 }}
-            {{- range $pv := .Values.pvc }}
+            {{- range $pv := $.Values.pvc }}
             - name: pv-{{ $pv_index }}
               persistentVolumeClaim:
                 claimName: {{ $pv.name }}
             {{- $pv_index = add $pv_index 1 }}
             {{- end }}
           tolerations:
-          {{- range $v := .Values.tolerations }}
+          {{- range $v := $.Values.tolerations }}
             - key: {{ $v.key }}
               {{- if $v.operator }}
               operator: "{{ $v.operator }}"
@@ -158,4 +162,6 @@ spec:
               {{- end }}
           {{- end }}
           nodeSelector:
-            node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}   
+            node.kubernetes.io/instance-type: {{ $.Values.resources.node_type }}
+
+    {{- end }}

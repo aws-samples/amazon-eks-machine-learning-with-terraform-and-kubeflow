@@ -50,9 +50,9 @@ resources:
   min_replicas: 1
   max_replicas: 2
   requests:
-    "aws.amazon.com/neuron": 6
+    "aws.amazon.com/neuron": 4
   limits:
-    "aws.amazon.com/neuron": 6
+    "aws.amazon.com/neuron": 4
   node_type: 'inf2.24xlarge' 
 tolerations:
   - key: "aws.amazon.com/neuron"
