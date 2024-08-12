@@ -37,7 +37,7 @@ data:
           with open(config, "r") as f:
             engine_config = json.load(f)
 
-          num_cores = int(engine_config.get("tp_degree", 1))
+          num_cores = int(engine_config.get("tensor_parallel_size", 1))
           base_index = int(os.getenv("BASE_INDEX", 0))
           os.environ["NEURON_RT_VISIBLE_CORES"]  = ",".join(map(str, list(range(base_index,num_cores+base_index))))
     
