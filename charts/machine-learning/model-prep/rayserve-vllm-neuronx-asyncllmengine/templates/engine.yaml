@@ -39,7 +39,8 @@ data:
 
           num_cores = int(engine_config.get("tensor_parallel_size", 1))
           base_index = int(os.getenv("BASE_INDEX", 0))
-          os.environ["NEURON_RT_VISIBLE_CORES"]  = ",".join(map(str, list(range(base_index,num_cores+base_index))))
+          base_core = base_index * num_cores
+          os.environ["NEURON_RT_VISIBLE_CORES"]  = ",".join(map(str, list(range(base_core,num_cores+base_core))))
     
           model_path = engine_config.get("model")
           tokenizer_path = engine_config.get("tokenizer", model_path)
