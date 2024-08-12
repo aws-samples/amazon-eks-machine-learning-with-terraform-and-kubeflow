@@ -21,8 +21,6 @@ ray:
       value: /efs/home/{{ .Release.Name }}/config/engine.json
     - name:   NEURON_CC_FLAGS
       value: "--model-type transformer"
-    - name: NEURON_RT_VISIBLE_CORES
-      value: "0,1,2,3,4,5,6,7"
   serve_config_v2: 
     serveConfigV2: |
       applications:
@@ -44,6 +42,7 @@ ray:
   deployment_unhealthy_threshold_secs: 900
 image:
 image_pull_policy: IfNotPresent
+privileged: true
 resources:
   min_replicas: 1
   max_replicas: 2

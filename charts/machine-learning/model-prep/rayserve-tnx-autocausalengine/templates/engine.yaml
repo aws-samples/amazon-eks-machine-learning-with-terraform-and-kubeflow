@@ -27,7 +27,7 @@ data:
     class TNXAutoCausalDeployment:
 
       def __init__(self):
-
+     
         config = os.getenv("ENGINE_CONFIG")
         assert config, "ENGINE_CONFIG env variable for engine config path is required"
         assert os.path.isfile(config), f"ENGINE_CONFIG {config} does not exist"
@@ -36,6 +36,10 @@ data:
         with open(config, "r") as f:
           engine_config = json.load(f)
 
+        num_cores = int(engine_config.get("tp_degree", 1))
+        base_index = int(os.getenv("BASE_INDEX", 0))
+        os.environ["NEURON_RT_VISIBLE_CORES"]  = ",".join(map(str, list(range(base_index,num_cores+base_index))))
+   
         pretrained_model_name_or_path = engine_config.get("pretrained_model_name_or_path")
         assert pretrained_model_name_or_path, "pretrained_model_name_or_path is required in engine config"
         assert os.path.isdir(pretrained_model_name_or_path), f"model {pretrained_model_name_or_path} does not exist"

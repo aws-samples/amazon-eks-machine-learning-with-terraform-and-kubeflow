@@ -28,11 +28,6 @@ spec:
           - name: ray-head
             image: {{ .Values.image }}
             imagePullPolicy: {{ .Values.image_pull_policy}} 
-            env:
-              {{- range $v := .Values.ray.env }}
-              - name: {{ $v.name }}
-                value: "{{ tpl $v.value $ }}"
-              {{- end }} 
             ports:
             {{- range $v := .Values.ray.ports }}
               - name: {{ $v.name }}
@@ -110,6 +105,8 @@ spec:
           - name: ray-worker
             image: {{ .Values.image }}
             imagePullPolicy: {{ .Values.image_pull_policy}}
+            securityContext:
+              privileged: {{ .Values.privileged | default false }}
             lifecycle:
               preStop:
                 exec:
