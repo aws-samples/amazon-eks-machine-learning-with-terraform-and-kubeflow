@@ -75,8 +75,8 @@ spec:
             node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
 
     {{- $worker_group_count := .Values.worker_group_count | default 1 | int }}
-    {{- range $worker_group_index := until $worker_group_count }}
     workerGroupSpecs:
+    {{- range $worker_group_index := until $worker_group_count }}
     - replicas: {{ $.Values.resources.min_replicas }}
       minReplicas: {{ $.Values.resources.min_replicas }}
       maxReplicas: {{ $.Values.resources.max_replicas }}
@@ -123,7 +123,6 @@ spec:
             volumeMounts:
               - mountPath: /dev/shm
                 name: shm
-
               {{- $pv_index := 1 }}
               {{- range $pv := $.Values.pvc }}
               - mountPath: {{ $pv.mount_path }}
@@ -163,5 +162,4 @@ spec:
           {{- end }}
           nodeSelector:
             node.kubernetes.io/instance-type: {{ $.Values.resources.node_type }}
-
     {{- end }}
