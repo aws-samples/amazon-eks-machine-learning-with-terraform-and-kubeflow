@@ -16,9 +16,9 @@ ray:
       port: 8000
   resources:
     requests:
-      cpu: 4
+      cpu: 8
     limits:
-      cpu: 16
+      cpu: 64
   env:
     - name: ENGINE_CONFIG
       value: /efs/home/{{ .Release.Name }}/config/engine.json
@@ -33,11 +33,11 @@ ray:
             working_dir: file:///fsx/rayserve/engines/vllm_neuronx_asyncllmengine.zip
           deployments:
           - name: VLLMDeployment
-            max_ongoing_requests: 8
+            max_ongoing_requests: 16
             autoscaling_config:
               min_replicas: 1
               max_replicas: 2
-              target_ongoing_requests: 4
+              target_ongoing_requests: 8
             ray_actor_options:
               resources: 
                 "neuron_cores": 8
@@ -45,7 +45,7 @@ ray:
   deployment_unhealthy_threshold_secs: 900
 image:
 image_pull_policy: IfNotPresent
-privileged: true
+scheduler_name: neuron-scheduler
 resources:
   min_replicas: 1
   max_replicas: 2

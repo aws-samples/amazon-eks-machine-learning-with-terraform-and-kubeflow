@@ -36,13 +36,6 @@ data:
           # Load engine args from config file
           with open(config, "r") as f:
             engine_config = json.load(f)
-
-          num_cores = int(engine_config.get("tensor_parallel_size", 1))
-          base_index = int(os.getenv("BASE_INDEX", 0))
-          base_core = base_index * num_cores
-          os.environ["NEURON_RT_VISIBLE_CORES"]= f"{base_core}-{num_cores+base_core-1}"
-          os.environ["NEURON_RT_NUM_CORES"]= f"{num_cores}"
-          print(f"Visible cores: {os.environ['NEURON_RT_VISIBLE_CORES']}")
     
           model_path = engine_config.get("model")
           tokenizer_path = engine_config.get("tokenizer", model_path)

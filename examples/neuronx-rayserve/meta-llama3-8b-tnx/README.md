@@ -4,13 +4,20 @@ This example illustrates how to use [Ray Serve](../../../charts/machine-learning
 
 Before proceeding, complete the [Prerequisites](../../../README.md#prerequisites) and [Getting started](../../../README.md#getting-started). See [What is in the YAML file](../../../README.md#what-is-in-the-yaml-file) to understand the common fields in the Helm values files. There are some fields that are specific to a machine learning chart.
 
+
+## Install Neuron Scheduler
+
+We need to install the Neuron scheduler so that contiguous Neuron cores are assigned to the Pods. To install Neuron scheduler (you only need to do this once):
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug neuron-scheduler charts/neuron-scheduler 
+    
 ## Build and Push Docker Container
 
 This example uses a custom Docker container for Ray Serve. Build and push this container using following command (replace `aws-region` with your AWS Region name):
 
      cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
      ./containers/ray-pytorch-neuronx/build_tools/build_and_push.sh aws-region
-
 
 ## Hugging Face Llama3 8B Instruct Pre-trained Model Weights
 
@@ -68,5 +75,5 @@ To launch Ray Service,  execute:
 
 To stop the service:
 
-     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-     helm uninstall neuronx-rayserve-llama3-8b-instruct  -n kubeflow-user-example-com
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm uninstall neuronx-rayserve-llama3-8b-instruct  -n kubeflow-user-example-com

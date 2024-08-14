@@ -36,13 +36,6 @@ data:
         with open(config, "r") as f:
           engine_config = json.load(f)
 
-        num_cores = int(engine_config.get("tp_degree", 1))
-        base_index = int(os.getenv("BASE_INDEX", 0))
-        base_core = base_index * num_cores
-        os.environ["NEURON_RT_VISIBLE_CORES"]= f"{base_core}-{num_cores+base_core-1}"
-        os.environ["NEURON_RT_NUM_CORES"]= f"{num_cores}"
-        print(f"Visible cores: {os.environ['NEURON_RT_VISIBLE_CORES']}")
-
         pretrained_model_name_or_path = engine_config.get("pretrained_model_name_or_path")
         assert pretrained_model_name_or_path, "pretrained_model_name_or_path is required in engine config"
         assert os.path.isdir(pretrained_model_name_or_path), f"model {pretrained_model_name_or_path} does not exist"
