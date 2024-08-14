@@ -1,13 +1,14 @@
 image: 
   name:
   pull_policy: Always
+scheduler_name: neuron-scheduler
 resources:
-  node_type: inf2.24xlarge
+  node_type: inf2.48xlarge
   resources:
   requests:
-    "aws.amazon.com/neuron": 6
+    "aws.amazon.com/neuron": 4
   limits:
-    "aws.amazon.com/neuron": 6
+    "aws.amazon.com/neuron": 4
 tolerations:
   - key: "aws.amazon.com/neuron"
     operator: "Exists"
@@ -29,7 +30,7 @@ inline_script:
   import triton_python_backend_utils as pb_utils
 
   _MODEL_ARGS_FILENAME = "model.json"
-  _MAX_MODEL_LEN = 2048
+  _MAX_MODEL_LEN = 8192
 
   class TritonPythonModel:
 
@@ -224,9 +225,9 @@ inline_script:
   {
     "model": "/fsx/pretrained-models/mistralai/Mistral-7B-Instruct-v0.1",
     "tokenizer": "/fsx/pretrained-models/mistralai/Mistral-7B-Instruct-v0.1",
-    "tensor_parallel_degree": 4,
+    "tensor_parallel_degree": 8,
     "amp": "f16",
-    "n_positions": 2048
+    "n_positions": 8192
   }
 
   EOF
@@ -274,8 +275,8 @@ server:
     - --disable-auto-complete-config
     - --log-file=$OUTPUT_LOG
   autoscaling:
-    minReplicas: 1
-    maxReplicas: 4
+    minReplicas: 3
+    maxReplicas: 6
     metrics:
       - type: Pods
         pods:
@@ -283,4 +284,4 @@ server:
             name: avg_time_queue_us
           target:
             type: AverageValue
-            averageValue: 50
+            averageValue: 1000000

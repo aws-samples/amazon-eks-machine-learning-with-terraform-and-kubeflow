@@ -80,6 +80,7 @@ spec:
         karpenter.sh/do-not-disrupt: "true"
         sidecar.istio.io/inject: 'false'
     spec:
+      schedulerName: {{ .Values.scheduler_name | default "kube-scheduler" }}
       volumes:
         - name: config
           configMap:

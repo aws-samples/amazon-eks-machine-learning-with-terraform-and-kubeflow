@@ -1,8 +1,9 @@
 image: 
   name:
   pull_policy: Always
+scheduler_name: neuron-scheduler
 resources:
-  node_type: inf2.24xlarge
+  node_type: inf2.48xlarge
   resources:
   requests:
     "aws.amazon.com/neuron": 4
@@ -152,8 +153,8 @@ server:
     - --disable-auto-complete-config
     - --log-file=$OUTPUT_LOG
   autoscaling:
-    minReplicas: 1
-    maxReplicas: 4
+    minReplicas: 3
+    maxReplicas: 6
     metrics:
       - type: Pods
         pods:
@@ -161,4 +162,4 @@ server:
             name: avg_time_queue_us
           target:
             type: AverageValue
-            averageValue: 50
+            averageValue: 1000000
