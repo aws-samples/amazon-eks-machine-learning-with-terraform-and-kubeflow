@@ -68,6 +68,7 @@ data:
     EOF
 
     python /tmp/hf_snapshot.py 2>&1 | tee $OUTPUT_LOG
+    chown -R {{ .Values.snapshot.user | default "root" }}:{{ .Values.snapshot.group | default "root" }} $SNAPSHOT_ROOT
 ---
 apiVersion: v1
 kind: Pod
@@ -109,7 +110,7 @@ spec:
     - name: LOG_ROOT
       value: /efs/home/{{ .Release.Name }}/logs
     - name: SNAPSHOT_ROOT
-      value: /fsx/pretrained-models
+      value: {{ .Values.snapshot.dir | default "/fsx/pretrained-models" }}
     {{- range $v := .Values.env }}
     - name: {{ $v.name }}
       value: "{{ tpl $v.value $ }}"
