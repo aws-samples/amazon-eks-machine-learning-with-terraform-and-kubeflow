@@ -1,6 +1,0 @@
-apiVersion: v2
-name: rayserve-vllm-neuronx-engine
-description: A Helm chart for Ray Serve vLLM Neuronx Engine
-type: application
-version: 1.0.0
-appVersion: "v1"

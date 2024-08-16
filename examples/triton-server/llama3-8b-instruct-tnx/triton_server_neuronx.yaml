@@ -7,15 +7,16 @@ resources:
   resources:
   requests:
     "aws.amazon.com/neuron": 4
+    cpu: 16
+    memory: 128Gi
   limits:
     "aws.amazon.com/neuron": 4
+    cpu: 60
+    memory: 180Gi
 tolerations:
   - key: "aws.amazon.com/neuron"
     operator: "Exists"
     effect: "NoSchedule"
-ebs:
-  storage: 400Gi
-  mount_path: /tmp
 inline_script:
 - |+
   cat > /tmp/model.py <<EOF
@@ -225,8 +226,8 @@ inline_script:
 - |+
   cat > /tmp/model.json <<EOF
   {
-    "model": "/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct",
-    "tokenizer": "/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct",
+    "model": "$MODEL_PATH",
+    "tokenizer": "$MODEL_PATH",
     "tensor_parallel_degree": 8,
     "amp": "f16",
     "n_positions": 8192
@@ -267,6 +268,8 @@ server:
       value: /efs/home/{{ .Release.Name }}/logs
     - name: MODEL_REPO
       value: /efs/home/{{ .Release.Name }}/model_repository
+    - name: MODEL_PATH
+      value: "/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct"
   command:
     - tritonserver
   args:

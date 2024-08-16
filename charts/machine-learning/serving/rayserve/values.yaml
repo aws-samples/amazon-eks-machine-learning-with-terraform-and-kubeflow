@@ -6,6 +6,7 @@ ray:
   resources:
     requests: {}
     limits: {}
+  tolerations: []
   serve_config_v2:
   service_unhealthy_threshold_secs: 900
   deployment_unhealthy_threshold_secs: 300

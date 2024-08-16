@@ -16,28 +16,30 @@ ray:
       port: 8000
   resources:
     requests:
-      cpu: 8
+      cpu: 1
     limits:
-      cpu: 64
+      cpu: 4
   env:
     - name: ENGINE_CONFIG
       value: /efs/home/{{ .Release.Name }}/config/engine.json
     - name: NEURON_CC_FLAGS
       value: "--model-type transformer"
+    - name: NEURON_COMPILE_CACHE_URL
+      value: "/tmp"
   serve_config_v2: 
     serveConfigV2: |
       applications:
         - name: meta-llama3-8b-instruct
           import_path: vllm_asyncllmengine:deployment
           runtime_env:
-            working_dir: file:///fsx/rayserve/engines/vllm_neuronx_asyncllmengine.zip
+            working_dir: file:///fsx/rayserve/engines/vllm_asyncllmengine.zip
           deployments:
           - name: VLLMDeployment
-            max_ongoing_requests: 16
+            max_ongoing_requests: 48
             autoscaling_config:
-              min_replicas: 1
-              max_replicas: 2
-              target_ongoing_requests: 8
+              min_replicas: 3
+              max_replicas: 6
+              target_ongoing_requests: 24
             ray_actor_options:
               resources: 
                 "neuron_cores": 8
@@ -47,13 +49,17 @@ image:
 image_pull_policy: IfNotPresent
 scheduler_name: neuron-scheduler
 resources:
-  min_replicas: 1
-  max_replicas: 2
+  min_replicas: 3
+  max_replicas: 6
   requests:
     "aws.amazon.com/neuron": 4
+    memory: 128Gi
+    cpu: 16
   limits:
     "aws.amazon.com/neuron": 4
-  node_type: 'inf2.24xlarge' 
+    memory: 180Gi
+    cpu: 60
+  node_type: 'inf2.48xlarge' 
 tolerations:
   - key: "aws.amazon.com/neuron"
     operator: "Exists"

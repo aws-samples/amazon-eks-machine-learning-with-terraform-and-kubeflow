@@ -1,6 +1,7 @@
 image: 
   name:
   pull_policy: Always
+scheduler_name: neuron-scheduler
 resources:
   node_type: inf2.xlarge
   resources:
@@ -12,9 +13,6 @@ tolerations:
   - key: "aws.amazon.com/neuron"
     operator: "Exists"
     effect: "NoSchedule"
-ebs:
-  storage: 100Gi
-  mount_path: /tmp
 inline_script:
 - |+
   cat > /tmp/model.py <<EOF
@@ -210,8 +208,8 @@ inline_script:
 - |+
   cat > /tmp/model.json <<EOF
   {
-    "model": "/fsx/pretrained-models/BAAI/bge-reranker-large",
-    "tokenizer": "/fsx/pretrained-models/BAAI/bge-reranker-large",
+    "model": "$MODEL_PATH",
+    "tokenizer": "$MODEL_PATH",
     "max_model_batch_size": 8
   }
 
@@ -251,6 +249,8 @@ server:
       value: /efs/home/{{ .Release.Name }}/logs
     - name: MODEL_REPO
       value: /efs/home/{{ .Release.Name }}/model_repository
+    - name: MODEL_PATH
+      value: "/fsx/pretrained-models/BAAI/bge-reranker-large"
   command:
     - tritonserver
   args:

@@ -3,7 +3,7 @@ inline_script:
 - |+
   cat > /tmp/engine.json <<EOF
   {
-    "model": "/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct",
+    "model": "$MODEL_PATH",
     "disable_log_requests": true,
     "tensor_parallel_size": 8,
     "max_num_seqs": 8,
@@ -18,3 +18,5 @@ process:
   env:
     - name: CONFIG_ROOT
       value: /efs/home/{{ .Release.Name }}/config
+    - name: MODEL_PATH
+      value: /efs/home/{{ .Release.Name }}/meta-llama/Meta-Llama-3-8B-Instruct

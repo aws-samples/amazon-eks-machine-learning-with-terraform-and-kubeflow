@@ -62,7 +62,7 @@ spec:
             {{- $pv_index = add $pv_index 1 }}
             {{- end }}
           tolerations:
-          {{- range $v := .Values.tolerations }}
+          {{- range $v := .Values.ray.tolerations }}
             - key: {{ $v.key }}
               {{- if $v.operator }}
               operator: "{{ $v.operator }}"
@@ -71,9 +71,7 @@ spec:
               effect: "{{ $v.effect }}"
               {{- end }}
           {{- end }}
-          nodeSelector:
-            node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
-
+    
     workerGroupSpecs:
     - replicas: {{ .Values.resources.min_replicas }}
       minReplicas: {{ .Values.resources.min_replicas }}
@@ -91,7 +89,9 @@ spec:
             app.kubernetes.io/managed-by: {{ $.Release.Service }}
         spec:
           restartPolicy: {{  .Values.ray.restart_policy.worker | default "OnFailure" }}
-          schedulerName: {{ .Values.scheduler_name | default "kube-scheduler" }}
+          {{- if .Values.scheduler_name }}
+          schedulerName: {{ .Values.scheduler_name }}
+          {{- end }}
           containers:
           - name: ray-worker
             image: {{ .Values.image }}

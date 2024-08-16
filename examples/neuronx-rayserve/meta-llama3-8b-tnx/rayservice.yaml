@@ -2,6 +2,9 @@ ray:
   version: '2.32.0'
   dashboard:
     host: '0.0.0.0'
+  restart_policy:
+    head: Never
+    worker: Never
   ports:
     - name: gcs
       port: 6379
@@ -13,9 +16,9 @@ ray:
       port: 8000
   resources:
     requests:
-      cpu: 8
+      cpu: 1
     limits:
-      cpu: 64
+      cpu: 4
   env:
     - name: ENGINE_CONFIG
       value: /efs/home/{{ .Release.Name }}/config/engine.json
@@ -32,11 +35,11 @@ ray:
             working_dir: file:///fsx/rayserve/engines/tnx_autocausalengine.zip
           deployments:
           - name: TNXAutoCausalDeployment
-            max_ongoing_requests: 16
+            max_ongoing_requests: 48
             autoscaling_config:
               min_replicas: 3
               max_replicas: 6
-              target_ongoing_requests: 8
+              target_ongoing_requests: 24
             ray_actor_options:
               resources: 
                 "neuron_cores": 8
@@ -50,8 +53,12 @@ resources:
   max_replicas: 6
   requests:
     "aws.amazon.com/neuron": 4 
+    cpu: 16
+    memory: 128Gi
   limits:
     "aws.amazon.com/neuron": 4
+    cpu: 60
+    memory: 180Gi
   node_type: 'inf2.48xlarge' 
 tolerations:
   - key: "aws.amazon.com/neuron"

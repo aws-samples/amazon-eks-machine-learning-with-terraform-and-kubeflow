@@ -1,17 +1,3 @@
-{{- if .Values.ebs  }}
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: ebs-{{ .Release.Name }}
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: ebs-sc-wait
-  resources:
-    requests:
-      storage: {{ .Values.ebs.storage | default "100Gi" }}
-{{- end }}
----
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -80,7 +66,9 @@ spec:
         karpenter.sh/do-not-disrupt: "true"
         sidecar.istio.io/inject: 'false'
     spec:
-      schedulerName: {{ .Values.scheduler_name | default "kube-scheduler" }}
+      {{- if .Values.scheduler_name }}
+      schedulerName: {{ .Values.scheduler_name }}
+      {{- end }}
       volumes:
         - name: config
           configMap:
@@ -103,8 +91,15 @@ spec:
         {{- end }}
         {{- if .Values.ebs }}
         - name: ebs
-          persistentVolumeClaim:
-            claimName: ebs-{{ .Release.Name }}
+          ephemeral:
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: {{ .Values.ebs.storage | default "100Gi" }}
+                storageClassName: ebs-sc-wait
         {{- end }}
       tolerations:
       {{- range $v := .Values.tolerations }}
