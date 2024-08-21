@@ -13,7 +13,8 @@ data:
     import os
     import json
 
-    from fastapi import FastAPI
+    from fastapi import FastAPI, Request
+    from fastapi.responses import JSONResponse, Response
     from ray import serve
 
     import torch
@@ -36,22 +37,62 @@ data:
         with open(config, "r") as f:
           engine_config = json.load(f)
 
-        pretrained_model_name_or_path = engine_config.get("pretrained_model_name_or_path")
+        pretrained_model_name_or_path = engine_config.pop("pretrained_model_name_or_path")
         assert pretrained_model_name_or_path, "pretrained_model_name_or_path is required in engine config"
         assert os.path.isdir(pretrained_model_name_or_path), f"model {pretrained_model_name_or_path} does not exist"
 
+        neuron_config_dict = engine_config.pop("neuron_config", {})
+        continuous_batching = neuron_config_dict.pop("continuous_batching", {})
+        if "batch_size_for_shared_caches" in continuous_batching:
+          engine_config["batch_size"] = int(continuous_batching.get("batch_size_for_shared_caches"))
+          neuron_config_dict["continuous_batching"] = ContinuousBatchingConfig(**continuous_batching)
+         
+        quant = neuron_config_dict.pop("quant", {})
+        if "quant_dtype" in quant and "dequant_dtype" in quant:
+          neuron_config_dict["quant"] = QuantizationConfig(**quant)
+        
+        neuron_config = None
+        if neuron_config_dict:
+          engine_config["neuron_config"] = NeuronConfig(**neuron_config_dict)
+
+        self.batch_size = engine_config.get("batch_size", 1)
+        self.n_positions = engine_config.get("n_positions", 2048)
         self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path)
-        self.model = NeuronAutoModelForCausalLM.from_pretrained(**engine_config)
+
+        print(f"Normalized engine_config: {engine_config}")
+        self.model = NeuronAutoModelForCausalLM.from_pretrained(pretrained_model_name_or_path, **engine_config)
+        print("Move model to neuron device")
         self.model.to_neuron()
+        print("Moved model to neuron device")
 
       @app.post("/generate")
-      def generate(self, prompt: str, **sampling_params) -> str:
-        with torch.inference_mode():
-          input_ids = self.tokenizer.encode_plus(prompt, return_tensors="pt")['input_ids']
-          generated_token_seqs = self.model.sample(input_ids, **sampling_params)
-          text_output_seqs = [self.tokenizer.decode(seq, skip_special_tokens=True) for seq in generated_token_seqs]
+      async def generate(self, request: Request) -> Response:
+        """Generate completion for the request.
+            The request should be a JSON object with the following fields:
+            - prompts: the prompts to use for the generation.
+            - sampling_params: the sampling parameters.
+        """
+        request_dict = await request.json()
+        prompts = request_dict.pop("prompt")
+        sampling_params = request_dict.pop("sampling_params", {})
+        assert isinstance(sampling_params, dict)
 
-        return text_output_seqs[0]
+        if "sequence_length" not in sampling_params:
+          sampling_params["sequence_length"] = self.n_positions
+          
+        prompts = [prompts] if isinstance(prompts, str) else prompts
+        assert isinstance(prompts, list)
+
+        n_prompts = len(prompts)
+        prompts.extend([ prompts[-1] for _ in range(self.batch_size - n_prompts)])
+        with torch.inference_mode():
+          input_ids = self.tokenizer.batch_encode_plus(prompts, return_tensors="pt")['input_ids']
+          generated_token_seqs = self.model.sample(input_ids, **sampling_params)
+          generated_token_seqs = generated_token_seqs[:n_prompts]
+          generated_text_seqs = self.tokenizer.batch_decode(generated_token_seqs, skip_special_tokens=True)
+        
+        ret = {"text_outputs": generated_text_seqs}
+        return JSONResponse(ret)
 
     deployment = TNXAutoCausalDeployment.bind() 
 

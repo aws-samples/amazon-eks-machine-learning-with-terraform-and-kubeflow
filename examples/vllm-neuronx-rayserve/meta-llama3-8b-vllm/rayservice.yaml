@@ -19,6 +19,11 @@ ray:
       cpu: 1
     limits:
       cpu: 4
+    node_type: 'inf2.48xlarge' 
+  tolerations:
+  - key: "aws.amazon.com/neuron"
+    operator: "Exists"
+    effect: "NoSchedule"
   env:
     - name: ENGINE_CONFIG
       value: /efs/home/{{ .Release.Name }}/config/engine.json

@@ -6,7 +6,7 @@ inline_script:
     "model": "$MODEL_PATH",
     "disable_log_requests": true,
     "tensor_parallel_size": 8,
-    "max_num_seqs": 8,
+    "max_num_seqs": 1,
     "dtype": "float16"
   }
 

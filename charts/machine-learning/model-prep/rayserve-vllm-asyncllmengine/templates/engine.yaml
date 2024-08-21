@@ -12,8 +12,11 @@ data:
     cat > /tmp/vllm_asyncllmengine.py <<EOF
     import os
     import json
+    from typing import AsyncGenerator
+    import asyncio
 
-    from fastapi import FastAPI
+    from fastapi import FastAPI, Request
+    from fastapi.responses import JSONResponse, Response, StreamingResponse
     from ray import serve
 
     from vllm.engine.arg_utils import AsyncEngineArgs
@@ -26,26 +29,62 @@ data:
     @serve.deployment()
     @serve.ingress(app)
     class VLLMDeployment:
-        def __init__(self):
+      def __init__(self):
 
-          config = os.getenv("ENGINE_CONFIG")
-          assert config, "ENGINE_CONFIG env variable for engine config path is required"
-          assert os.path.isfile(config), f"ENGINE_CONFIG {config} does not exist"
+        config = os.getenv("ENGINE_CONFIG")
+        assert config, "ENGINE_CONFIG env variable for engine config path is required"
+        assert os.path.isfile(config), f"ENGINE_CONFIG {config} does not exist"
 
-          # Load engine args from config file
-          with open(config, "r") as f:
-            engine_config = json.load(f)
+        # Load engine args from config file
+        with open(config, "r") as f:
+          engine_config = json.load(f)
 
-          engine_args = AsyncEngineArgs(**engine_config)
-          self.engine = AsyncLLMEngine.from_engine_args(engine_args)
+        engine_args = AsyncEngineArgs(**engine_config)
+        self.engine = AsyncLLMEngine.from_engine_args(engine_args)
 
-        @app.post("/generate")
-        async def generate(self, prompt: str, **sampling_params):
+      @app.post("/generate")
+      async def generate(self, request: Request) -> Response:
+        """Generate completion for the request.
+        The request should be a JSON object with the following fields:
+        - prompt: the prompt to use for the generation.
+        - stream: whether to stream the results or not.
+        - sampling_params: the sampling parameters (See `SamplingParams` for details).
+        """
+        request_dict = await request.json()
+        prompt = request_dict.pop("prompt")
+        stream = request_dict.pop("stream", False)
+        sampling_params_dict = request_dict.pop("sampling_params", {})
+        sampling_params = SamplingParams(**sampling_params_dict)
+        request_id = random_uuid()
 
-            sampling_params = SamplingParams(**sampling_params)
-            request_id = random_uuid()
-            generator = self.engine.generate(prompt, sampling_params, request_id)
-            return generator
+        results_generator = self.engine.generate(prompt, sampling_params, request_id)
+        
+        # Streaming case
+        async def stream_results() -> AsyncGenerator[bytes, None]:
+          async for request_output in results_generator:
+              prompt = request_output.prompt
+              text_outputs = [
+                  prompt + output.text for output in request_output.outputs
+              ]
+              ret = {"text": text_outputs}
+              yield (json.dumps(ret) + "\0").encode("utf-8")
+
+        if stream:
+          return StreamingResponse(stream_results())
+
+        # Non-streaming case
+        final_output = None
+        try:
+          async for request_output in results_generator:
+            final_output = request_output
+        except asyncio.CancelledError:
+            return Response(status_code=499)
+
+        assert final_output is not None
+        prompt = final_output.prompt
+        text_outputs = [prompt + output.text for output in final_output.outputs]
+        ret = {"text_outputs": text_outputs}
+        return JSONResponse(ret)
     
     deployment = VLLMDeployment.bind()
 

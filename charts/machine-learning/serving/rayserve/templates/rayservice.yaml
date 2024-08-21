@@ -71,6 +71,8 @@ spec:
               effect: "{{ $v.effect }}"
               {{- end }}
           {{- end }}
+          nodeSelector:
+            node.kubernetes.io/instance-type: {{ .Values.ray.resources.node_type }}
     
     workerGroupSpecs:
     - replicas: {{ .Values.resources.min_replicas }}
