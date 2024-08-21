@@ -6,8 +6,10 @@ inline_script:
     "model": "$MODEL_PATH",
     "disable_log_requests": true,
     "tensor_parallel_size": 8,
-    "max_num_seqs": 1,
-    "dtype": "float16"
+    "max_num_seqs": 4,
+    "dtype": "float16",
+    "max_model_len": 8192,
+    "block_size": 8192
   }
 
   EOF

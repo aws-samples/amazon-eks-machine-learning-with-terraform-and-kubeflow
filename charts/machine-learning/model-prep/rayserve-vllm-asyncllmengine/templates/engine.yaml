@@ -73,19 +73,19 @@ data:
           return StreamingResponse(stream_results())
 
         # Non-streaming case
-        final_output = None
         try:
           async for request_output in results_generator:
-            final_output = request_output
+            if request_output.finished:
+              prompt = request_output.prompt
+              text_outputs = [prompt + output.text for output in request_output.outputs]
+              ret = {"text_outputs": text_outputs}
+              return JSONResponse(ret)
         except asyncio.CancelledError:
-            return Response(status_code=499)
+          return Response(status_code=499)
+        except Exception as e:
+          print(f"Error: {e}")
+          return Response(status_code=500)
 
-        assert final_output is not None
-        prompt = final_output.prompt
-        text_outputs = [prompt + output.text for output in final_output.outputs]
-        ret = {"text_outputs": text_outputs}
-        return JSONResponse(ret)
-    
     deployment = VLLMDeployment.bind()
 
     EOF
