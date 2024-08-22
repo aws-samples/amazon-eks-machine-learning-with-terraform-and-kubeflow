@@ -75,13 +75,14 @@ inline_script:
   cat > /tmp/model.json <<EOF
   {
     "model": "$MODEL_PATH",
-    "tokenizer": "$MODEL_PATH",
-    "tokenizer_mode": "auto",
     "disable_log_requests": true,
-    "dtype": "float16",
     "tensor_parallel_size": 8,
-    "max_num_seqs": 8
+    "max_num_seqs": 4,
+    "dtype": "float16",
+    "max_model_len": 8192,
+    "block_size": 8192
   }
+
 
   EOF
 - |+
@@ -110,9 +111,10 @@ inline_script:
 pre_script: 
   - mkdir -p $LOG_ROOT
   - OUTPUT_LOG="$LOG_ROOT/triton_server.log"
+  - rm -rf $MODEL_REPO
   - mkdir -p $MODEL_REPO
   - VERSION=1
-  - MODEL_NAME=llama3-8b
+  - MODEL_NAME=llama3-8b-instruct
   - mkdir -p $MODEL_REPO/$MODEL_NAME/$VERSION
   - cp /tmp/model.json $MODEL_REPO/$MODEL_NAME/$VERSION/model.json
   - cp /tmp/config.pbtxt $MODEL_REPO/$MODEL_NAME/config.pbtxt
