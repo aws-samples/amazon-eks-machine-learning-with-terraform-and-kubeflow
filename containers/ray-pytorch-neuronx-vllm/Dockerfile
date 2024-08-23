@@ -60,11 +60,9 @@ ENV PJRT_DEVICE=NEURON
 
 ENV VLLM_TARGET_DEVICE=neuron
 RUN git clone https://github.com/vllm-project/vllm.git
-RUN cd vllm && git fetch origin 8f89d72090da70895d77d32248ea8504f7daba50
-RUN cd vllm && git reset --hard 8f89d72090da70895d77d32248ea8504f7daba50
-COPY patches/vllm_v0.5.0_neuron.patch vllm/vllm_v0.5.0_neuron.patch
-RUN cd vllm && git apply --ignore-space-change --ignore-whitespace vllm_v0.5.0_neuron.patch \
-      && pip3 install -U -r requirements-neuron.txt && pip3 install .
+RUN cd vllm && git fetch origin 5b734fb7edfdf3f8a836a3ddee81eba506230fdd
+RUN cd vllm && git reset --hard 5b734fb7edfdf3f8a836a3ddee81eba506230fdd
+RUN cd vllm && pip3 install -U -r requirements-neuron.txt && pip3 install .
 RUN pip3 install pynvml
 
 CMD ["/bin/bash"]
