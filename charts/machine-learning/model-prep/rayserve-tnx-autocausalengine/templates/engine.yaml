@@ -20,6 +20,7 @@ data:
     import torch
     from transformers_neuronx import NeuronAutoModelForCausalLM
     from transformers import AutoTokenizer
+    from transformers_neuronx.config import NeuronConfig,  GenerationConfig, QuantizationConfig, ContinuousBatchingConfig
     
     app = FastAPI()
 
@@ -51,6 +52,10 @@ data:
         if "quant_dtype" in quant and "dequant_dtype" in quant:
           neuron_config_dict["quant"] = QuantizationConfig(**quant)
         
+        on_device_embedding = neuron_config_dict.pop("on_device_embedding", {})
+        if on_device_embedding:
+          neuron_config_dict["on_device_embedding"] = GenerationConfig(**on_device_embedding)
+
         neuron_config = None
         if neuron_config_dict:
           engine_config["neuron_config"] = NeuronConfig(**neuron_config_dict)
