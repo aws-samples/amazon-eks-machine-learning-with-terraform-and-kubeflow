@@ -316,6 +316,7 @@ pre_script:
   - cp /tmp/config.pbtxt $MODEL_REPO/$MODEL_NAME/config.pbtxt
   - export NEURON_CC_FLAGS="--model-type transformer"
   - export NEURON_COMPILE_CACHE_URL="/tmp"
+  - export OMP_NUM_THREADS=32
 server:
   ports:
     http: 8000
