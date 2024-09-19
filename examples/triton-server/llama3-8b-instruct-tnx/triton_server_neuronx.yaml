@@ -125,6 +125,7 @@ inline_script:
 
       tokenizer_location = model_args.pop("tokenizer", model_location)
       self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_location)
+      self.tokenizer.pad_token = self.tokenizer.eos_token
 
       self.logger.log_info(f"normalized model_args: {model_args}")
       self.model = NeuronAutoModelForCausalLM.from_pretrained(model_location, **model_args)
@@ -207,7 +208,7 @@ inline_script:
             batch_prompts.extend(batch_prompts[-1] for _ in range(self.batch_size - batch_prompts_size))
 
             start_time = time.time()
-            input_ids = self.tokenizer.batch_encode_plus(batch_prompts, return_tensors="pt")['input_ids']
+            input_ids = self.tokenizer.batch_encode_plus(batch_prompts, return_tensors="pt", padding='longest')['input_ids']
             generated_token_seqs = self.model.sample(input_ids, **params)
             generated_token_seqs = generated_token_seqs[:batch_prompts_size]
             generated_text_seqs = self.tokenizer.batch_decode(generated_token_seqs, skip_special_tokens=True)
