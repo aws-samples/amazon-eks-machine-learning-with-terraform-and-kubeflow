@@ -58,7 +58,8 @@ aws ecr get-login-password --region ${region} \
 docker push ${fullname}
 if [ $? -eq 0 ]; then
 	echo "Amazon ECR URI: ${fullname}"
-    files=$(find $DIR/../../../examples/ -wholename "*/ray*/*.yaml")
+    cd $DIR/../../../
+    files=$(find examples/ -wholename "*/ray*/*.yaml")
     for file in $files
     do
         sed -i -e "s|image:.*$|image: ${fullname}|g" $file
