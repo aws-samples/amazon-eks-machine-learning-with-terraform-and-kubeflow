@@ -291,7 +291,7 @@ resource "aws_fsx_data_repository_association" "this" {
 }
 
 locals {
-  use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.28": var.k8s_version
+  use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.29": var.k8s_version
   s3_bucket = split("/", substr(var.import_path, 5, -1))[0]
 }
 
