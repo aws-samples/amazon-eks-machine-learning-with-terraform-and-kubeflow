@@ -601,6 +601,18 @@ resource "kubernetes_namespace" "kubeflow" {
   depends_on = [  helm_release.cluster-autoscaler ]
 }
 
+resource "kubernetes_namespace" "lws-system" {
+  metadata {
+    labels = {
+      istio-injection = "disabled"
+    }
+
+    name = "lws-system"
+  }
+
+  depends_on = [  helm_release.cluster-autoscaler ]
+}
+
 data "tls_certificate" "this" {
   url = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
 }
@@ -1264,6 +1276,16 @@ resource "helm_release" "mpi-operator" {
 
   depends_on = [  helm_release.cluster-autoscaler ]
 }
+
+resource "helm_release" "lws" {
+  name       = "lws"
+  chart      = "${var.local_helm_repo}/lws"
+  version    = "0.4.2"
+  namespace = "lws-system"
+
+  depends_on = [  helm_release.cluster-issuer ]
+}
+
 
 module "kubeflow-components" {
   count = var.kubeflow_platform_enabled ? 1 : 0

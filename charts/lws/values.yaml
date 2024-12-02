@@ -1,0 +1,6 @@
+manager:
+  image: registry.k8s.io/lws/lws:v0.4.2
+  pullpolicy: IfNotPresent
+kube_rbac_proxy:
+  image: gcr.io/kubebuilder/kube-rbac-proxy:v0.15.0
+  pullpolicy: IfNotPresent
