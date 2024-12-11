@@ -326,7 +326,7 @@ variable "kubeflow_platform_enabled" {
 
 variable "system_group_desired" {
     description = "System group desired size"
-    default = 5
+    default = 6
     type = number
 }
 
