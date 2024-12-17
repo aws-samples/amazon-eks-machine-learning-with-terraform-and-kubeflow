@@ -10,7 +10,11 @@ data:
     yum install -y unzip
     yum install -y wget
 
-    [[ -d $DATA_DIR ]] && echo "$DATA_DIR already exists" && exit 0
+    if [ -d $DATA_DIR ] && [ ! -z "$(ls -A $DATA_DIR)" ]
+    then 
+      echo "$DATA_DIR exists and is not empty" 
+      exit 0
+    fi
     mkdir -p $DATA_DIR
     echo "Data dir: $DATA_DIR"
 

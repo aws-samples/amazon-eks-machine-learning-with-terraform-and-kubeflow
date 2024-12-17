@@ -9,7 +9,11 @@ data:
 
     yum install -y wget
 
-    [[ -d $DATA_DIR ]] && echo "$DATA_DIR already exists" && exit 0
+    if [ -f $DATA_DIR/data.jsonl ]
+    then 
+      echo "$DATA_DIR/data.jsonl exists" 
+      exit 0
+    fi
     mkdir -p $DATA_DIR
     echo "Data dir: $DATA_DIR"
     

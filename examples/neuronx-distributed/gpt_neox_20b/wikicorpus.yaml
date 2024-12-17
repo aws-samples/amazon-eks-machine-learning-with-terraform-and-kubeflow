@@ -1,4 +1,4 @@
-image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.1.2-neuronx-py310-sdk2.18.2-ubuntu20.04'
+image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.1.2-neuronx-py310-sdk2.20.2-ubuntu20.04'
 backoff_limit: 2000
 ebs:
   storage: 200Gi
@@ -14,19 +14,23 @@ tolerations:
     effect: "NoSchedule"
 git:
   repo_url: "https://github.com/aws-neuron/neuronx-distributed.git"
-  commit: 8520967d0a39e703e03ba0edbe595230f7e16bde
+  commit: 083d3ea26f58d6b91d6e0f0deb2c0670fdb7bbb0
   branch: main
 pre_script: 
   - pip3 install --upgrade pip
   - pip3 install -r $GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/common/requirements.txt 
   - mkdir -p $DATA_ROOT
+  - mkdir -p $LOG_ROOT 
 process:
   env:
     - name: HOME
       value: /tmp
     - name: DATA_ROOT
       value: /fsx/home/{{ .Release.Name }}
+    - name: LOG_ROOT
+      value: /efs/home/{{ .Release.Name }}/logs
   command:
     -  HOME=$DATA_ROOT python3 
   args:
     - $GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/common/get_dataset.py 
+    - '2>&1 | tee $LOG_ROOT/dataset.log'
