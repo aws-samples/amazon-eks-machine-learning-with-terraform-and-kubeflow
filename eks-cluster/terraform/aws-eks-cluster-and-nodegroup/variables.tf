@@ -338,7 +338,7 @@ variable "system_group_max" {
 
 variable "system_group_min" {
     description = "System group minimum size"
-    default = 1
+    default = 6
     type = number
 }
 
