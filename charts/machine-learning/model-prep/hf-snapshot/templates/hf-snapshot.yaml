@@ -34,37 +34,41 @@ data:
 
     hf_model_id = os.environ.get("HF_MODEL_ID", None)
     assert hf_model_id is not None, "HF_MODEL_ID must be set"
-    print(f"HF_MODEL_ID: {hf_model_id}")
+    print(f"HF_MODEL_ID: {hf_model_id}", flush=True)
 
     hf_tensors = os.environ.get("HF_TENSORS", "true").lower() in ("true", "1")
-    print(f"Download Hugging Face Snapshot Tensors: {hf_tensors}")
+    print(f"Download Hugging Face Snapshot Tensors: {hf_tensors}", flush=True)
 
     hf_token = os.environ.get("HF_TOKEN", None)
 
-    print(f"Downloading HuggingFace snapshot: {hf_model_id}")
     with TemporaryDirectory(suffix="model", prefix="hf", dir="/tmp") as cache_dir:
         ignore_patterns = ["*.msgpack", "*.h5"] if hf_tensors else [ "*.msgpack", "*.h5", "*.bin", "*.safetensors"]
+        print(f"Downloading HuggingFace snapshot: {hf_model_id} to local dir: {cache_dir}")
         snapshot_download(repo_id=hf_model_id, 
             cache_dir=cache_dir,
             ignore_patterns=ignore_patterns,
             token=hf_token)
+        print(f"Completed downloading HuggingFace snapshot: {hf_model_id} to local dir: {cache_dir}", flush=True)
 
         cache_path = Path(cache_dir)
         local_snapshot_path = str(list(cache_path.glob(f"**/snapshots/*"))[0])
-        print(f"Local snapshot path: {local_snapshot_path}")
+        print(f"Local snapshot path: {local_snapshot_path}", flush=True)
 
         snapshot_path = os.path.join(os.environ["SNAPSHOT_ROOT"], os.environ["HF_MODEL_ID"])
         os.makedirs(snapshot_path, exist_ok=True)
 
-        print(f"Copying snapshot to {snapshot_path}")
+        print(f"Copying snapshot to {snapshot_path}", flush=True)
         for root, dirs, files in os.walk(local_snapshot_path):
           for file in files:
               full_path = os.path.join(root, file)
+              print(f"Copying {full_path}", flush=True)
               if os.path.isdir(full_path):
                 shutil.copytree(full_path, os.path.join(snapshot_path, os.path.basename(full_path)))
               else:
                 shutil.copy2(full_path, snapshot_path)
-                
+
+        print(f"Completed copying snapshot to {snapshot_path}", flush=True)
+
     EOF
 
     python /tmp/hf_snapshot.py 2>&1 | tee $OUTPUT_LOG

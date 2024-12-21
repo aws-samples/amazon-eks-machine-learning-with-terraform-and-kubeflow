@@ -5,10 +5,10 @@ ebs:
 resources:
   requests:
     cpu: "1000m"
-    memory: "512Mi"
+    memory: "2048Mi"
   limits:
-    cpu: "2000m"
-    memory: "8192Mi"
+    cpu: "1000m"
+    memory: "2048Mi"
 pvc:
   - name: pv-fsx
     mount_path: /fsx
