@@ -63,6 +63,6 @@ RUN git clone https://github.com/vllm-project/vllm.git
 RUN cd vllm && git fetch origin 5b734fb7edfdf3f8a836a3ddee81eba506230fdd
 RUN cd vllm && git reset --hard 5b734fb7edfdf3f8a836a3ddee81eba506230fdd
 RUN cd vllm && pip3 install -U -r requirements-neuron.txt && pip3 install .
-RUN pip3 install pynvml
+RUN pip3 install pynvml==12.0.0 triton==2.2.0
 
 CMD ["/bin/bash"]
