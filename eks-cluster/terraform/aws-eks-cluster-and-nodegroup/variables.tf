@@ -119,7 +119,7 @@ variable "capacity_type" {
 
 variable "system_capacity_type" {
   description = "System node group capacity type: ON_DEMAND or SPOT capacity"
-  default = "SPOT"
+  default = "ON_DEMAND"
   type = string
 }
 
