@@ -73,6 +73,10 @@ To launch Ray Service,  execute:
         charts/machine-learning/serving/rayserve \
         -f examples/vllm-neuronx-rayserve/meta-llama3-8b-vllm/rayservice.yaml -n kubeflow-user-example-com
 
+To check the status of Ray Service:
+    kubectl describe rayservice rayservice-rayserve-llama3-8b-instruct-vllm-nx \
+        -n kubeflow-user-example-com
+
 ## Stop Service
 
 To stop the service:
