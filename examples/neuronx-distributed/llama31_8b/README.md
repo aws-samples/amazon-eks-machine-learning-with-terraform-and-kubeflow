@@ -22,9 +22,9 @@ Following variables are implicitly defined by the [pytorch-distributed](../../..
 5. `PET_MASTER_PORT`: Maps to `master_port`
 
 
-## Hugging Face Llama2 7B model
+## Hugging Face Llama3.1 8B model
 
-To download Hugging Face Llama2 7B model configuration (without model weights, since we are pre-training from scratch), replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
+To download Hugging Face Llama3.1 8B model configuration (without model weights, since we are pre-training from scratch), replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nxd-llama31-8b    \
