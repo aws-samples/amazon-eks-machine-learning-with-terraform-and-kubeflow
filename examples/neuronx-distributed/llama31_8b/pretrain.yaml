@@ -68,11 +68,9 @@ pre_script:
     --loading_step latest_if_exists
     --checkpoint_freq=100
     --num_kept_checkpoint=1"
-  - export TPU_NUM_DEVICES=$PET_NPROC_PER_NODE
-  - export TPU_CHIPS_PER_HOST_BOUNDS=$PET_NPROC_PER_NODE
   - TMP_CACHE_DIR=/tmp/cache
   - cp -r $CACHE_DIR $TMP_CACHE_DIR
-  - export NEURON_CC_FLAGS="--model-type transformer --distribution-strategy=llm-training --cache_dir=$TMP_CACHE_DIR"
+  - export NEURON_CC_FLAGS="--model-type transformer --cache_dir=$TMP_CACHE_DIR"
   - NEURON_COMPILE_CACHE_URL=$TMP_CACHE_DIR neuron_parallel_compile --command clear-locks
 train:
   env:
