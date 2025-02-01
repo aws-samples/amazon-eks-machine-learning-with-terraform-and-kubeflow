@@ -10,7 +10,7 @@ resources:
   limits:
     "aws.amazon.com/neuron": 16 
     "vpc.amazonaws.com/efa": 8
-  nnodes: 16
+  nnodes: 32
   nproc_per_node: 32 
   node_type: 'trn1.32xlarge' 
 tolerations:
@@ -38,7 +38,7 @@ pre_script:
   - DATA_PATH="$DATA_ROOT/examples_datasets/wikicorpus_llama3_tokenized_8k"
   - export DISTRIBUTED_ARGS="--nproc_per_node $PET_NPROC_PER_NODE --nnodes $PET_NNODES --node_rank $PET_NODE_RANK --master_addr $PET_MASTER_ADDR --master_port $PET_MASTER_PORT"
   - TP_DEGREE=32
-  - PP_DEGREE=16
+  - PP_DEGREE=8
   - GBS=1024
   - SEQ_LEN=8192
   - DP=$(($PET_NPROC_PER_NODE * $PET_NNODES / $TP_DEGREE / $PP_DEGREE))
@@ -79,7 +79,7 @@ pre_script:
     --tb_dir $tb_dir"
   - TMP_CACHE_DIR=/tmp/cache
   - cp -r $CACHE_DIR $TMP_CACHE_DIR
-  - export NEURON_CC_FLAGS="--model-type transformer --cache_dir=$TMP_CACHE_DIR"
+  - export NEURON_CC_FLAGS="--model-type transformer --distribution-strategy=llm-training --cache_dir=$TMP_CACHE_DIR"
   - NEURON_COMPILE_CACHE_URL=$TMP_CACHE_DIR neuron_parallel_compile --command clear-locks
 train:
   env:

@@ -43,7 +43,7 @@ pre_script:
   - DATA_PATH="$DATA_ROOT/examples_datasets/wikicorpus_llama3_tokenized_8k"
   - DISTRIBUTED_ARGS="--nproc_per_node $PET_NPROC_PER_NODE --nnodes $PET_NNODES --node_rank $PET_NODE_RANK --master_addr $PET_MASTER_ADDR --master_port $PET_MASTER_PORT"
   - TP_DEGREE=32
-  - PP_DEGREE=16
+  - PP_DEGREE=8
   - GBS=1024
   - SEQ_LEN=8192
   - DP=$(($PET_NPROC_PER_NODE * $PET_NNODES / $TP_DEGREE / $PP_DEGREE))
@@ -84,7 +84,7 @@ pre_script:
     --tb_dir $tb_dir"
   - echo DISTRIBUTED_ARGS=$DISTRIBUTED_ARGS
   - echo "#!/bin/bash" >  compile.sh
-  - echo export NEURON_CC_FLAGS=\"--model-type transformer --cache_dir=$TMP_CACHE_DIR\" >> ./compile.sh
+  - echo export NEURON_CC_FLAGS=\"--model-type transformer --distribution-strategy=llm-training --cache_dir=$TMP_CACHE_DIR\" >> ./compile.sh
   - echo "torchrun  $DISTRIBUTED_ARGS run_llama_nxd.py $LLAMA_ARGS 2>&1 | tee $OUTPUT_LOG"  >> compile.sh 
   - chmod u+x ./compile.sh
 post_script:
