@@ -10,7 +10,7 @@ resources:
   limits:
     "aws.amazon.com/neuron": 16 
     "vpc.amazonaws.com/efa": 8
-  nnodes: 16
+  nnodes: 32
   nproc_per_node: 32 
   node_type: 'trn1.32xlarge' 
 tolerations:
@@ -46,7 +46,7 @@ pre_script:
   - NUM_MICROBATCHES=$BS
   - MODEL_SIZE=70B
   - LLAMA_CONFIG_VERISON=3
-  - checkpoint_freq=30000
+  - checkpoint_freq=10000
   - max_steps=30000
   - LLAMA_ARGS="--model_path $SCRIPT_DIR/70B_config_llama3
     --train_batch_size $BS

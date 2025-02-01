@@ -10,7 +10,7 @@ resources:
   limits:
     "aws.amazon.com/neuron": 16 
     "vpc.amazonaws.com/efa": 8
-  nnodes: 16
+  nnodes: 32
   nproc_per_node: 32 
   node_type: 'trn1.32xlarge' 
 tolerations:
