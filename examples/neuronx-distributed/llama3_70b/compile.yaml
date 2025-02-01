@@ -1,0 +1,128 @@
+image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.5.1-neuronx-py310-sdk2.21.0-ubuntu22.04'
+backoff_limit: 2000
+ebs:
+  storage: 200Gi
+  mount_path: /tmp
+resources:
+  requests:
+    "aws.amazon.com/neuron": 16 
+    "vpc.amazonaws.com/efa": 8
+  limits:
+    "aws.amazon.com/neuron": 16 
+    "vpc.amazonaws.com/efa": 8
+  nnodes: 16
+  nproc_per_node: 32 
+  node_type: 'trn1.32xlarge' 
+tolerations:
+  - key: "aws.amazon.com/neuron"
+    operator: "Exists"
+    effect: "NoSchedule"
+git:
+  repo_url: "https://github.com/aws-neuron/neuronx-distributed.git"
+  branch: main
+  commit: 3aa65c661c45f133a99052746ed70a0121d0e695
+pre_script: 
+  - pip3 install --upgrade pip
+  - SCRIPT_DIR=$GIT_CLONE_DIR/examples/training/llama/tp_pp_llama_hf_pretrain
+  - cp $GIT_CLONE_DIR/examples/training/llama/requirements.txt $SCRIPT_DIR
+  - cp $GIT_CLONE_DIR/examples/training/llama/*.py $SCRIPT_DIR
+  - cd $SCRIPT_DIR
+  - pip3 install -r requirements.txt
+  - LOGS_DIR=$LOG_ROOT/$PET_NODE_RANK
+  - 'if [ -d $LOGS_DIR ]; then rm -rf $LOGS_DIR; fi'
+  - mkdir -p $LOGS_DIR 
+  - OUTPUT_LOG=$LOGS_DIR/compile.log
+  - CACHE_DIR=$CACHE_ROOT/$PET_NODE_RANK
+  - 'if [ -d $CACHE_DIR ]; then rm -rf $CACHE_DIR; fi'
+  - mkdir -p $CACHE_DIR
+  - TMP_CACHE_DIR=/tmp/cache
+  - mkdir -p $CKPT_ROOT
+  - tb_dir=$LOG_ROOT/tb/compile
+  - 'if [ -d $tb_dir ]; then rm -rf $tb_dir; fi'
+  - mkdir -p $tb_dir
+  - DATA_PATH="$DATA_ROOT/examples_datasets/wikicorpus_llama3_tokenized_8k"
+  - DISTRIBUTED_ARGS="--nproc_per_node $PET_NPROC_PER_NODE --nnodes $PET_NNODES --node_rank $PET_NODE_RANK --master_addr $PET_MASTER_ADDR --master_port $PET_MASTER_PORT"
+  - TP_DEGREE=32
+  - PP_DEGREE=16
+  - GBS=1024
+  - SEQ_LEN=8192
+  - DP=$(($PET_NPROC_PER_NODE * $PET_NNODES / $TP_DEGREE / $PP_DEGREE))
+  - BS=$(($GBS / $DP))
+  - NUM_MICROBATCHES=$BS
+  - MODEL_SIZE=70B
+  - LLAMA_CONFIG_VERISON=3
+  - checkpoint_freq=-1
+  - max_steps=10
+  - LLAMA_ARGS="--model_path $SCRIPT_DIR/70B_config_llama3
+    --train_batch_size $BS
+    --use_meta_device_init 1
+    --training_dir $DATA_PATH
+    --training_config $SCRIPT_DIR/${MODEL_SIZE}_config_llama${LLAMA_CONFIG_VERISON}
+    --max_steps $max_steps
+    --seq_len $SEQ_LEN
+    --pipeline_parallel_size $PP_DEGREE
+    --tensor_parallel_size $TP_DEGREE
+    --num_microbatches $NUM_MICROBATCHES
+    --lr 0.000015
+    --min_lr 1e-06
+    --beta1 0.9
+    --beta2 0.95
+    --weight_decay 0.1
+    --warmup_steps 2000
+    --constant_steps 0
+    --use_zero1_optimizer 1
+    --use_selective_checkpoint 1
+    --use_flash_attention 1
+    --qkv_linear 1
+    --kv_replicator 4
+    --pretrained_weight 0
+    --save_load_xser 1
+    --checkpoint_dir $CKPT_ROOT
+    --checkpoint_freq $checkpoint_freq
+    --num_kept_checkpoint -1
+    --loading_step -1
+    --tb_dir $tb_dir"
+  - echo DISTRIBUTED_ARGS=$DISTRIBUTED_ARGS
+  - echo "#!/bin/bash" >  compile.sh
+  - echo export NEURON_CC_FLAGS=\"--model-type transformer --cache_dir=$TMP_CACHE_DIR\" >> ./compile.sh
+  - echo "torchrun  $DISTRIBUTED_ARGS run_llama_nxd.py $LLAMA_ARGS 2>&1 | tee $OUTPUT_LOG"  >> compile.sh 
+  - chmod u+x ./compile.sh
+post_script:
+  - cp -r $TMP_CACHE_DIR/* $CACHE_DIR
+train:
+  env:
+    - name: HOME
+      value: /tmp
+    - name: LOG_ROOT
+      value: /efs/home/{{ .Release.Name }}/logs
+    - name: DATA_ROOT
+      value: /fsx/home/{{ .Release.Name }}
+    - name: CACHE_ROOT
+      value: /efs/home/{{ .Release.Name }}/cache
+    - name: CKPT_ROOT
+      value: "/tmp/checkpoints"
+    - name: CCOM_SOCKET_IFNAME
+      value: "eth0"
+    - name: FI_EFA_USE_DEVICE_RDMA
+      value: "1"
+    - name: FI_PROVIDER
+      value: "efa"
+    - name: FI_EFA_FORK_SAFE
+      value: "1"
+    - name:  NEURON_FUSE_SOFTMAX
+      value: "1"
+    - name: NEURON_RT_STOCHASTIC_ROUNDING_EN
+      value: "1"
+    - name: NEURON_RT_ASYNC_EXEC_MAX_INFLIGHT_REQUESTS
+      value: "7"
+    - name: MALLOC_ARENA_MAX
+      value: "128"
+    - name: XLA_DISABLE_FUNCTIONALIZATION
+      value: "0"
+    - name: XLA_DOWNCAST_BF16
+      value: "1"
+  command:
+    -  neuron_parallel_compile
+  args:
+    - './compile.sh'
+    - '2>&1 | tee $LOGS_DIR/neuron_parallel_compile.log'
