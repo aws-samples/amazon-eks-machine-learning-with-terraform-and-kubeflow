@@ -1,0 +1,86 @@
+image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.5.1-neuronx-py310-sdk2.21.0-ubuntu22.04'
+backoff_limit: 2000
+ebs:
+  storage: 200Gi
+  mount_path: /tmp
+resources:
+  requests:
+    "aws.amazon.com/neuron": 16 
+    "vpc.amazonaws.com/efa": 8
+  limits:
+    "aws.amazon.com/neuron": 16 
+    "vpc.amazonaws.com/efa": 8
+  nnodes: 16
+  nproc_per_node: 32 
+  node_type: 'trn1.32xlarge' 
+tolerations:
+  - key: "aws.amazon.com/neuron"
+    operator: "Exists"
+    effect: "NoSchedule"
+git:
+  repo_url: "https://github.com/aws-neuron/neuronx-distributed-training.git"
+  branch: main
+  commit: 27113567e3a15487efbbca999e84c61f8a194b33
+pre_script: 
+  - git clone https://github.com/aws-neuron/neuronx-distributed.git /tmp/neuronx-distributed
+  - cd /tmp/neuronx-distributed
+  - git fetch origin 3aa65c661c45f133a99052746ed70a0121d0e695
+  - git reset --hard 3aa65c661c45f133a99052746ed70a0121d0e695
+  - cd $GIT_CLONE_DIR/examples
+  - cp /tmp/neuronx-distributed/examples/training/llama/tp_pp_llama_hf_pretrain/70B_config_llama3/config.json config.json
+  - LOGS_DIR=$LOG_ROOT/$PET_NODE_RANK
+  - 'if [ -d $LOGS_DIR ]; then rm -rf $LOGS_DIR; fi'
+  - mkdir -p $LOGS_DIR 
+  - OUTPUT_LOG=$LOGS_DIR/compile.log
+  - CACHE_DIR=$CACHE_ROOT/$PET_NODE_RANK
+  - 'if [ -d $CACHE_DIR ]; then rm -rf $CACHE_DIR; fi'
+  - mkdir -p $CACHE_DIR
+  - TMP_CACHE_DIR=/tmp/cache
+  - DATA_PATH=$DATA_ROOT/examples_datasets/wikicorpus_llama3_tokenized_8k
+  - CONF_FILE=hf_llama3_70B_config.yaml
+  - export DISTRIBUTED_ARGS="--nproc_per_node $PET_NPROC_PER_NODE --nnodes $PET_NNODES --node_rank $PET_NODE_RANK --master_addr $PET_MASTER_ADDR --master_port $PET_MASTER_PORT"
+  - export LLAMA_ARGS="--config-path=conf
+    --config-name=$CONF_FILE
+    model.model_config=config.json
+    data.train_dir=$DATA_PATH
+    trainer.devices=$PET_NPROC_PER_NODE
+    trainer.num_nodes=$PET_NNODES
+    trainer.val_check_interval=1000
+    exp_manager.explicit_log_dir=$LOGS_DIR
+    exp_manager.checkpoint_callback_params.every_n_train_steps=1000
+    compiler_cache_url=$TMP_CACHE_DIR"
+post_script:
+  - cp -r $TMP_CACHE_DIR/* $CACHE_DIR
+train:
+  env:
+    - name: HOME
+      value: /tmp
+    - name: LOG_ROOT
+      value: /efs/home/{{ .Release.Name }}/logs
+    - name: DATA_ROOT
+      value: /fsx/home/{{ .Release.Name }}
+    - name: CACHE_ROOT
+      value: /efs/home/{{ .Release.Name }}/cache
+    - name: CKPT_ROOT
+      value: "/tmp/checkpoints"
+    - name: CCOM_SOCKET_IFNAME
+      value: "eth0"
+    - name: FI_EFA_USE_DEVICE_RDMA
+      value: "1"
+    - name: FI_PROVIDER
+      value: "efa"
+    - name: FI_EFA_FORK_SAFE
+      value: "1"
+    - name: MALLOC_ARENA_MAX
+      value: "128"
+    - name: XLA_DISABLE_FUNCTIONALIZATION
+      value: "0"
+    - name: HYDRA_FULL_ERROR
+      value: "1"
+  command:
+    - torchrun
+  args:
+    - $DISTRIBUTED_ARGS 
+    - training_orchestrator.py
+    - $LLAMA_ARGS
+    - '2>&1 | tee $LOGS_DIR/pretrain.log'
