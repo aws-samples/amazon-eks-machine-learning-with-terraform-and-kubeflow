@@ -26,7 +26,6 @@ To download Hugging Face Llama3 8B Instruct pre-trained model weights, replace `
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug rayserve-llama3-8b-instruct-vllm-nx      \
             charts/machine-learning/model-prep/hf-snapshot    \
-            --set-json='snapshot={"dir": "/efs/home/rayserve-llama3-8b-instruct-vllm-nx", "user": 1000, "group": 100}' \
             --set-json='env=[{"name":"HF_MODEL_ID","value":"meta-llama/Meta-Llama-3-8B-Instruct"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
             -n kubeflow-user-example-com
 
@@ -42,7 +41,6 @@ To build Ray Serve engine config:
     helm install --debug rayserve-llama3-8b-instruct-vllm-nx      \
             charts/machine-learning/data-prep/data-process   \
             -f examples/vllm-neuronx-rayserve/meta-llama3-8b-vllm/engine_config.yaml \
-            --set 'image=public.ecr.aws/docker/library/python:slim-bullseye' \
             -n kubeflow-user-example-com
 
 Uninstall the Helm chart at completion:

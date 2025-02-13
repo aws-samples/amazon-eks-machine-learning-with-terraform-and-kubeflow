@@ -1,5 +1,5 @@
 ray:
-  version: '2.32.0'
+  version: '2.42.0'
   dashboard:
     host: '0.0.0.0'
   ports:
@@ -27,7 +27,7 @@ ray:
           runtime_env:
             working_dir: file:///fsx/rayserve/engines/vllm_asyncllmengine.zip
             pip:
-              - "vllm==0.5.1"
+              - "vllm==0.6.6"
           deployments:
           - name: VLLMDeployment
             max_ongoing_requests: 64

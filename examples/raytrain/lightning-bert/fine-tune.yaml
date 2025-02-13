@@ -1,5 +1,5 @@
 ray:
-  version: '2.32.0'
+  version: '2.42.0'
   dashboard:
     host: '0.0.0.0'
   ports:
@@ -40,7 +40,7 @@ pvc:
 git:
   repo_url: https://github.com/ray-project/kuberay.git 
   branch: master 
-  commit: bab00be57c4f3b8b4f80134f5cb415354f459103 
+  commit: 0ea404b84e45b7b8822b071c7c02b2afb3bb3eae 
 pre_script:
   - export LOGS_DIR=$HOME/logs/$HOSTNAME
   - mkdir -p $LOGS_DIR

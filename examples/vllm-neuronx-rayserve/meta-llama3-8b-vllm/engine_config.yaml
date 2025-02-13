@@ -21,4 +21,4 @@ process:
     - name: CONFIG_ROOT
       value: /efs/home/{{ .Release.Name }}/config
     - name: MODEL_PATH
-      value: /efs/home/{{ .Release.Name }}/meta-llama/Meta-Llama-3-8B-Instruct
+      value: /fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct

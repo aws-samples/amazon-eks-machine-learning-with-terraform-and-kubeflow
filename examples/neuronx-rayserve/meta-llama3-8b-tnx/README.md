@@ -41,7 +41,6 @@ To build Ray Serve engine config:
     helm install --debug neuronx-rayserve-llama3-8b-instruct     \
             charts/machine-learning/data-prep/data-process   \
             -f examples/neuronx-rayserve/meta-llama3-8b-tnx/engine_config.yaml \
-            --set 'image=public.ecr.aws/docker/library/python:slim-bullseye' \
             -n kubeflow-user-example-com
 
 Uninstall the Helm chart at completion:

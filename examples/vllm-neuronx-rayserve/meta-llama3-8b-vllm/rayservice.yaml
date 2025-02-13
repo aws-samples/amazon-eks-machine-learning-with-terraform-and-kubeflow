@@ -1,5 +1,5 @@
 ray:
-  version: '2.32.0'
+  version: '2.42.0'
   dashboard:
     host: '0.0.0.0'
   restart_policy:
