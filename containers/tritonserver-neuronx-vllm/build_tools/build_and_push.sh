@@ -58,7 +58,7 @@ aws ecr get-login-password --region ${region} \
 docker push ${fullname}
 if [ $? -eq 0 ]; then
 	echo "Amazon ECR URI: ${fullname}"
-    files=$(find $DIR/../../../examples/triton-server/ -regex ".*-tnx/triton_server_neuronx\.yaml")
+    files=$(find $DIR/../../../examples/triton-server/ -regex ".*-vllm-neuronx/triton_server_neuronx\.yaml")
     for file in $files
     do
         sed -i -e '/image: .*/!b; n; s|name:.*|name: '${fullname}'|g' $file

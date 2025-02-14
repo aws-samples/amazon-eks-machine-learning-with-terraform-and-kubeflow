@@ -1,5 +1,5 @@
 image: 
-  name: nvcr.io/nvidia/tritonserver:24.06-vllm-python-py3
+  name: 
 resources:
   node_type: g5.48xlarge
   requests:

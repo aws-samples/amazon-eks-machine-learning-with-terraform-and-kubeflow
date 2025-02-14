@@ -17,10 +17,10 @@ We need to install the Neuron scheduler so that contiguous Neuron cores are assi
     
 ## Build and Push Docker Container
 
-This example uses a custom Docker container for Tritonserver Neuronx. Build and push this container using following command (replace `aws-region` with your AWS Region name):
+This example uses a custom Docker container for Tritonserver Neuronx with [LMI](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/index.html). Build and push this container using following command (replace `aws-region` with your AWS Region name):
 
      cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-     ./containers/tritonserver-neuronx/build_tools/build_and_push.sh aws-region
+     ./containers/tritonserver-neuronx-djl-lmi/build_tools/build_and_push.sh aws-region
 
 ## Hugging Face Meta Llama 3 8B Instruct  pre-trained model weights
 

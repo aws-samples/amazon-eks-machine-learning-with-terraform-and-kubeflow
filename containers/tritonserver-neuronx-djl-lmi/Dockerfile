@@ -79,6 +79,21 @@ RUN pip3 install neuronx-cc==2.16.* torch-neuronx==2.5.* torchvision transformer
 
 RUN pip3 install ray
 
+RUN pip3 install --extra-index-url https://pip.repos.neuron.amazonaws.com optimum[neuronx]
+RUN git clone https://github.com/deepjavalibrary/djl-serving.git /opt/djl-serving
+RUN cd /opt/djl-serving && git fetch origin c343d60b35f0d42f96f678570a553953f055ab32
+RUN cd /opt/djl-serving && git reset --hard c343d60b35f0d42f96f678570a553953f055ab32
+RUN cd /opt/djl-serving/engines/python/setup  && pip3 install -e .
+
+ENV VLLM_TARGET_DEVICE=neuron
+RUN git clone https://github.com/vllm-project/vllm.git /opt/vllm
+RUN cd /opt/vllm && git fetch origin 5b734fb7edfdf3f8a836a3ddee81eba506230fdd
+RUN cd /opt/vllm && git reset --hard 5b734fb7edfdf3f8a836a3ddee81eba506230fdd
+RUN pip3 install -r /opt/vllm/requirements-neuron.txt
+RUN cd /opt/vllm && pip3 install -e .
+
+RUN pip3 install triton==2.2.0 pynvml==11.5.3 transformers==4.44.2
+
 RUN cp -r /server/build/opt/* /opt/
 RUN rm -rf /server
 

@@ -8,6 +8,12 @@ Before proceeding, complete the [Prerequisites](../../../README.md#prerequisites
 
 See [What is in the YAML file](../../../README.md#what-is-in-the-yaml-file) to understand the common fields in the Helm values files. There are some fields that are specific to a machine learning chart.
 
+## Build and Push Docker Container
+
+This example uses a custom Docker container for Tritonserver vLLM. Build and push this container using following command (replace `aws-region` with your AWS Region name):
+
+     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+     ./containers/tritonserver-vllm/build_tools/build_and_push.sh aws-region
 
 ## Hugging Face Mistral 7B Instruct v0.1 pre-trained model weights
 

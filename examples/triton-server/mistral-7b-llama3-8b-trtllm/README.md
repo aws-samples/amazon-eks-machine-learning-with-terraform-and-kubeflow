@@ -7,7 +7,14 @@ This example shows how to serve [mistral-7b-instruct-v01](https://huggingface.co
 Before proceeding, complete the [Prerequisites](../../../README.md#prerequisites) and [Getting started](../../../README.md#getting-started). 
 
 See [What is in the YAML file](../../../README.md#what-is-in-the-yaml-file) to understand the common fields in the Helm values files. There are some fields that are specific to a machine learning chart.
-    
+
+## Build and Push Docker Container
+
+This example uses a custom Docker container for Tritonserver TensorRT-LLM. Build and push this container using following command (replace `aws-region` with your AWS Region name):
+
+     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+     ./containers/tritonserver-trtllm/build_tools/build_and_push.sh aws-region
+      
 ## Hugging Face Mistral 7B Instruct v0.1 pre-trained model weights
 
 To download Hugging Face Mistral 7B Instruct v0.1 pre-trained model weights, replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:

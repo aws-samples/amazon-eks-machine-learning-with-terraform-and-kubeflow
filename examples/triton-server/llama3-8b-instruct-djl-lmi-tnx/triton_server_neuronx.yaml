@@ -17,10 +17,6 @@ tolerations:
   - key: "aws.amazon.com/neuron"
     operator: "Exists"
     effect: "NoSchedule"
-git:
-  repo_url: "https://github.com/deepjavalibrary/djl-serving.git"
-  commit: c343d60b35f0d42f96f678570a553953f055ab32
-  branch: main
 inline_script:
 - |+
   cat > /tmp/model.py <<EOF
@@ -367,17 +363,6 @@ inline_script:
   EOF
 
 pre_script: 
-  - pip3 install --extra-index-url https://pip.repos.neuron.amazonaws.com optimum[neuronx]
-  - cd $GIT_CLONE_DIR/engines/python/setup 
-  - pip3 install .
-  - GIT_CLONE_DIR=/tmp/vllm
-  - git clone https://github.com/vllm-project/vllm.git $GIT_CLONE_DIR
-  - cd $GIT_CLONE_DIR
-  - git fetch origin 38c4b7e863570a045308af814c72f4504297222e
-  - git reset --hard 38c4b7e863570a045308af814c72f4504297222e
-  - pip3 install -r requirements-neuron.txt
-  - pip3 install .
-  - pip3 install pynvml==11.5.3 transformers==4.44.2
   - mkdir -p $LOG_ROOT
   - OUTPUT_LOG="$LOG_ROOT/triton-server.log"
   - rm -rf $MODEL_REPO

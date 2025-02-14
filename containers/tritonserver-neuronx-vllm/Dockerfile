@@ -27,11 +27,12 @@ RUN apt-get update \
             software-properties-common \
             pkg-config \
             unzip \
-            wget \
             zlib1g-dev \
             libarchive-dev \
             libxml2-dev \
             libnuma-dev \
+            wget \
+            nginx \
       && rm -rf /var/lib/apt/lists/*
 
       RUN pip3 install --upgrade pip \
@@ -73,16 +74,36 @@ RUN apt-get -y install aws-neuronx-collectives=2.*
 RUN apt-get -y install aws-neuronx-runtime-lib=2.*
 RUN apt-get -y install aws-neuronx-tools=2.*
 
-RUN pip3 config set global.extra-index-url https://pip.repos.neuron.amazonaws.com
-RUN pip3 install awscli
-RUN pip3 install neuronx-cc==2.16.* torch-neuronx==2.5.* torchvision transformers-neuronx
+RUN pip3 install awscli --extra-index-url https://pip.repos.neuron.amazonaws.com
+RUN pip3 install --extra-index-url https://pip.repos.neuron.amazonaws.com neuronx-cc==2.16.* torch-neuronx==2.5.* torchvision transformers-neuronx optimum[neuronx]
 
 RUN pip3 install ray
 
 RUN cp -r /server/build/opt/* /opt/
 RUN rm -rf /server
 
+ENV VLLM_TARGET_DEVICE=neuron
+RUN git clone https://github.com/vllm-project/vllm.git /opt/vllm
+RUN cd /opt/vllm && git fetch origin 2339d59f9260499599d60599f83978fad1827999
+RUN cd /opt/vllm && git reset --hard 2339d59f9260499599d60599f83978fad1827999
+COPY patch /opt/patch
+RUN cd /opt/vllm && git apply --ignore-whitespace /opt/patch/vllm-neuron-0.6.6.post1.patch
+RUN pip3 install -r /opt/vllm/requirements-neuron.txt
+RUN cd /opt/vllm && pip3 install -e .
+
+RUN git clone https://github.com/triton-inference-server/vllm_backend.git /opt/vllm_backend
+RUN cd /opt/vllm_backend && git fetch origin 507e4dccabf85c3b7821843261bcea7ea5828802
+RUN cd /opt/vllm_backend && git reset --hard 507e4dccabf85c3b7821843261bcea7ea5828802
+
+RUN mkdir -p /opt/tritonserver/backends/vllm
+RUN cp -r /opt/vllm_backend/src/* /opt/tritonserver/backends/vllm/
+
+RUN pip3 install pynvml==11.5.3 transformers==4.48.3
+
+
 ENV PATH=/opt/aws/neuron/bin:/opt/tritonserver/bin:$PATH
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PJRT_DEVICE=NEURON
+
+WORKDIR /opt/program

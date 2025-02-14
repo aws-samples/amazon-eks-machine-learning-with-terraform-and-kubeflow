@@ -1,4 +1,4 @@
-image: nvcr.io/nvidia/tritonserver:24.05-trtllm-python-py3
+image: 
 resources:
   requests:
     "nvidia.com/gpu": 1
@@ -8,11 +8,9 @@ tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"
     effect: "NoSchedule"
-git:
-  repo_url: "https://github.com/triton-inference-server/tensorrtllm_backend.git"
-  commit: 76464e9be06600f3979acad9c14857938a66ff9f
-  branch: main
 pre_script: 
+  - SCRIPT_DIR=tensorrtllm_backend
+  - cd $SCRIPT_DIR
   - mkdir -p $LOG_ROOT
   - TP_SIZE=8
   - PP_SIZE=1
@@ -27,6 +25,7 @@ pre_script:
   - MAX_QUEUE_DELAY_MS=100
   - FILL_TEMPLATE_SCRIPT=tools/fill_template.py
   - ENGINE_DIR=$OUTPUT_ROOT/${MODEL_NAME}_engine_tp_${TP_SIZE}_pp_${PP_SIZE}
+  - ENCODER_INPUT_DATA_TYPE=TYPE_BF16
   - mkdir -p $MODEL_REPO
   - rm -rf $MODEL_REPO/${MODEL_NAME}_*
   - cp -r all_models/inflight_batcher_llm/preprocessing $MODEL_REPO/${MODEL_NAME}_preprocessing
@@ -38,7 +37,7 @@ pre_script:
   - python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/${MODEL_NAME}_postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},tokenizer_type:${TOKENIZER_TYPE},triton_max_batch_size:${MAX_BATCH_SIZE},postprocessing_instance_count:${INSTANCE_COUNT} 2>&1 | tee -a $OUTPUT_LOG
   - python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},bls_instance_count:${INSTANCE_COUNT},tensorrt_llm_model_name:${MODEL_NAME}_tensorrt_llm 2>&1 | tee -a $OUTPUT_LOG
   - python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/${MODEL_NAME}_ensemble/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE} 2>&1 | tee -a $OUTPUT_LOG
-  - python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},engine_dir:${ENGINE_DIR},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MS},batching_strategy:inflight_fused_batching 2>&1 | tee -a $OUTPUT_LOG
+  - python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},engine_dir:${ENGINE_DIR},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MS},batching_strategy:inflight_fused_batching,encoder_input_features_data_type:${ENCODER_INPUT_DATA_TYPE},triton_backend:tensorrtllm 2>&1 | tee -a $OUTPUT_LOG
   - "sed -i 's/name: \"preprocessing\"/name: \"llama3_8b_instruct_preprocessing\"/1' ${MODEL_REPO}/${MODEL_NAME}_preprocessing/config.pbtxt"
   - "sed -i 's/name: \"postprocessing\"/name: \"llama3_8b_instruct_postprocessing\"/1' ${MODEL_REPO}/${MODEL_NAME}_postprocessing/config.pbtxt"
   - "sed -i 's/name: \"tensorrt_llm_bls\"/name: \"llama3_8b_instruct_tensorrt_llm_bls\"/1' ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm_bls/config.pbtxt"
