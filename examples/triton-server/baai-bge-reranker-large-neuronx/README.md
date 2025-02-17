@@ -37,7 +37,7 @@ To launch Triton server:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug triton-server-baai-bge-reranker-large \
         charts/machine-learning/serving/triton-inference-server \
-        -f examples/triton-server/baai-bge-reranker-large-tnx/triton_server_neuronx.yaml -n kubeflow-user-example-com
+        -f examples/triton-server/baai-bge-reranker-large-neuronx/triton_server_neuronx.yaml -n kubeflow-user-example-com
 
 
 ## Stop Service
