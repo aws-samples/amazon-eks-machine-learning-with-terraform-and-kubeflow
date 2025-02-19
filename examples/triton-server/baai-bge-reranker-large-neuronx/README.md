@@ -1,6 +1,6 @@
 # Serve BAAI Bge Reranker Large using Triton Inference Server on AWS Neuron
 
-This example shows how to serve [BAAI/bge-reranker-large](https://huggingface.co/BAAI/bge-reranker-large) model using [Triton Inference Server](https://github.com/triton-inference-server) on [AWS Neuron](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/index.html) with with [transformers-neuronx](https://github.com/aws-neuron/transformers-neuronx).
+This example shows how to serve [BAAI/bge-reranker-large](https://huggingface.co/BAAI/bge-reranker-large) model using [Triton Inference Server](https://github.com/triton-inference-server) on [AWS Neuron](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/index.html) with [torch-neuronx](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/general/setup/torch-neuronx.html).
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ See [What is in the YAML file](../../../README.md#what-is-in-the-yaml-file) to u
 
 ## Build and Push Docker Container
 
-This example uses a custom Docker container for Tritonserver Neuronx. Build and push this container using following command (replace `aws-region` with your AWS Region name):
+This example uses a custom Docker container for Triton Inference Server with PyTorch Neuronx. Build and push this container using following command (replace `aws-region` with your AWS Region name):
 
      cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
      ./containers/tritonserver-neuronx/build_tools/build_and_push.sh aws-region
