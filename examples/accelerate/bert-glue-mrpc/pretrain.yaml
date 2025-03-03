@@ -23,7 +23,7 @@ git:
   commit: ee004674b9560976688e1a701b6d3650a09b2100
 pre_script: 
   - pip3 install --upgrade pip
-  - pip3 install transformers==4.38.1 datasets==2.17.1 evaluate==0.4.1
+  - pip3 install transformers==4.38.1 datasets==2.17.1 evaluate==0.4.3
   - pip3 install -e ./
   - export LOGS_DIR=$HOME/logs/$HOSTNAME
   - mkdir -p $LOGS_DIR
