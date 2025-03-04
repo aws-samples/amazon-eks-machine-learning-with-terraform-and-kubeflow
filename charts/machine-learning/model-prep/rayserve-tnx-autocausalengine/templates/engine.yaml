@@ -34,6 +34,15 @@ data:
         assert config, "ENGINE_CONFIG env variable for engine config path is required"
         assert os.path.isfile(config), f"ENGINE_CONFIG {config} does not exist"
 
+        master_addr = os.getenv("FQ_RAY_IP", None)
+        if master_addr is not None:
+          os.environ["MASTER_ADDR"] = f"{master_addr}"
+          master_port = os.getenv("MASTER_PORT", None)
+          if master_port is None:
+            master_port = 43000
+            os.environ["MASTER_PORT"] = f"{master_port}"
+          os.environ["CPU_COMM_ID"] = "{master_addr}:{master_port}"
+
         # Load engine args from config file
         with open(config, "r") as f:
           engine_config = json.load(f)
