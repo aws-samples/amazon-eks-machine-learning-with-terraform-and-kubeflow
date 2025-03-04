@@ -19,7 +19,7 @@ variable "cluster_name" {
 
 variable "k8s_version" {
   description = "kubernetes version"
-  default = "1.29"
+  default = "1.31"
   type    = string
 }
 
@@ -322,6 +322,12 @@ variable "kubeflow_platform_enabled" {
   description = "Install Kubeflow Components, if enabled"
   type        = bool
   default = true
+}
+
+variable "ack_sagemaker_enabled" {
+  description = "Install ACK for SageMaker"
+  type        = bool
+  default = false
 }
 
 variable "system_group_desired" {

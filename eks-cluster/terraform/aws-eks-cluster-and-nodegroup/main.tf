@@ -291,7 +291,7 @@ resource "aws_fsx_data_repository_association" "this" {
 }
 
 locals {
-  use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.29": var.k8s_version
+  use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.31": var.k8s_version
   s3_bucket = split("/", substr(var.import_path, 5, -1))[0]
 }
 
@@ -364,7 +364,7 @@ module "ebs_csi_driver_irsa" {
 module "eks_blueprints_addons" {
 
   source = "aws-ia/eks-blueprints-addons/aws"
-  version = "1.13.0"
+  version = "1.20.0"
 
   cluster_name      = aws_eks_cluster.eks_cluster.id
   cluster_endpoint  = aws_eks_cluster.eks_cluster.endpoint
@@ -378,23 +378,23 @@ module "eks_blueprints_addons" {
 
   aws_load_balancer_controller = {
     namespace     = "kube-system"
-    chart_version = "v1.6.2"
+    chart_version = "v1.11.0"
     wait = true
   }
 
   aws_efs_csi_driver = {
     namespace     = "kube-system"
-    chart_version = "2.5.2"
+    chart_version = "3.1.7"
   }
 
   aws_fsx_csi_driver = {
     namespace     = "kube-system"
-    chart_version = "1.8.0"
+    chart_version = "1.10.0"
   }
 
   eks_addons = {
     aws-ebs-csi-driver = {
-      addon_version              = "v1.26.0-eksbuild.1"
+      addon_version              = "v1.31.0-eksbuild.1"
       service_account_role_arn = module.ebs_csi_driver_irsa.iam_role_arn
     }
   }
@@ -809,7 +809,7 @@ module "karpenter" {
   count = var.karpenter_enabled ? 1 : 0
 
   source  = "terraform-aws-modules/eks/aws//modules/karpenter"
-  version = "20.0.1"
+  version = "20.33.1"
 
   cluster_name = aws_eks_cluster.eks_cluster.id
 
@@ -1413,4 +1413,64 @@ resource helm_release "oauth2-proxy-route" {
   ]
 
   depends_on = [ helm_release.oauth2-proxy ]
+}
+
+resource "aws_iam_role" "ack_sagemaker_role" {
+  count = var.ack_sagemaker_enabled ? 1 : 0
+  name = "${var.cluster_name}-ack-sagemaker-role"
+
+  assume_role_policy = <<POLICY
+{
+  "Version": "2012-10-17",
+  "Statement": [
+      {
+      "Effect": "Allow",
+      "Principal": {
+          "Federated": "${aws_iam_openid_connect_provider.eks_oidc_provider.arn}"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+          "StringEquals": {
+          "${substr(aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer, 8, -1)}:aud": "sts.amazonaws.com"
+          }
+      }
+      }
+  ]
+}
+POLICY
+}
+
+resource "aws_iam_role_policy_attachment" "ack_sagemaker_AmazonSageMakerFullAccess" {
+  count = var.ack_sagemaker_enabled ? 1 : 0
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
+  role       = aws_iam_role.ack_sagemaker_role[count.index].name
+}
+
+
+resource "helm_release" "ack_sagemaker_controller" {
+  count = var.ack_sagemaker_enabled ? 1 : 0
+  
+  name       = "sagemaker-controller"
+  chart      = "sagemaker-chart"
+  cleanup_on_fail = true
+  create_namespace = true
+  repository  = "oci://public.ecr.aws/aws-controllers-k8s/"
+  version    = "1.2.15"
+  namespace  = "kube-system"
+  timeout = 300
+  wait = true
+
+
+  set {
+    name  = "aws.region"
+    value = var.region
+  }
+
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = aws_iam_role.ack_sagemaker_role[count.index].arn
+  }
+
+  depends_on = [  helm_release.cluster-autoscaler ]
+
 }
