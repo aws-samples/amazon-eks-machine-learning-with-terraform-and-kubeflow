@@ -16,15 +16,12 @@ pre_script:
   - cd $SCRIPT_DIR
   - mkdir -p $LOG_ROOT
   - OUTPUT_LOG=$LOG_ROOT/merge_peft.log
-  - TP_SIZE=8
-  - PP_SIZE=1
   - PATH_TO_BASE_MODEL=$MODEL_PATH/ckpt.nemo
   - echo "PATH_TO_BASE_MODEL=$PATH_TO_BASE_MODEL"
   - PATH_TO_PEFT_MODEL=$LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints/$EXP_NAME.nemo
   - echo "PATH_TO_PEFT_MODEL=$PATH_TO_PEFT_MODEL"
   - PATH_TO_MERGED_MODEL=$LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints/merged_model.nemo
   - echo "PATH_TO_MERGED_MODEL=$PATH_TO_MERGED_MODEL"
-  - sed -i -e '/from scripts\.nlp_language_modeling\.merge_lora_weights\.convert_lora_parallelism/ s/^#*/#/' merge.py
 process:
   env:
     - name: LOG_ROOT
@@ -38,8 +35,6 @@ process:
   args:
     - merge.py
     - trainer.accelerator=cpu
-    - tensor_model_parallel_size=$TP_SIZE
-    - pipeline_model_parallel_size=$PP_SIZE
     - gpt_model_file=$PATH_TO_BASE_MODEL
     - lora_model_path=$PATH_TO_PEFT_MODEL
     - merged_model_path=$PATH_TO_MERGED_MODEL
