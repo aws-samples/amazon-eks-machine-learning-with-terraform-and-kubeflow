@@ -4,9 +4,9 @@ resources:
     "nvidia.com/gpu": 8
   limits:
     "nvidia.com/gpu": 8
-  nnodes: 2 
+  nnodes: 1 
   nproc_per_node: 8 
-  node_type: 'p3.16xlarge' 
+  node_type: 'p4d.24xlarge' 
 ebs:
   storage: 400Gi
   mount_path: /tmp
@@ -46,8 +46,11 @@ pre_script:
     model.global_batch_size=32
     model.optim.lr=1e-4
     model.restore_from_path=${MODEL}
-    model.data.train_ds.num_workers=7
-    model.data.validation_ds.num_workers=7
+    model.data.train_ds.num_workers=1
+    model.data.train_ds.memmap_workers=1
+    model.data.train_ds.pin_memory=false
+    model.data.validation_ds.num_workers=1
+    model.data.validation_ds.pin_memory=false
     model.data.train_ds.file_names=${TRAIN_DS}
     model.data.train_ds.concat_sampling_probabilities=[1.0]
     model.data.validation_ds.file_names=${VALID_DS}

@@ -6,7 +6,7 @@ resources:
     "nvidia.com/gpu": 8
   nnodes: 1 
   nproc_per_node: 8 
-  node_type: 'p3.16xlarge' 
+  node_type: 'g5.48xlarge' 
 ebs:
   storage: 400Gi
   mount_path: /tmp

@@ -18,12 +18,12 @@ inline_script:
   import os
 
   def convert_to_jsonl(dataset, path:str):
-    with open(path, "w") as f:
+    with open(path, "w", encoding='utf-8') as f:
       for sample in dataset:
-        input = f"### Instruction:\n{sample['instruction']}\n ### Input:\n{sample['input']}\n"
-        output = f"### Response:\n{sample['output']}"
+        input = f"""### Instruction:\n{sample['instruction']}\n ### Input:\n{sample['input']}\n"""
+        output = f"""### Response:\n{sample['output']}"""
         json_obj = {"input": input, "output": output}
-        json_string = json.dumps(json_obj) + "\n"
+        json_string = json.dumps(json_obj, ensure_ascii=False) + "\n"
         f.write(json_string)
 
   def load_dolphin_dataset():
