@@ -41,7 +41,7 @@ pre_script:
     ++model.mcore_gpt=True
     model.tensor_model_parallel_size=${TP_SIZE}
     model.pipeline_model_parallel_size=${PP_SIZE}
-    model.micro_batch_size=1
+    model.micro_batch_size=8
     model.global_batch_size=32
     model.optim.lr=1e-4
     model.restore_from_path=${MODEL}
@@ -63,7 +63,7 @@ pre_script:
     ++exp_manager.checkpoint_callback_params.save_best_model=True
     exp_manager.checkpoint_callback_params.save_nemo_on_train_end=True
     exp_manager.early_stopping_callback_params.monitor=val_loss
-    exp_manager.early_stopping_callback_params.patience=10
+    exp_manager.early_stopping_callback_params.patience=3
     exp_manager.early_stopping_callback_params.min_delta=0.001
     model.save_nemo_on_validation_end=False"
   - SCRIPT_DIR=/NeMo/examples/nlp/language_modeling/tuning

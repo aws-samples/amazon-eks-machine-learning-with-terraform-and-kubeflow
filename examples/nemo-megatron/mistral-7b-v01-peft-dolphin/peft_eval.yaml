@@ -6,7 +6,7 @@ resources:
     "nvidia.com/gpu": 8
   nnodes: 1 
   nproc_per_node: 8 
-  node_type: 'g5.48xlarge' 
+  node_type: 'p4d.24xlarge'
 ebs:
   storage: 400Gi
   mount_path: /tmp
@@ -39,7 +39,7 @@ pre_script:
     model.data.test_ds.file_names=${TEST_DS} 
     model.data.test_ds.names=${TEST_NAMES} 
     model.data.test_ds.global_batch_size=32 
-    model.data.test_ds.micro_batch_size=4
+    model.data.test_ds.micro_batch_size=8
     model.data.test_ds.tokens_to_generate=${TOKENS_TO_GENERATE} 
     model.data.test_ds.num_workers=8
     model.data.test_ds.drop_last=True

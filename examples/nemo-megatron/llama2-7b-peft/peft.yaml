@@ -40,7 +40,7 @@ pre_script:
     trainer.max_steps=$MAX_STEPS
     model.restore_from_path=${MODEL}
     model.peft.peft_scheme=${SCHEME}
-    model.micro_batch_size=1
+    model.micro_batch_size=8
     model.global_batch_size=128
     model.tensor_model_parallel_size=${TP_SIZE}
     model.pipeline_model_parallel_size=${PP_SIZE}
@@ -55,11 +55,9 @@ pre_script:
     model.data.validation_ds.file_names=${VALID_DS}
     model.data.test_ds.file_names=${TEST_DS}
     model.data.train_ds.concat_sampling_probabilities=${CONCAT_SAMPLING_PROBS}
-    model.data.train_ds.max_seq_length=2048
-    model.data.validation_ds.max_seq_length=2048
-    model.data.train_ds.micro_batch_size=1
+    model.data.train_ds.micro_batch_size=8
     model.data.train_ds.global_batch_size=128
-    model.data.validation_ds.micro_batch_size=1
+    model.data.validation_ds.micro_batch_size=16
     model.data.validation_ds.global_batch_size=128
     model.data.train_ds.num_workers=0
     model.data.validation_ds.num_workers=0
@@ -77,7 +75,7 @@ pre_script:
     ++exp_manager.checkpoint_callback_params.save_best_model=True
     exp_manager.checkpoint_callback_params.save_nemo_on_train_end=True
     exp_manager.early_stopping_callback_params.monitor=val_loss
-    exp_manager.early_stopping_callback_params.patience=10
+    exp_manager.early_stopping_callback_params.patience=3
     exp_manager.early_stopping_callback_params.min_delta=0.001
     model.save_nemo_on_validation_end=False"
   - SCRIPT_DIR=/NeMo/examples/nlp/language_modeling/tuning
