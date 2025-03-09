@@ -21,22 +21,23 @@ pre_script:
   - mkdir -p $LOGS_DIR
   - export OUTPUT_LOG=$LOGS_DIR/peft.log
   - MODEL="$MODEL_PATH/ckpt.nemo"
-  - DATASET="pubmedqa"
+  - DATASET="dolphin"
   - TRAIN_DS="[$DATA_ROOT/${DATASET}_train.jsonl]"
-  - VALID_DS="[$DATA_ROOT/${DATASET}_val.jsonl]"
+  - VALID_DS="[$DATA_ROOT/${DATASET}_valid.jsonl]"
   - TEST_DS="[$DATA_ROOT/${DATASET}_test.jsonl]"
   - TEST_NAMES="[${DATASET}]"
   - SCHEME="lora"
   - CONCAT_SAMPLING_PROBS="[1.0]"
   - TP_SIZE=8
   - PP_SIZE=1
-  - MAX_STEPS=10000
+  - MAX_STEPS=500
   - export HYDRA_FULL_ERROR=1
   - export PEFT_ARGS="
     trainer.devices=$PET_NPROC_PER_NODE
     trainer.num_nodes=$PET_NNODES 
     trainer.precision=bf16
-    trainer.val_check_interval=20
+    trainer.val_check_interval=100
+    +trainer.limit_val_batches=50
     trainer.max_steps=$MAX_STEPS
     model.megatron_amp_O2=True
     ++model.mcore_gpt=True
@@ -46,8 +47,11 @@ pre_script:
     model.global_batch_size=32
     model.optim.lr=1e-4
     model.restore_from_path=${MODEL}
-    model.data.train_ds.num_workers=0
-    model.data.validation_ds.num_workers=0
+    model.data.train_ds.num_workers=1
+    model.data.train_ds.memmap_workers=1
+    model.data.train_ds.pin_memory=false
+    model.data.validation_ds.num_workers=1
+    model.data.validation_ds.pin_memory=false
     model.data.train_ds.file_names=${TRAIN_DS}
     model.data.train_ds.concat_sampling_probabilities=[1.0]
     model.data.validation_ds.file_names=${VALID_DS}
@@ -80,7 +84,7 @@ train:
     - name: TMP
       value: /tmp
     - name: MODEL_PATH
-      value: /fsx/pretrained-models/mistralai/Mistral-7B-v0.1
+      value: /fsx/pretrained-models/meta-llama/Llama-3.1-8B
     - name: LOG_ROOT
       value: "/efs/home/{{ .Release.Name }}/logs"
     - name: DATA_ROOT
@@ -92,7 +96,9 @@ train:
     - name: NCCL_DEBUG 
       value: "WARN"
     - name: EXP_NAME
-      value: "peft_pubmedqa"
+      value: "peft_dolphin"
+    - name: HF_TOKEN
+      value: "{{ .Values.hf_token }}"
   command:
     -  "torchrun"
   args: 

@@ -12,7 +12,6 @@ tolerations:
     operator: "Exists"
     effect: "NoSchedule"
 pre_script: 
-  - 'if [ -f $MODEL_PATH/ckpt.nemo ]; then echo "$MODEL_PATH/ckpt.nemo exists" && exit 0; fi'
   - SCRIPT_DIR=/NeMo/scripts/checkpoint_converters
   - cd $SCRIPT_DIR
   - mkdir -p $LOG_ROOT

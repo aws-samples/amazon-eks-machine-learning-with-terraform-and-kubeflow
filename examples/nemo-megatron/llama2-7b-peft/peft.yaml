@@ -21,10 +21,11 @@ pre_script:
   - mkdir -p $LOGS_DIR
   - export OUTPUT_LOG=$LOGS_DIR/peft.log
   - MODEL="$MODEL_PATH/ckpt.nemo"
-  - TRAIN_DS="[$DATA_ROOT/pubmedqa_train.jsonl]"
-  - VALID_DS="[$DATA_ROOT/pubmedqa_val.jsonl]"
-  - TEST_DS="[$DATA_ROOT/pubmedqa_test.jsonl]"
-  - TEST_NAMES="[pubmedqa]"
+  - DATASET="pubmedqa"
+  - TRAIN_DS="[$DATA_ROOT/${DATASET}_train.jsonl]"
+  - VALID_DS="[$DATA_ROOT/${DATASET}_val.jsonl]"
+  - TEST_DS="[$DATA_ROOT/${DATASET}_test.jsonl]"
+  - TEST_NAMES="[${DATASET}]"
   - SCHEME="lora"
   - CONCAT_SAMPLING_PROBS="[1.0]"
   - TP_SIZE=8
@@ -80,6 +81,8 @@ pre_script:
     model.save_nemo_on_validation_end=False"
   - SCRIPT_DIR=/NeMo/examples/nlp/language_modeling/tuning
   - cd $HOME
+  - 'if [ "${PET_NODE_RANK}" -eq "0" ]; then rm $DATA_ROOT/${DATASET}*.idx.* ; fi'
+  - 'if [ -d $LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints ]; then rm -rf $LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints; fi'
 train:
   env:
     - name: HOME
