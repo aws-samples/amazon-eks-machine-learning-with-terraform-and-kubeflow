@@ -33,12 +33,14 @@ pre_script:
   - export HYDRA_FULL_ERROR=1
   - export PEFT_ARGS="
     model.restore_from_path=${MODEL} 
+    model.micro_batch_size=96
+    model.global_batch_size=96
     model.peft.restore_from_path=${PATH_TO_TRAINED_MODEL} 
     trainer.devices=${PET_NPROC_PER_NODE} 
     model.data.test_ds.file_names=${TEST_DS} 
     model.data.test_ds.names=${TEST_NAMES} 
-    model.data.test_ds.global_batch_size=32 
-    model.data.test_ds.micro_batch_size=16 
+    model.data.test_ds.global_batch_size=96 
+    model.data.test_ds.micro_batch_size=96
     model.data.test_ds.tokens_to_generate=${TOKENS_TO_GENERATE} 
     model.tensor_model_parallel_size=${TP_SIZE} 
     model.megatron_amp_O2=True 

@@ -42,9 +42,9 @@ pre_script:
     ++model.mcore_gpt=True
     model.tensor_model_parallel_size=${TP_SIZE}
     model.pipeline_model_parallel_size=${PP_SIZE}
-    model.micro_batch_size=8
-    model.global_batch_size=32
-    model.optim.lr=1e-4
+    model.micro_batch_size=24
+    model.global_batch_size=96
+    model.optim.lr=1e-5
     model.restore_from_path=${MODEL}
     model.data.train_ds.num_workers=0
     model.data.validation_ds.num_workers=0
