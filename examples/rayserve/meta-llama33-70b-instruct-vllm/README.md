@@ -1,4 +1,4 @@
-# Ray Serve Meta Llama3 8B Instruct Model
+# Ray Serve Meta Llama 3.3 70B Instruct Model
 
 This example illustrates how to use [Ray Serve](../../../charts/machine-learning/training/rayserve/) Helm chart to serve [Meta Llama 3.3 70B Instruct](https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct)  model.
 
@@ -12,7 +12,7 @@ This example uses a custom Docker container for Ray Serve. Build and push this c
     ./containers/ray-pytorch/build_tools/build_and_push.sh aws-region
 
 
-## Hugging Face Llama3 8B Instruct Pre-trained Model Weights
+## Hugging Face Llama3.3 70B Instruct Pre-trained Model Weights
 
 To download Hugging Face Llama3 8B Instruct pre-trained model weights, replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
 
