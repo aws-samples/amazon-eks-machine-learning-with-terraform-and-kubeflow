@@ -30,7 +30,7 @@ pre_script:
   - CONCAT_SAMPLING_PROBS="[1.0]"
   - TP_SIZE=8
   - PP_SIZE=1
-  - MAX_STEPS=10000
+  - MAX_STEPS=1000
   - export HYDRA_FULL_ERROR=1
   - export PEFT_ARGS="
     trainer.log_every_n_steps=1
@@ -41,8 +41,8 @@ pre_script:
     trainer.max_steps=$MAX_STEPS
     model.restore_from_path=${MODEL}
     model.peft.peft_scheme=${SCHEME}
-    model.micro_batch_size=8
-    model.global_batch_size=128
+    model.micro_batch_size=24
+    model.global_batch_size=96
     model.tensor_model_parallel_size=${TP_SIZE}
     model.pipeline_model_parallel_size=${PP_SIZE}
     model.megatron_amp_O2=True
@@ -50,16 +50,12 @@ pre_script:
     model.activations_checkpoint_num_layers=null
     model.activations_checkpoint_method=uniform
     model.optim.name=fused_adam
-    model.optim.lr=1e-4
+    model.optim.lr=1e-5
     model.answer_only_loss=True
     model.data.train_ds.file_names=${TRAIN_DS}
     model.data.validation_ds.file_names=${VALID_DS}
     model.data.test_ds.file_names=${TEST_DS}
     model.data.train_ds.concat_sampling_probabilities=${CONCAT_SAMPLING_PROBS}
-    model.data.train_ds.micro_batch_size=8
-    model.data.train_ds.global_batch_size=128
-    model.data.validation_ds.micro_batch_size=16
-    model.data.validation_ds.global_batch_size=128
     model.data.train_ds.num_workers=0
     model.data.validation_ds.num_workers=0
     model.data.test_ds.num_workers=0
