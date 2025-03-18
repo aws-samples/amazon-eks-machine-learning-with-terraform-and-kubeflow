@@ -1,5 +1,5 @@
 image: 
-  name: deepjavalibrary/djl-serving:0.29.0-pytorch-inf2
+  name: deepjavalibrary/djl-serving:0.32.0-pytorch-inf2
   pull_policy: Always
 resources:
   node_type: inf2.48xlarge

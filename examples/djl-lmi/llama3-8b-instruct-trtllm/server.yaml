@@ -1,5 +1,5 @@
 image: 
-  name: deepjavalibrary/djl-serving:0.29.0-tensorrt-llm
+  name: deepjavalibrary/djl-serving:0.32.0-tensorrt-llm
   pull_policy: Always
 resources:
   node_type: g5.48xlarge
@@ -18,7 +18,7 @@ ebs:
 inline_script:
 - |+
   cat > /opt/ml/model/serving.properties <<EOF
-  option.model_id=/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct/
+  option.model_id=/tmp/Meta-Llama-3-8B-Instruct/
   option.entryPoint=djl_python.tensorrt_llm
   option.tensor_parallel_degree=8
   option.dtype=fp16
@@ -33,6 +33,7 @@ inline_script:
 pre_script:
   - mkdir -p $LOG_ROOT
   - OUTPUT_LOG="$LOG_ROOT/djl-lmi-server.log"
+  - cp -r /fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct /tmp/
 server:
   ports:
     http: 8080
