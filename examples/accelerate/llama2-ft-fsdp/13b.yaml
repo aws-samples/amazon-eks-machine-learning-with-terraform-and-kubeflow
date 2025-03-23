@@ -1,4 +1,4 @@
-image: '763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-training:2.2.0-gpu-py310-cu121-ubuntu20.04-ec2' 
+image: '763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-training:2.6.0-gpu-py312-cu126-ubuntu22.04-ec2' 
 backoff_limit: 2000
 ebs:
   storage: 200Gi
@@ -6,11 +6,13 @@ ebs:
 resources:
   requests:
     "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
   limits:
     "nvidia.com/gpu": 8 
+    "vpc.amazonaws.com/efa": 4
   nnodes: 2
   nproc_per_node: 8
-  node_type: 'p3dn.24xlarge' 
+  node_type: 'p4d.24xlarge'  
 tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"
@@ -26,8 +28,8 @@ git:
   commit: 88a84227c533a27eec5867e265774aee8de060ec
 pre_script: 
   - pip3 install --upgrade pip
-  - pip3 install transformers==4.38.1 datasets==2.17.1 evaluate==0.4.1 accelerate==0.27.2
-  - pip3 install trl==0.7.11 peft==0.9.0 bitsandbytes==0.43.0
+  - pip3 install transformers==4.48.1 datasets==3.4.1 evaluate==0.4.3 accelerate==1.5.2
+  - pip3 install trl==0.11.0 peft==0.15.0 bitsandbytes==0.45.3
   - LOGS_DIR=$LOG_ROOT/$HOSTNAME
   - mkdir -p $LOGS_DIR
   - export OUTPUT_LOG=$LOGS_DIR/fsdp-sft.log
@@ -69,7 +71,15 @@ train:
     - name: NCCL_SOCKET_IFNAME 
       value: "^lo,docker0"
     - name: NCCL_DEBUG
-      value: "INFO"
+      value: "WARN"
+    - name: FI_EFA_USE_DEVICE_RDMA
+      value: "1"
+    - name: FI_PROVIDER
+      value: "efa"
+    - name: FI_EFA_FORK_SAFE
+      value: "1"
+    - name: "RDMAV_FORK_SAFE"
+      value: "1"
   command:
     - torchrun 
   args:
@@ -91,7 +101,7 @@ train:
     - --logging_strategy "steps" 
     - --evaluation_strategy "steps" 
     - --save_strategy "steps"
-    - --bf16 False 
+    - --bf16 True 
     - --packing False 
     - --learning_rate 5e-5 
     - --lr_scheduler_type "cosine" 
@@ -104,7 +114,7 @@ train:
     - --gradient_checkpointing True 
     - --use_reentrant False 
     - --dataset_text_field "content" 
-    - --use_flash_attn False 
+    - --use_flash_attn True
     - --ddp_timeout 36000 
     - --optim paged_adamw_32bit 
     - --output_dir $CKPT_DIR
