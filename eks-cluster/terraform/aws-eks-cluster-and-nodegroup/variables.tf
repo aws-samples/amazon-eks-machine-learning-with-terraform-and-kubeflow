@@ -332,7 +332,7 @@ variable "ack_sagemaker_enabled" {
 
 variable "system_group_desired" {
     description = "System group desired size"
-    default = 6
+    default = 8
     type = number
 }
 
@@ -344,7 +344,7 @@ variable "system_group_max" {
 
 variable "system_group_min" {
     description = "System group minimum size"
-    default = 6
+    default = 8
     type = number
 }
 
