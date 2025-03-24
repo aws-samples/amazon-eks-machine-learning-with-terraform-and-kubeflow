@@ -1474,3 +1474,31 @@ resource "helm_release" "ack_sagemaker_controller" {
   depends_on = [  helm_release.cluster-autoscaler ]
 
 }
+
+resource "helm_release" "dcgm_exporter" {
+  count = var.dcgm_exporter_enabled ? 1 : 0
+  
+  name       = "dcgm-exporter"
+  chart      = "dcgm-exporter"
+  cleanup_on_fail = true
+  create_namespace = true
+  repository  = "https://nvidia.github.io/dcgm-exporter/helm-charts/"
+  version    = "4.0.4"
+  namespace  = "kube-system"
+  timeout = 300
+  wait = true
+
+  values = [
+    <<-EOT
+      nodeSelector:
+	      karpenter.k8s.aws/instance-gpu-manufacturer: nvidia
+      tolerations:
+ 	      - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+    EOT
+  ]
+
+  depends_on = [  helm_release.cluster-autoscaler ]
+
+}

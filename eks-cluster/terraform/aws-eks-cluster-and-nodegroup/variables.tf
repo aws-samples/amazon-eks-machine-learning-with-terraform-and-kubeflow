@@ -354,4 +354,10 @@ variable fsx_storage_capacity {
   type = number
 }
 
+variable "dcgm_exporter_enabled" {
+  description = "Install DCGM Exporter"
+  type        = bool
+  default = false
+}
+
 # END variables
