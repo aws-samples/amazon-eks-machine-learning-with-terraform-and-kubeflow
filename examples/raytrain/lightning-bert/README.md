@@ -4,6 +4,13 @@ This example illustrates how to use [raytrain](../../../charts/machine-learning/
 
 Before proceeding, complete the [Prerequisites](../../../README.md#prerequisites) and [Getting started](../../../README.md#getting-started). See [What is in the YAML file](../../../README.md#what-is-in-the-yaml-file) to understand the common fields in the Helm values files. There are some fields that are specific to a machine learning chart.
 
+## Build and Push Docker Container
+
+This example uses a custom Docker container for Ray Train. Build and push this container using following command (replace `aws-region` with your AWS Region name):
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    ./containers/ray-pytorch/build_tools/build_and_push.sh aws-region
+
 ## Launch fine-training
 
 The fine-training values files is defined in [fine-tune.yaml](fine-tune.yaml). 
