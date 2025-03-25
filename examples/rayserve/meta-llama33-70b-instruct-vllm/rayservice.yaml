@@ -19,6 +19,18 @@ ray:
   env:
     - name: ENGINE_CONFIG
       value: /efs/home/{{ .Release.Name }}/config/engine.json
+    - name: NCCL_SOCKET_IFNAME 
+      value: "^lo,docker0"
+    - name: NCCL_DEBUG
+      value: "WARN"
+    - name: FI_EFA_USE_DEVICE_RDMA
+      value: "1"
+    - name: FI_PROVIDER
+      value: "efa"
+    - name: FI_EFA_FORK_SAFE
+      value: "1"
+    - name: "RDMAV_FORK_SAFE"
+      value: "1"
   serve_config_v2: 
     serveConfigV2: |
       applications:
@@ -44,9 +56,11 @@ resources:
   max_replicas: 2
   requests:
     "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
   limits:
     "nvidia.com/gpu": 8
-  node_type: 'g5.48xlarge' 
+    "vpc.amazonaws.com/efa": 4
+  node_type: 'p4d.24xlarge' 
 tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"
