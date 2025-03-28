@@ -1,0 +1,72 @@
+ray:
+  version: '2.44.0'
+  dashboard:
+    host: '0.0.0.0'
+  ports:
+    - name: gcs
+      port: 6379
+    - name: client
+      port: 10001
+    - name: dashboard
+      port: 8265
+    - name: serve
+      port: 8000
+  resources:
+    requests:
+      cpu: 300m 
+    limits:
+      cpu: 2
+  env:
+    - name: ENGINE_CONFIG
+      value: /efs/home/{{ .Release.Name }}/config/engine.json
+    - name: NCCL_SOCKET_IFNAME 
+      value: "^lo,docker0"
+    - name: NCCL_DEBUG
+      value: "WARN"
+    - name: FI_EFA_USE_DEVICE_RDMA
+      value: "1"
+    - name: FI_PROVIDER
+      value: "efa"
+    - name: FI_EFA_FORK_SAFE
+      value: "1"
+    - name: "RDMAV_FORK_SAFE"
+      value: "1"
+  serve_config_v2: 
+    serveConfigV2: |
+      applications:
+        - name: mistral-8x22b-instruct-v01
+          import_path: vllm_asyncllmengine:deployment
+          runtime_env:
+            working_dir: file:///fsx/rayserve/engines/vllm_asyncllmengine.zip
+            pip:
+              - "vllm==0.8.1"
+          deployments:
+          - name: VLLMDeployment
+            max_ongoing_requests: 64
+            autoscaling_config:
+              min_replicas: 1
+              max_replicas: 1
+              target_ongoing_requests: 32
+  service_unhealthy_threshold_secs: 900
+  deployment_unhealthy_threshold_secs: 300
+image:
+image_pull_policy: IfNotPresent
+resources:
+  min_replicas: 2
+  max_replicas: 2
+  requests:
+    "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
+  limits:
+    "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
+  node_type: 'p4d.24xlarge' 
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
