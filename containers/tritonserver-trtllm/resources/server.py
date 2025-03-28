@@ -13,23 +13,21 @@
 # limitations under the License.
 
 import argparse
-import os
-import signal
 import subprocess
 import sys
 import time
 
 ERROR_EXIT_DELAY = 15
 ERROR_CODE_FATAL = 255
-EXIT_SUCCESS = 0
 
 DELAY_BETWEEN_QUERIES = 60
+WAIT_WORKER_TIMEOUT = 1800
 
 def die(exit_code: int):
     if exit_code is None:
         exit_code = ERROR_CODE_FATAL
 
-    write_error(f"Waiting {ERROR_EXIT_DELAY} second before exiting.")
+    write_error(f"Error code: {exit_code}. Waiting {ERROR_EXIT_DELAY} second before exiting.")
     # Delay the process' termination to provide a small window for administrators 
     # to capture the logs before it exits and restarts.
     time.sleep(ERROR_EXIT_DELAY)
@@ -39,33 +37,30 @@ def die(exit_code: int):
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", type=str, choices=["leader", "worker"])
-    parser.add_argument("--model", help="Model name", type=str, default="model")
+    
+    parser.add_argument("--model", help="Model name", type=str, default="tensorrt_llm")
     parser.add_argument("--model-repo", help="Model repository path", type=str, default="model_repo")
-    parser.add_argument(
-        "--dt",
-        type=str,
-        default="float16",
-        choices=["bfloat16", "float16", "float32"],
-        help="Tensor type.",
-    )
+    
     parser.add_argument("--pp", type=int, default=1, help="Pipeline parallelism.")
     parser.add_argument("--tp", type=int, default=1, help="Tensor parallelism.")
-    parser.add_argument("--iso8601", action='store_true', type=bool, default=False)
-    parser.add_argument("--verbose", action='store_true', type=bool, default=False)
-    parser.add_argument(
-        "--deployment", type=str, help="Name of the Kubernetes deployment."
-    )
-    parser.add_argument(
-        "--namespace",
-        type=str,
-        default="default",
-        help="Namespace of the Kubernetes deployment.",
-    )
-    parser.add_argument("--multinode", action="count", default=0)
+    parser.add_argument("--group-key", type=str, help="LWS Group Key")
+    parser.add_argument("--namespace", type=str, default="default", help="Namespace of the Kubernetes deployment.")
+    parser.add_argument('--grpc_port', type=str, help='tritonserver grpc port', default='8001')
+    parser.add_argument('--http_port', type=str, help='tritonserver http port', default='8000')
+    parser.add_argument('--metrics_port', type=str, help='tritonserver metrics port', default='8002')
+    parser.add_argument('--log-file', type=str, help='path to triton log file', default='triton_log.txt')
+    parser.add_argument('--wait-worker-timeout', type=int, help='Wait for worker pods timeout', default=WAIT_WORKER_TIMEOUT)
 
     return parser.parse_args()
 
+def detect_local_gpus():
+    try:
+        output = subprocess.check_output(["nvidia-smi", "-L"]).decode("utf-8")
+        write_output(output)
+        return len(output.strip().split("\n"))
+    except subprocess.CalledProcessError:
+        return 0
+    
 def run_command(cmd_args: [str], omit_args: [int] = None):
     command = ""
 
@@ -81,15 +76,7 @@ def run_command(cmd_args: [str], omit_args: [int] = None):
 
     return subprocess.call(cmd_args, stderr=sys.stderr, stdout=sys.stdout)
 
-
-def signal_handler(sig, frame):
-    write_output(f"Signal {sig} detected, quitting.")
-    exit(EXIT_SUCCESS)
-
-def wait_for_workers(world_size: int, timeout: int=1800):
-    if world_size is None or world_size <= 0:
-        raise RuntimeError("Argument `world_size` must be greater than zero.")
-
+def wait_for_workers(num_workers: int, timeout: int):
     write_output("Begin waiting for worker pods.")
 
     cmd_args = [
@@ -99,7 +86,9 @@ def wait_for_workers(world_size: int, timeout: int=1800):
         "-n",
         f"{args.namespace}",
         "-l",
-        f"app={args.deployment}",
+        f"leaderworkerset.sigs.k8s.io/group-key={args.group_key}",
+        "--field-selector",
+        "status.phase=Running",
         "-o",
         "jsonpath='{.items[*].metadata.name}'",
     ]
@@ -107,18 +96,17 @@ def wait_for_workers(world_size: int, timeout: int=1800):
 
     workers = []
     start_time = time.time()
-    while len(workers) < world_size and ( time.time() - start_time) < timeout:
+    while len(workers) < num_workers and ( time.time() - start_time) < timeout:
         time.sleep(DELAY_BETWEEN_QUERIES)
-        write_output(f"> {command}")
+        write_output(f">{command}")
         output = subprocess.check_output(cmd_args).decode("utf-8")
         write_output(output)
         output = output.strip("'")
         workers = output.split(" ")
-        write_output(f"{len(workers)} workers of {world_size} workers ready in {time.time() - start_time} seconds")
+        write_output(f"{len(workers)} workers of {num_workers} workers ready in {time.time() - start_time} seconds")
 
-
-    if workers is not None and len(workers) == world_size:
-        write_output(f"All {world_size} workers are ready in {time.time() - start_time} seconds")
+    if workers is not None and len(workers) == num_workers:
+        write_output(f"All {num_workers} workers are ready in {time.time() - start_time} seconds")
         workers.sort()
 
     return workers
@@ -132,20 +120,19 @@ def write_error(message: str):
     print(message, file=sys.stderr, flush=True)
 
 
-def do_leader(args):
+def start_tritonserver(args):
     world_size = args.tp * args.pp
-
-    if world_size <= 0:
-        raise Exception(
-            "usage: Options --pp and --pp must both be equal to or greater than 1."
-        )
-
+    assert world_size > 0, f"world_size: {world_size} must be greater than zero, tp: {args.tp}, pp: {args.pp}"
     write_output(f"Executing Leader (world size: {world_size})")
 
-    workers = wait_for_workers(world_size)
+    num_local_gpus = detect_local_gpus()
+    num_workers = world_size // num_local_gpus
 
-    if len(workers) != world_size:
-        write_error(f"fatal: {len(workers)} found, expected {world_size}.")
+    workers = wait_for_workers(num_workers=num_workers, timeout=args.wait_worker_timeout)
+    workers_with_mpi_slots = [worker + f":{num_local_gpus}" for worker in workers]
+
+    if len(workers) != num_workers:
+        write_error(f"fatal: {len(workers)} found, expected {num_workers}.")
         die(ERROR_EXIT_DELAY)
 
     cmd_args = [
@@ -155,17 +142,26 @@ def do_leader(args):
 
     cmd_args += [
         "--report-bindings",
+        "-map-by",
+        "slot",
+        "-mca",
+        "btl_tcp_if_exclude",
+        "lo,docker0",
+        "-mca",
+        "oob_tcp_if_exclude",
+        "lo,docker0",
         "-mca",
         "plm_rsh_agent",
         "kubessh",
         "-np",
         f"{world_size}",
         "--host",
-        ",".join(workers),
+        ",".join(workers_with_mpi_slots),
     ]
 
     # Add per node command lines separated by ':'.
     for i in range(world_size):
+
         if i != 0:
             cmd_args += [":"]
 
@@ -173,28 +169,28 @@ def do_leader(args):
             "-n",
             "1",
             "tritonserver",
-            "--allow-cpu-metrics=false",
-            "--allow-gpu-metrics=false",
             "--disable-auto-complete-config",
-            f"--id=rank{i}",
-            "--model-load-thread-count=2",
             f"--model-repository={args.model_repo}",
+            f"--id=rank{i}",
+            "--model-load-thread-count=2"
         ]
 
         # Rank0 node needs to support metrics collection and web services.
         if i == 0:
             cmd_args += [
+                f'--grpc-port={args.grpc_port}', 
+                f'--http-port={args.http_port}',
+                f'--metrics-port={args.metrics_port}',
+            ]
+
+            cmd_args += ['--log-verbose=3', f'--log-file={args.log_file}']
+
+            cmd_args += [
                 "--allow-metrics=true",
                 "--metrics-interval-ms=1000",
             ]
 
-            if args.verbose:
-                cmd_args += ["--log-verbose=1"]
-
-            if args.iso8601:
-                cmd_args += ["--log-format=ISO8601"]
-
-        # Rank(N) nodes can disable metrics, web services, and logging.
+        # Rank(N > 0) nodes can disable metrics, web services, and logging.
         else:
             cmd_args += [
                 "--allow-http=false",
@@ -202,8 +198,8 @@ def do_leader(args):
                 "--allow-metrics=false",
                 "--model-control-mode=explicit",
                 f"--load-model={args.model}",
-                "--log-info=false",
-                "--log-warning=false",
+                '--log-verbose=1', 
+                f'--log-file={args.log_file}.{i}'
             ]
 
     result = run_command(cmd_args)
@@ -213,19 +209,6 @@ def do_leader(args):
 
     exit(result)
 
-
-def do_worker(args):
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    write_output("Worker paused awaiting SIGINT or SIGTERM.")
-    signal.pause()
-
-
-# Parse options provided.
-args = parse_arguments()
-
-if args.mode == "leader":
-    do_leader(args)
-elif args.mode == "worker":
-    do_worker(args)
+if __name__ == "__main__":
+    args = parse_arguments()
+    start_tritonserver(args)

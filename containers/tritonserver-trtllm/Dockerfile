@@ -38,5 +38,5 @@ RUN git clone https://github.com/triton-inference-server/tensorrtllm_backend.git
 RUN cd /workspace/tensorrtllm_backend && git fetch origin ad209ced188cbae19c7041d968dd4e6d3800ece2
 RUN cd /workspace/tensorrtllm_backend && git reset --hard ad209ced188cbae19c7041d968dd4e6d3800ece2
 
-COPY --chmod=555 resources/kubessh .
+COPY --chmod=555 resources/kubessh /usr/local/bin/kubessh
 COPY resources/server.py .
