@@ -1,5 +1,0 @@
-apiVersion: v1
-appVersion: "0.4.2"
-description: A Helm chart for LeaderWorkingSet 
-name: lws
-version: 0.4.2

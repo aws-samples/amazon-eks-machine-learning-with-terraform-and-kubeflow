@@ -1277,15 +1277,30 @@ resource "helm_release" "mpi-operator" {
   depends_on = [  helm_release.cluster-autoscaler ]
 }
 
-resource "helm_release" "lws" {
-  name       = "lws"
-  chart      = "${var.local_helm_repo}/lws"
-  version    = "0.4.2"
-  namespace = "lws-system"
+resource "null_resource" "git_clone" {
+  triggers = {
+    always_run = "${timestamp()}"
+  }
 
-  depends_on = [  helm_release.cluster-issuer ]
+  provisioner "local-exec" {
+    command = <<-EOT
+      rm -rf /tmp/lws || true
+      git clone https://github.com/kubernetes-sigs/lws.git /tmp/lws
+      cd /tmp/lws
+      git fetch origin aceee3387f2424067777c32db14378909c3633a5
+      git reset --hard aceee3387f2424067777c32db14378909c3633a5
+    EOT
+  }
 }
 
+resource "helm_release" "lws" {
+  name       = "lws"
+  chart      = "/tmp/lws/charts/lws"
+  version    = "0.1.0"
+  namespace = kubernetes_namespace.lws-system.metadata[0].name
+
+  depends_on = [null_resource.git_clone]
+}
 
 module "kubeflow-components" {
   count = var.kubeflow_platform_enabled ? 1 : 0
