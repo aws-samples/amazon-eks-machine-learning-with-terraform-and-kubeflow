@@ -1,0 +1,50 @@
+image:
+  name:
+  pull_policy: IfNotPresent
+lws:
+  size: 2
+resources:
+  node_type: g5.48xlarge
+  requests: {}
+  limits: {}
+tolerations: []
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+ebs: {}
+git:
+  repo_url:
+  branch:
+  commit:
+pre_script: []
+post_script: []
+server:
+  name: triton-inference-server 
+  args: []
+  command: []
+  ports:
+    http: 8000
+    grpc: 8001
+    metrics: 8002
+  readiness_probe:
+    period_secs: 5
+    failure_threshold: 3
+  startup_probe:
+    period_secs: 10
+    failure_threshold: 30
+  liveness_probe:
+    period_secs: 10
+    failure_threshold: 3
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 2
+    metrics:
+      - type: Pods
+        pods:
+          metric:
+            name: avg_time_queue_us
+          target:
+            type: AverageValue
+            averageValue: 50

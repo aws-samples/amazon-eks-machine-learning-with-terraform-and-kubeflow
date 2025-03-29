@@ -1,0 +1,44 @@
+image: 
+resources:
+  node_type: p4d.24xlarge
+  requests:
+    "nvidia.com/gpu": 8
+  limits:
+    "nvidia.com/gpu": 8
+ebs:
+  storage: 400Gi
+  mount_path: /tmp
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+pre_script: 
+  - mkdir -p $LOG_ROOT
+  - mkdir -p $OUTPUT_ROOT
+  - TP_SIZE=8
+  - PP_SIZE=2
+  - OUTPUT_LOG=$LOG_ROOT/hf_to_trtllm.log
+  - TMP_OUTPUT_PATH=/tmp/ckpt
+  - SCRIPT_DIR=TensorRT-LLM/examples/llama
+  - cd $SCRIPT_DIR
+  - pip3 install datasets==3.1.0 evaluate~=0.4.3 rouge_score~=0.1.2 sentencepiece~=0.2.0
+post_script:
+  - cp -r $TMP_OUTPUT_PATH $OUTPUT_ROOT/
+process:
+  env:
+    - name: LOG_ROOT
+      value: /efs/home/{{ .Release.Name }}/logs
+    - name: OUTPUT_ROOT
+      value: /efs/home/{{ .Release.Name }}/trtllm
+    - name: MODEL_PATH
+      value: /fsx/pretrained-models/mistralai/Mixtral-8x22B-Instruct-v0.1
+  command:
+    - python3
+  args:
+    - convert_checkpoint.py 
+    - --model_dir=$MODEL_PATH
+    - --output_dir=$TMP_OUTPUT_PATH
+    - --dtype=float16
+    - --tp_size=$TP_SIZE
+    - --pp_size=$PP_SIZE
+    - '2>&1 | tee $OUTPUT_LOG'
