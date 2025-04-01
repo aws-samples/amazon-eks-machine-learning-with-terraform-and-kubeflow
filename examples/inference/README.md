@@ -50,7 +50,7 @@
 | [Llama2 7B](./triton-inference-server/tensorrtllm_backend/llama2-7b/README.md)    |[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)   | Nvidia GPU, Devices=8, TP=8, PP=1 |
 | [Llama 3 8B Instruct](./triton-inference-server/tensorrtllm_backend/llama3-8b-instruct/README.md)    |[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)   | Nvidia GPU, Devices=8, TP=8, PP=1 |
 | [Mistral 7B Instruct v0.1](./triton-inference-server/tensorrtllm_backend/mistral-7b-instruct-v01/README.md)    |[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)   | Nvidia GPU, Devices=8, TP=8, PP=1 |
-| [Mistral 8x22B Instruct v0.1](./triton-inference-server/tensorrtllm_backend/mistral-8x22b-instruct-v01/README.md)    |[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)   | Nvidia GPU, Devices=8, TP=8, PP=1 |
+| [Mistral 8x22B Instruct v0.1](./triton-inference-server/tensorrtllm_backend/mistral-8x22b-instruct-v01/README.md)    |[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)   | Nvidia GPU, Nodes=2, Devices=8, TP=8, PP=2, Multi-node inference using [lws](https://github.com/kubernetes-sigs/lws) |
 | [Mistral 7B Instruct v0.1, Llama 3 8B Instruct](./triton-inference-server/tensorrtllm_backend/mistral-7b-instruct-v01_llama3-8b/README.md)    |[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)   | Nvidia GPU, Devices=8, TP=8, PP=1 |
 
 
