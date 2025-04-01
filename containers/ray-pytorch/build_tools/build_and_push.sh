@@ -62,7 +62,7 @@ if [ $? -eq 0 ]; then
     files=$(find examples/ -regex "\(.*/rayserve/.*/rayservice\.yaml\\|.*/raytrain/.*/.*\.yaml\)")
     for file in $files
     do
-        sed -i -e "s|image:.*$|image: ${fullname}|g" $file
+        [[ ! "$file" =~ "-neuron" ]] && sed -i -e "s|image:.*$|image: ${fullname}|g" $file && echo "update image: in  $file"
     done
 else
 	echo "Error: Image build and push failed"

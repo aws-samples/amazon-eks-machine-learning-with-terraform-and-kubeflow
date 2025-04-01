@@ -1,32 +1,35 @@
 # Distributed Training and Inference on Amazon EKS
 
-This project defines a *prototypical* solution for  distributed training and inference on [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/whitepapers/latest/overview-deployment-options/amazon-elastic-kubernetes-service.html). The primary audience for this project is machine learning  researchers, developers, and applied engineers who need to pre-train or fine-tune large language models (LLMs) in the area of generative AI, or train deep neural networks (DNNs) in the area of computer vision.
+This project defines a *prototypical* solution for  distributed training and inference on [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/whitepapers/latest/overview-deployment-options/amazon-elastic-kubernetes-service.html). The primary audience for this project is machine learning  researchers, developers, and applied engineers, who need to train, pre-train, fine-tune, or test Generative AI, or general purpose deep neural networks (DNNs).
 
-The solution offers a framework and  accelerator agnostic approach to distributed training and inference. For training, it works with popular AI machine learning libraries, for example, [Nemo](https://github.com/NVIDIA/NeMo), [Hugging Face Accelerate](https://github.com/huggingface/accelerate), [PyTorch Lightning](https://github.com/Lightning-AI/pytorch-lightning), [DeepSpeed](https://github.com/microsoft/DeepSpeed]), [Megatron-DeepSpeed](https://github.com/microsoft/Megatron-DeepSpeed), [Ray Train](https://docs.ray.io/en/latest/train/train.html), [NeuronX Distributed](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/libraries/neuronx-distributed/index.html), among others. For inference, it supports [Ray Serve](https://docs.ray.io/en/latest/serve/index.html) with [vLLM](https://docs.vllm.ai/en/latest/), [Triton Inference Server](https://github.com/triton-inference-server)  with [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) and [vLLM](https://docs.vllm.ai/en/latest/) backends, and [Deep Java Library (DJL) Large Model Inference (LMI)](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/index.html) with all [supported backends](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/vllm_user_guide.html).
+The solution offers a framework and  accelerator agnostic approach to distributed training and inference. For training, it works with popular AI machine learning libraries, for example, [Nemo](https://github.com/NVIDIA/NeMo), [Hugging Face Accelerate](https://github.com/huggingface/accelerate), [PyTorch Lightning](https://github.com/Lightning-AI/pytorch-lightning), [DeepSpeed](https://github.com/microsoft/DeepSpeed]), [Megatron-DeepSpeed](https://github.com/microsoft/Megatron-DeepSpeed), [Ray Train](https://docs.ray.io/en/latest/train/train.html), [Neuronx Distributed](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/libraries/neuronx-distributed/index.html), among others. For inference, it supports [Ray Serve](https://docs.ray.io/en/latest/serve/index.html) with [vLLM](https://docs.vllm.ai/en/latest/), [Triton Inference Server](https://github.com/triton-inference-server)  with Python, [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) and [vLLM](https://docs.vllm.ai/en/latest/) backends, and [Deep Java Library (DJL) Large Model Inference (LMI)](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/index.html) with all [supported backends](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/vllm_user_guide.html).
 
-## Legacy Note: 
+#### Legacy Note: 
 This project started as a companion to the [Mask R-CNN distributed training blog](https://aws.amazon.com/blogs/opensource/distributed-tensorflow-training-using-kubeflow-on-amazon-eks/), and that part of the project is documented in [this README](./tutorials/maskrcnn-blog/README.md). 
 
-## How does the solution work
+## Conceptual Overview
 
-The solution uses [Terraform](https://www.terraform.io/) to deploy [Kubeflow](https://www.kubeflow.org/) machine learning platform on top of [Amazon EKS](https://aws.amazon.com/eks/). [Amazon EFS](https://aws.amazon.com/efs/) and [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) file-systems are used to store various machine learning artifacts. Typically, code, configuration files, log files, and checkpoints are stored on the EFS file-system. Data is stored on the FSx for Lustre file system. FSx for Lustre file-system is configured to automatically import and export content from and to the configured S3 bucket. Accelerator machines with Nvidia GPUs or AWS Trainium/Inferentia devices used for data-preprocessing, training, or inference are automatically managed by [Karpenter](https://karpenter.sh/), and the CPU-only machines used for running system pods are managed by [Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler).
+This solution uses [Helm charts](https://helm.sh/docs/intro/using_helm/) to execute inference and training pipelines. See [tutorials](#tutorials) for a quick start.
 
-The deployed Kubeflow platform version is 1.8.0, and includes [Kubeflow Notebooks](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/notebooks/), [Kubeflow Tensorboard](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/tensorboard/). [Kubeflow Pipelines](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/pipelines/). [Kubeflow Katib](https://www.kubeflow.org/docs/components/katib/overview/), and [Kubeflow Central Dashboard](https://www.kubeflow.org/docs/components/central-dash/).
+Helm charts are commonly used to [deploy applications](https://docs.aws.amazon.com/eks/latest/userguide/helm.html) within an Amazon EKS cluster. While typically, the applications deployed using Helm charts are services that run until stopped, Helm charts can be also used to deploy application that are not long running services. We leverage Helm Charts to execute discrete steps within any training or inference pipeline.
 
-To launch a data pre-processing or training job, all you need to do is install one of the pre-defined [machine-learning charts](./charts/machine-learning/) with a YAML file that defines inputs to the chart. Here is a [very quick example](./examples/accelerate/bert-glue-mrpc/README.md) that pre-trains Bert model on Glue MRPC dataset using Hugging Face Accelerate. For a heavy weight example, try the example for [Llama2 fine-tuning using PyTorch FSDP](./examples/accelerate/llama2/ft/fsdp/README.md).
+Any training or inference pipeline in this solution can be conceptualized as a series of Helm chart installations, managed within a single Helm *Release*. Each step in the workflow is executed via a Helm chart installation using a specific [YAML recipe](#yaml-recipes), whereby, the YAML recipe acts as a [Helm Values File](https://helm.sh/docs/chart_template_guide/values_files/). Once the Helm chart step completes successfully, the Helm chart is uninstalled, and the next Helm chart in the pipeline is deployed within the same Helm *Release*. Using a single Helm *Release* for a given ML pipeline ensures that the discrete steps in the pipeline are executed atomically, and the dependency among the steps is maintained.
 
-## What is in the YAML file
+The included [tutorials](#tutorials) provide examples of training and inference pipelines that use pre-defined Helm charts, along with YAML recipe files that model each pipeline step. Typically, in order to define a new pipeline in this solution, you do not need to write new Helm Charts. The solution comes with a library of pre-defined [machine learning Helm charts](./charts/machine-learning/). However, you are required to write a YAML recipe file for each step in your training or inference pipeline. 
 
-The YAML file is a [Helm values](https://helm.sh/docs/chart_template_guide/values_files/) file that defines the runtime environment for a data pre-processing, or training job. The key fields in the Helm values file that are common to all charts are described below:
+The [tutorials](#tutorials) walk you through each pipeline, step by step, where you manually execute each pipeline step by installing, and uninstalling, a pre-defined Helm chart with its associated [YAML recipe](#yaml-recipes). For complete end-to-end automation, we also provide an [example](./examples/training/accelerate/bert-glue-mrpc/pipeline.ipynb) where you can execute all the pipeline steps automatically using [Kubeflow Pipelines](https://www.kubeflow.org/docs/components/pipelines/concepts/). 
 
-* The `image` field specifies the required docker container image.
-* The `resources` field specifies the required infrastructure resources.
-* The `git` field describes the code repository we plan to use for running the job. The `git` repository is cloned into an implicitly defined location under `HOME` directory, and, the location is made available in the environment variable `GIT_CLONE_DIR`.
-* The `pre_script` field defines the shell script executed after cloning the `git` repository, but before launching the job.
-* There is an optional `post-script` section for executing post training script.
-* The training launch command and arguments are defined in the `train` field, and the data processing launch command and arguments are defined in the `process` field.
-* The `pvc` field specifies the persistent volumes and their mount paths. EFS and Fsx for Lustre persistent volumes are available by default at `/efs` and `/fsx` mount paths, respectively, but these mount paths can be changed.
-* The `ebs` field specifies optional [Amazon EBS](https://aws.amazon.com/ebs/) volume storage capacity and mount path. By default, no EBS volume is attached.
+If you are a platform engineer, you may be interested in a [system architecture](#system-architecture) overview of this solution.
+
+## Tutorials
+
+Use the directory below to navigate tutorials.
+
+| Category      | Frameworks/Libraries |
+| ----------- | ----------- |
+| [Inference](./examples/inference/README.md)      | [DJL Serving](https://github.com/deepjavalibrary/djl-serving) , [RayServe](https://docs.ray.io/en/latest/serve/index.html), [Triton Inference Server](https://github.com/triton-inference-server/server)      |
+| [Training](./examples/training/README.md)      | [Hugging Face Accelerate](https://github.com/huggingface/accelerate), [Lightning](https://lightning.ai/docs/pytorch/stable/), [Megatron-DeepSpeed](https://github.com/deepspeedai/Megatron-DeepSpeed), [Nemo](https://github.com/NVIDIA/NeMo), [Neuronx Distributed](https://github.com/aws-neuron/neuronx-distributed), [Neuronx Distributed Training](https://github.com/aws-neuron/neuronx-distributed-training), [RayTrain](https://docs.ray.io/en/latest/train/train.html) |
+| [Legacy](./examples/legacy/README.md)      | [Mask R-CNN (TensorFlow)](https://github.com/aws-samples/mask-rcnn-tensorflow), [Neuronx Nemo Megatron](https://github.com/aws-neuron/neuronx-nemo-megatron)   |
 
 ## Prerequisites
 
@@ -77,10 +80,10 @@ For non-Linux, [install and configure kubectl for EKS](https://docs.aws.amazon.c
 
 #### Enable S3 backend for Terraform
 
-Replace `S3_BUCKET` with your S3 bucket name, and execute the commands below
+Replace `S3_BUCKET`and `S3_PREFIX` with your S3 bucket name, and s3 prefix (no leading or trailing `/`), and execute the commands below
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    ./eks-cluster/utils/s3-backend.sh S3_BUCKET
+    ./eks-cluster/utils/s3-backend.sh S3_BUCKET S3_PREFIX
 
 #### Initialize Terraform
    
@@ -109,15 +112,6 @@ This step is only needed if you plan to use the Kubeflow Central Dashboard, whic
 
     terraform output static_password 
 
-### Build and Upload Docker Images to Amazon ECR
-
-Before you try to run any examples, or tutorials, you must build and push all the Docker images to [Amazon ECR](https://aws.amazon.com/ecr/) Replace ```aws-region``` below, and execute:
-
-      cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-      ./build-ecr-images.sh aws-region
-
-Besides building and pushing images to Amazon ECR, this step automatically updates `image` field in Helm values files in examples and tutorials.
-
 ### Create `home` folder on shared file-systems
 
 Attach to the shared file-systems by executing following steps:
@@ -139,6 +133,7 @@ For Fsx for Lustre file-system, execute:
     mkdir home
     chown 1000:100 home
     exit
+
 #### FSx for Lustre File-system Eventual Consistency with S3
 
 FSx for Lustre file-system is configured to automatically import and export content from and to the configured S3 bucket. By default, `/fsx` is mapped to `ml-platform` top-level S3 folder in the S3 bucket. This automatic importing and exporting of content maintains *eventual consistency* between the FSx for Lustre file-system and the configured S3 bucket.
@@ -192,6 +187,30 @@ To launch an EC2 instance for the *build machine*, you will need [Administrator 
         exit
 
 Now, reconnect to your linux instance. 
+
+## Reference
+
+### YAML Recipes
+
+The YAML recipe file is a [Helm values](https://helm.sh/docs/chart_template_guide/values_files/) file that defines the runtime environment for a data pre-processing, or training job. The key fields in the Helm values file that are common to all charts are described below:
+
+* The `image` field specifies the required docker container image.
+* The `resources` field specifies the required infrastructure resources.
+* The `git` field describes the code repository we plan to use for running the job. The `git` repository is cloned into an implicitly defined location under `HOME` directory, and, the location is made available in the environment variable `GIT_CLONE_DIR`.
+* The `inline_script` field is used to define an arbitrary script file.
+* The `pre_script` field defines the shell script executed after cloning the `git` repository, but before launching the job.
+* There is an optional `post-script` section for executing post training script.
+* The training launch command and arguments are defined in the `train` field, and the data processing launch command and arguments are defined in the `process` field.
+* The `pvc` field specifies the persistent volumes and their mount paths. EFS and Fsx for Lustre persistent volumes are available by default at `/efs` and `/fsx` mount paths, respectively, but these mount paths can be changed.
+* The `ebs` field specifies optional [Amazon EBS](https://aws.amazon.com/ebs/) volume storage capacity and mount path. By default, no EBS volume is attached.
+
+## System Architecture
+
+The solution uses [Terraform](https://www.terraform.io/) to deploy [Kubeflow](https://www.kubeflow.org/) machine learning platform on top of [Amazon EKS](https://aws.amazon.com/eks/).  Amazon EC2 machines with Nvidia GPUs or AWS AI Chips ([AWS Trainium](https://aws.amazon.com/ai/machine-learning/trainium/) and [AWS Inferentia](https://aws.amazon.com/ai/machine-learning/inferentia/)) used in machine learning are automatically managed by [Karpenter](https://karpenter.sh/). CPU-only machines used for running system pods are managed by [Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler).
+
+The deployed Kubeflow platform version is 1.8.0, and includes [Kubeflow Notebooks](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/notebooks/), [Kubeflow Tensorboard](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/tensorboard/). [Kubeflow Pipelines](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/pipelines/). [Kubeflow Katib](https://www.kubeflow.org/docs/components/katib/overview/), and [Kubeflow Central Dashboard](https://www.kubeflow.org/docs/components/central-dash/).
+
+The solution makes extensive use of [Amazon EFS](https://aws.amazon.com/efs/) and [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) shared file-systems to store the machine learning artifacts. Code, configuration, log files, and training checkpoints are stored on the EFS file-system. Data, and pre-trained model checkpoints are stored on the FSx for Lustre file system. FSx for Lustre file-system is configured to automatically import and export content from, and to, the configured S3 bucket. Any data stored on FSx for Lustre is automatically backed up to your S3 bucket.
 
 ## Contributing
 

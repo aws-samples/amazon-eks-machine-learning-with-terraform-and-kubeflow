@@ -1,0 +1,56 @@
+image: 
+  name: deepjavalibrary/djl-serving:0.32.0-tensorrt-llm
+  pull_policy: Always
+resources:
+  node_type: g5.48xlarge
+  requests:
+    "nvidia.com/gpu": 8
+  limits:
+    "nvidia.com/gpu": 8 
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+ebs:
+  storage: 400Gi
+  mount_path: /tmp
+inline_script:
+- |+
+  cat > /opt/ml/model/serving.properties <<EOF
+  option.model_id=/tmp/Mistral-7B-Instruct-v0.2/
+  option.entryPoint=djl_python.tensorrt_llm
+  option.tensor_parallel_degree=8
+  option.dtype=fp16
+  option.max_num_tokens=8192
+  option.model_loading_timeout=1800
+  option.rolling_batch=trtllm
+  option.max_rolling_batch_size=4
+  option.max_num_sequences=4
+  option.output_formatter=json
+  option.trust_remote_code=true
+
+  EOF
+pre_script:
+  - mkdir -p $LOG_ROOT
+  - OUTPUT_LOG="$LOG_ROOT/djl-lmi-server.log"
+  - cp -r /fsx/pretrained-models/mistralai/Mistral-7B-Instruct-v0.2 /tmp
+server:
+  ports:
+    http: 8080
+  readiness_probe:
+    period_secs: 30
+    failure_threshold: 10
+  startup_probe:
+    period_secs: 60
+    failure_threshold: 30
+  liveness_probe:
+    period_secs: 30
+    failure_threshold: 10
+  env:
+    - name: LOG_ROOT
+      value: /efs/home/{{ .Release.Name }}/logs
+  command:
+    - /usr/local/bin/dockerd-entrypoint.sh
+  args:
+    - serve
+    - '2>&1 | tee $OUTPUT_LOG'

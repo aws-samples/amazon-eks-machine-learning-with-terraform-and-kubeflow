@@ -53,17 +53,20 @@ data:
 
         neuron_config_dict = engine_config.pop("neuron_config", {})
         continuous_batching = neuron_config_dict.pop("continuous_batching", {})
-        if "batch_size_for_shared_caches" in continuous_batching:
-          engine_config["batch_size"] = int(continuous_batching.get("batch_size_for_shared_caches"))
+        if continuous_batching:
+          if "max_num_seqs" in continuous_batching:
+            engine_config["batch_size"] = int(continuous_batching.get("max_num_seqs"))
+          elif "batch_size_for_shared_caches" in continuous_batching:
+            engine_config["batch_size"] = int(continuous_batching.get("batch_size_for_shared_caches"))
           neuron_config_dict["continuous_batching"] = ContinuousBatchingConfig(**continuous_batching)
          
         quant = neuron_config_dict.pop("quant", {})
         if "quant_dtype" in quant and "dequant_dtype" in quant:
           neuron_config_dict["quant"] = QuantizationConfig(**quant)
         
-        on_device_embedding = neuron_config_dict.pop("on_device_embedding", {})
-        if on_device_embedding:
-          neuron_config_dict["on_device_embedding"] = GenerationConfig(**on_device_embedding)
+        on_device_generation = neuron_config_dict.pop("on_device_generation", {})
+        if on_device_generation:
+          neuron_config_dict["on_device_generation"] = GenerationConfig(**on_device_generation)
 
         neuron_config = None
         if neuron_config_dict:

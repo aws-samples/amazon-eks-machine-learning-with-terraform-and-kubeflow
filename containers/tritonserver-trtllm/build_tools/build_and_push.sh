@@ -58,17 +58,11 @@ aws ecr get-login-password --region ${region} \
 docker push ${fullname}
 if [ $? -eq 0 ]; then
 	echo "Amazon ECR URI: ${fullname}"
-    files=$(find $DIR/../../../examples/triton-server/ -regex ".*-trtllm/triton_server\.yaml")
+    files=$(find $DIR/../../../examples/inference/triton-inference-server/tensorrtllm_backend/ -regex ".*/.*\.yaml")
     for file in $files
     do
-        echo "update image:name in  $file"
-        sed -i -e '/image: .*/!b; n; s|name:.*|name: '${fullname}'|g' $file
-    done
-    files=$(find $DIR/../../../examples/triton-server/ -regex ".*-trtllm/.*_\(model\|engine\|trtllm\)\.yaml")
-    for file in $files
-    do
-        echo "update image in  $file"
-        sed -i -e 's|image:.*|image: '${fullname}'|g' $file
+        [[ "$file" =~ "triton_server.yaml" ]] && sed -i -e '/image: .*/!b; n; s|name:.*|name: '${fullname}'|g' $file && echo "update image:name in  $file"
+        [[ ! "$file" =~ "triton_server.yaml" ]] && sed -i -e 's|image:.*|image: '${fullname}'|g' $file && echo "update image in  $file"
     done
 else
 	echo "Error: Image build and push failed"

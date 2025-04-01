@@ -970,16 +970,27 @@ resource "helm_release" "karpenter_components" {
   depends_on = [ helm_release.karpenter ]
 }
 
-resource "helm_release" "neuron_device_plugin" {
-  chart = "${var.local_helm_repo}/neuron-device-plugin"
-  name = "neuron-device-plugin"
-  version = "1.0.0"
+resource "helm_release" "neuron_helm_chart" {
+  chart = "oci://public.ecr.aws/neuron/neuron-helm-chart"
+  name  = "neuron-helm-chart"
+  version = "1.1.1"
   namespace = "kube-system"
   
   set {
-    name  = "namespace"
-    value = "kube-system"
+    name  = "scheduler.enabled"
+    value = "true"
   }
+
+  set {
+    name  = "npd.enabled"
+    value = "false"
+  }
+
+  set {
+    name = "scheduler.customScheduler.fullnameOverride"
+    value = "neuron-scheduler"
+  }
+
 }
 
 resource "helm_release" "nvidia_device_plugin" {

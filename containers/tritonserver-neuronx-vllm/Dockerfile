@@ -83,13 +83,14 @@ RUN cp -r /server/build/opt/* /opt/
 RUN rm -rf /server
 
 ENV VLLM_TARGET_DEVICE=neuron
-RUN git clone https://github.com/vllm-project/vllm.git /opt/vllm
-RUN cd /opt/vllm && git fetch origin 2339d59f9260499599d60599f83978fad1827999
-RUN cd /opt/vllm && git reset --hard 2339d59f9260499599d60599f83978fad1827999
-COPY patch /opt/patch
-RUN cd /opt/vllm && git apply --ignore-whitespace /opt/patch/vllm-neuron-0.6.6.post1.patch
-RUN pip3 install -r /opt/vllm/requirements-neuron.txt
-RUN cd /opt/vllm && pip3 install -e .
+RUN git clone https://github.com/vllm-project/vllm.git
+RUN cd vllm && git fetch origin 61c7a1b856e32ef8b12c70abcb9fd9ad22619a13
+RUN cd vllm && git reset --hard 61c7a1b856e32ef8b12c70abcb9fd9ad22619a13
+COPY patch vllm/patch
+RUN cd vllm && git apply --ignore-whitespace patch/vllm-neuron-0.8.1.patch
+RUN pip3 install -r vllm/requirements/neuron.txt
+RUN cd vllm && pip3 install -e .
+RUN pip3 install pynvml==12.0.0 triton==2.2.0
 
 RUN git clone https://github.com/triton-inference-server/vllm_backend.git /opt/vllm_backend
 RUN cd /opt/vllm_backend && git fetch origin 507e4dccabf85c3b7821843261bcea7ea5828802
@@ -99,7 +100,6 @@ RUN mkdir -p /opt/tritonserver/backends/vllm
 RUN cp -r /opt/vllm_backend/src/* /opt/tritonserver/backends/vllm/
 
 RUN pip3 install pynvml==11.5.3 transformers==4.48.3
-
 
 ENV PATH=/opt/aws/neuron/bin:/opt/tritonserver/bin:$PATH
 ENV PYTHONDONTWRITEBYTECODE=1

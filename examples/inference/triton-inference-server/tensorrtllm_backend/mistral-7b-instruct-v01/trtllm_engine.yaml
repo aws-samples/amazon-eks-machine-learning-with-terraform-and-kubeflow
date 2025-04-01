@@ -1,0 +1,46 @@
+image: 
+resources:
+  node_type: g5.48xlarge
+  requests:
+    "nvidia.com/gpu": 8
+  limits:
+    "nvidia.com/gpu": 8
+ebs:
+  storage: 400Gi
+  mount_path: /tmp
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+pre_script: 
+  - mkdir -p $LOG_ROOT
+  - TP_SIZE=8
+  - PP_SIZE=1
+  - OUTPUT_LOG=$LOG_ROOT/build_trtllm_tp_${TP_SIZE}_pp_${PP_SIZE}.log
+  - CKPT_PATH=$OUTPUT_ROOT/ckpt_tp_${TP_SIZE}_pp_${PP_SIZE}
+  - TMP_ENGINE_DIR=/tmp/engine_tp_${TP_SIZE}_pp_${PP_SIZE}
+post_script:
+  - rm -rf $OUTPUT_ROOT/engine_tp_${TP_SIZE}_pp_${PP_SIZE}
+  - cp -r $TMP_ENGINE_DIR $OUTPUT_ROOT/
+process:
+  env:
+    - name: LOG_ROOT
+      value: /efs/home/{{ .Release.Name }}/logs
+    - name: OUTPUT_ROOT
+      value: /efs/home/{{ .Release.Name }}/trtllm
+    - name: MODEL_PATH
+      value: /fsx/pretrained-models/mistralai/Mistral-7B-Instruct-v0.1
+  command:
+    - trtllm-build
+  args:
+    - --checkpoint_dir ${CKPT_PATH}
+    - --max_num_tokens 32768
+    - --gpus_per_node 8
+    - --remove_input_padding enable
+    - --gemm_plugin float16
+    - --gpt_attention_plugin float16 
+    - --paged_kv_cache enable
+    - --context_fmha enable
+    - --output_dir ${TMP_ENGINE_DIR}
+    - --max_batch_size 4
+    - '2>&1 | tee $OUTPUT_LOG'

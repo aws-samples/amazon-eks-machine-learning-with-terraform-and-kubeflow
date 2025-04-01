@@ -58,7 +58,7 @@ if [ $? -eq 0 ]; then
 	echo "Amazon ECR URI: ${fullname}"
 	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../../charts/machine-learning/training/maskrcnn-optimized/values.yaml
 	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../../charts/machine-learning/testing/maskrcnn-optimized-jupyter/values.yaml
-	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../../examples/maskrcnn/train-maskrcnn-aws.yaml
+	sed -i -e "s|image:.*|image: ${fullname}|g" $DIR/../../../examples/legacy/maskrcnn/train-maskrcnn-aws.yaml
 else
 	echo "Error: Image build and push failed"
 	exit 1

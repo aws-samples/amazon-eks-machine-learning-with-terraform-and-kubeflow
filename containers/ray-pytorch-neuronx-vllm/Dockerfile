@@ -62,6 +62,8 @@ ENV VLLM_TARGET_DEVICE=neuron
 RUN git clone https://github.com/vllm-project/vllm.git
 RUN cd vllm && git fetch origin 61c7a1b856e32ef8b12c70abcb9fd9ad22619a13
 RUN cd vllm && git reset --hard 61c7a1b856e32ef8b12c70abcb9fd9ad22619a13
+COPY patches/vllm-neuron-0.8.1.patch vllm/patch/vllm-neuron-0.8.1.patch
+RUN cd vllm && git apply --ignore-whitespace patch/vllm-neuron-0.8.1.patch
 RUN pip3 install -r vllm/requirements/neuron.txt
 RUN cd vllm && pip3 install -e .
 RUN pip3 install pynvml==12.0.0 triton==2.2.0

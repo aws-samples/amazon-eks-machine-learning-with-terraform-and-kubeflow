@@ -1,0 +1,69 @@
+ray:
+  version: '2.44.0'
+  dashboard:
+    host: '0.0.0.0'
+  restart_policy:
+    head: Never
+    worker: Never
+  ports:
+    - name: gcs
+      port: 6379
+    - name: client
+      port: 10001
+    - name: dashboard
+      port: 8265
+    - name: serve
+      port: 8000
+  resources:
+    requests:
+      cpu: 300m 
+    limits:
+      cpu: 2
+  env:
+    - name: ENGINE_CONFIG
+      value: /efs/home/{{ .Release.Name }}/config/engine.json
+    - name: NEURON_CC_FLAGS
+      value: "--model-type transformer --enable-fast-loading-neuron-binaries"
+    - name: NEURON_COMPILE_CACHE_URL
+      value: "/tmp"
+    - name: FI_EFA_FORK_SAFE
+      value: "1"
+  serve_config_v2: 
+    serveConfigV2: |
+      applications:
+        - name: meta-llama33-70b-instruct
+          import_path: tnx_autocausal:deployment
+          runtime_env:
+            working_dir: file:///fsx/rayserve/engines/tnx_autocausalengine.zip
+          deployments:
+          - name: TNXAutoCausalDeployment
+            max_ongoing_requests: 32
+            autoscaling_config:
+              min_replicas: 2
+              max_replicas: 2
+              target_ongoing_requests: 32
+            ray_actor_options:
+              resources: 
+                "neuron_cores": 32
+  service_unhealthy_threshold_secs: 900
+  deployment_unhealthy_threshold_secs: 1800
+image:
+image_pull_policy: IfNotPresent
+scheduler_name: neuron-scheduler
+resources:
+  min_replicas: 2
+  max_replicas: 2
+  requests:
+    "aws.amazon.com/neuron": 16
+  limits:
+    "aws.amazon.com/neuron": 16
+  node_type: 'trn1.32xlarge' 
+tolerations:
+  - key: "aws.amazon.com/neuron"
+    operator: "Exists"
+    effect: "NoSchedule"
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
