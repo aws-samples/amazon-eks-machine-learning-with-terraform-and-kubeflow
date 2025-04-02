@@ -58,9 +58,17 @@
 
 * Inference Server: [DJL Serving](https://github.com/deepjavalibrary/djl-serving)
 
+#### TensorRT-LLM Engine
+
 | Model      | Inference Engine | Notes |
 | ----------- | ----------- | ------------ |
-| [Llama3 8B Instruct](./djl-serving/llama3-8b-instruct-trtllm/README.md)    | [LMI TensorRT-LLM](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/trt_llm_user_guide.html)    | Nvidia GPU, Devices=8, TP=8, PP=1 |
-| [Mistral 7B Instruct v0.2](./djl-serving/mistral-7b-instruct-v0.2-trtllm/README.md)    | [LMI TensorRT-LLM](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/trt_llm_user_guide.html)    | Nvidia GPU, Devices=8, TP=8, PP=1 |
-| [Llama3 8B Instruct](./djl-serving/llama3-8b-instruct-tnx/README.md)    | [LMI Transformers-Neuronx](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/tnx_user_guide.html)    | AWS Inferentia2, Cores=8, TP=8, PP=1 |
-| [Mistral 7B Instruct v0.2](./djl-serving/mistral-7b-instruct-v0.2-tnx/README.md)    | [LMI Transformers-Neuronx](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/tnx_user_guide.html)    | AWS Inferentia2, Cores=8, TP=8, PP=1 |
+| [Llama3 8B Instruct](./djl-serving/tensorrt-llm/llama3-8b-instruct/README.md)    | [LMI TensorRT-LLM](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/trt_llm_user_guide.html)    | Nvidia GPU, Devices=8, TP=8, PP=1 |
+| [Mistral 7B Instruct v0.2](./djl-serving/tensorrt-llm/mistral-7b-instruct-v0.2/README.md)    | [LMI TensorRT-LLM](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/trt_llm_user_guide.html)    | Nvidia GPU, Devices=8, TP=8, PP=1 |
+
+
+#### Transformers Neuronx Engine
+
+| Model      | Inference Engine | Notes |
+| ----------- | ----------- | ------------ |
+| [Llama3 8B Instruct](./djl-serving/transformers-neuronx/llama3-8b-instruct/README.md)    | [LMI Transformers-Neuronx](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/tnx_user_guide.html)    | AWS Inferentia2, Cores=8, TP=8, PP=1 |
+| [Mistral 7B Instruct v0.2](./djl-serving/transformers-neuronx/mistral-7b-instruct-v0.2/README.md)    | [LMI Transformers-Neuronx](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/tnx_user_guide.html)    | AWS Inferentia2, Cores=8, TP=8, PP=1 |
