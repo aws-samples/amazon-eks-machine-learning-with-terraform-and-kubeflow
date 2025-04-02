@@ -4,9 +4,9 @@ This example shows how to serve [Mistral 7B Instruct v0.2](https://huggingface.c
 
 ## Prerequisites
 
-Before proceeding, complete the [Prerequisites](../../../README.md#prerequisites) and [Getting started](../../../README.md#getting-started). 
+Before proceeding, complete the [Prerequisites](../../../../../README.md#prerequisites) and [Getting started](../../../../../README.md#getting-started). 
 
-See [What is in the YAML file](../../../README.md#what-is-in-the-yaml-file) to understand the common fields in the Helm values files. There are some fields that are specific to a machine learning chart.
+See [What is in the YAML file](../../../../../README.md#what-is-in-the-yaml-file) to understand the common fields in the Helm values files. There are some fields that are specific to a machine learning chart.
 
 
 ## Hugging Face Mistral 7B Instruct v0.2 pre-trained model weights

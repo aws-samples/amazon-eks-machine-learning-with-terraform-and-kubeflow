@@ -2,7 +2,7 @@
 
 This example illustrates how to use [raytrain](../../../charts/machine-learning/training/raytrain/) Helm chart to pre-train BERT with [PyTorch Lightning](https://github.com/Lightning-AI/pytorch-lightning) and [Ray Train](https://docs.ray.io/en/latest/train/train.html) libraries.
 
-Before proceeding, complete the [Prerequisites](../../../README.md#prerequisites) and [Getting started](../../../README.md#getting-started). See [What is in the YAML file](../../../README.md#what-is-in-the-yaml-file) to understand the common fields in the Helm values files. There are some fields that are specific to a machine learning chart.
+Before proceeding, complete the [Prerequisites](../../../../README.md#prerequisites) and [Getting started](../../../../README.md#getting-started). See [What is in the YAML file](../../../../README.md#what-is-in-the-yaml-file) to understand the common fields in the Helm values files. There are some fields that are specific to a machine learning chart.
 
 ## Build and Push Docker Container
 
