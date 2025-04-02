@@ -36,7 +36,7 @@ spec:
         persistentVolumeClaim:
           claimName: pv-fsx # k8s persistent-volume-claim name
       nodeSelector:
-        node.kubernetes.io/instance-type: "p3dn.24xlarge" 
+        node.kubernetes.io/instance-type: "p4d.24xlarge" 
       tolerations:
         - key: "nvidia.com/gpu"
           operator: "Exists"

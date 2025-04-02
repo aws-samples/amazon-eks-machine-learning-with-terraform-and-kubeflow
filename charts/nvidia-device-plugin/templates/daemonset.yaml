@@ -41,10 +41,24 @@ spec:
                   - g5.16xlarge
                   - g5.24xlarge
                   - g5.48xlarge
+                  - g6.xlarge
+                  - g6.2xlarge
+                  - g6.4xlarge
+                  - g6.8xlarge
+                  - g6.12xlarge
+                  - g6.16xlarge
+                  - g6.24xlarge
+                  - g6.48xlarge
+                  - g6e.xlarge
+                  - g6e.2xlarge
+                  - g6e.4xlarge
+                  - g6e.8xlarge
+                  - g6e.12xlarge
+                  - g6e.16xlarge
+                  - g6e.24xlarge
+                  - g6e.48xlarge
                   - p3.2xlarge
                   - p3.8xlarge
-                  - p3.16xlarge
-                  - p3dn.24xlarge
                   - p4d.24xlarge
                   - p4de.24xlarge
                   - p5.48xlarge

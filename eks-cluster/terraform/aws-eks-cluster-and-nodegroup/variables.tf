@@ -168,7 +168,7 @@ variable "efa_enabled" {
 variable "node_instances" {
   description = "List of instance types for accelerator node groups. Ignored if karpenter_enabled=true."
   type = list(string)
-  default = ["g5.xlarge", "p3.16xlarge", "p3dn.24xlarge"]
+  default = ["g5.xlarge", "g5.12xlarge", "g5.48xlarge",  "p4d.24xlarge"]
 }
 
 variable "system_instances" {

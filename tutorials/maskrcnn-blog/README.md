@@ -32,21 +32,10 @@ To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/ma
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug maskrcnn ./charts/machine-learning/training/maskrcnn/ 
 
-By default, the training job uses `p3dn.24xlarge` instance type. If you want to use `p3.16xlarge` instance type instead, use following command:
-
-    helm install --debug maskrcnn ./charts/machine-learning/training/maskrcnn/ \
-        --set maskrcnn.gpu_instance_type=p3.16xlarge  --set maskrcnn.tf_device_min_sys_mem_mb=2560
-
 To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, install the [maskrcnn-optimized](../../charts/machine-learning/training/maskrcnn-optimized/Chart.yaml) chart by executing following commands:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug maskrcnn-optimized ./charts/machine-learning/training/maskrcnn-optimized/
-
- By default, the training job uses `p3dn.24xlarge` instance type, with a per GPU batch size of 4. If you want to use `p3.16xlarge` instance type instead, use following command:
-
-    helm install --debug maskrcnn-optimized ./charts/machine-learning/training/maskrcnn-optimized/ \
-        --set maskrcnn.gpu_instance_type=p3.16xlarge  --set maskrcnn.tf_device_min_sys_mem_mb=2560 \
-        --set maskrcnn.batch_size_per_gpu=2 
 
 ### Monitor training
 

@@ -106,10 +106,6 @@ spec:
           - "g6e.16xlarge"
           - "g6e.24xlarge"
           - "g6e.48xlarge"
-          - "p3.2xlarge"
-          - "p3.8xlarge"
-          - "p3.16xlarge"
-          - "p3dn.24xlarge"
           - "p4d.24xlarge"
           - "p4de.24xlarge"
           - "p5.48xlarge"
@@ -158,7 +154,6 @@ spec:
       - key: node.kubernetes.io/instance-type
         operator: In
         values: 
-          - "p3dn.24xlarge"
           - "p4d.24xlarge"
           - "p4de.24xlarge"
           - "p5.48xlarge"

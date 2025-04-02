@@ -7,7 +7,7 @@ maskrcnn:
   gpus: 16
   gpu_nodes: 2
   gpus_per_node: 8
-  gpu_instance_type: p3dn.24xlarge
+  gpu_instance_type: p4d.24xlarge
   image:
   train_script: /tensorpack/examples/FasterRCNN/train.py
   data_fs: fsx # efs

@@ -36,8 +36,7 @@ Use the directory below to navigate tutorials.
 1. [Create and activate an AWS Account](https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/)
 2. Select your AWS Region. For the tutorial below, we assume the region to be ```us-west-2```
 3. [Manage your Amazon EC2 service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) in your selected AWS Region. Increase service limits to at least 8 each for [p4d.24xlarge](https://aws.amazon.com/ec2/instance-types/p4/), [g5.xlarge, g5.12xlarge, g5.48xlarge](https://aws.amazon.com/ec2/instance-types/g5/), [`inf2.48xlarge`](https://aws.amazon.com/machine-learning/inferentia/) and [`trn1.32xlarge`](https://aws.amazon.com/machine-learning/trainium/). 
-4. For [Mask R-CNN tutorial](./examples/legacy/maskrcnn/README.md), increase service linits to 8 for [p3.16xlarge, and p3dn.24xlarge](https://aws.amazon.com/ec2/instance-types/p3/). 
-5. If you use other Amazon EC2 GPU or AWS Trainium/Inferentia instance types, ensure your EC2 service limits are increased appropriately.
+4. If you use other Amazon EC2 GPU or AWS Trainium/Inferentia instance types, ensure your EC2 service limits are increased appropriately.
 
 ## Getting started
 
