@@ -8,7 +8,7 @@
 
 | Model      | Description |
 | ----------- | ----------- |
-| [Bert GLUE MRPC Fine-tuning](./accelerate/bert-glue-mrpc/README.md)     | BERT Glue MRPC     |
+| [Bert GLUE MRPC Pre-training](./accelerate/bert-glue-mrpc/README.md)     | BERT Glue MRPC Pretraining    |
 | [Llama 2 7B Fine-tuning](./accelerate/llama2-ft-fsdp/README.md)     | Llama 2 7B Fine-tuning with FSDP  |
 | [Llama 2 13B Fine-tuning](./accelerate/llama2-ft-fsdp/README.md)     | Llama 2 13B Fine-tuning with FSDP |
 | [Llama 2 70B Fine-tuning](./accelerate/llama2-ft-fsdp/README.md)     | Llama 2 70B Fine-tuning with FSDP |
