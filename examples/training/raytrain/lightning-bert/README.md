@@ -11,9 +11,9 @@ This example uses a custom Docker container for Ray Train. Build and push this c
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     ./containers/ray-pytorch/build_tools/build_and_push.sh aws-region
 
-## Launch fine-training
+## Launch Fine Tuning
 
-The fine-training values files is defined in [fine-tune.yaml](fine-tune.yaml). 
+The fine tuning values files is defined in [fine-tune.yaml](fine-tune.yaml). 
 
 To launch fine-tuning,  execute:
 
