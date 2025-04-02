@@ -552,7 +552,6 @@ resource "helm_release" "aws-efa-k8s-device-plugin" {
         values:
           - "trn1.32xlarge"
           - "trn1n.32xlarge"
-          - "p3dn.24xlarge"
           - "p4d.24xlarge"
           - "p4de.24xlarge"
           - "p5.48xlarge"
