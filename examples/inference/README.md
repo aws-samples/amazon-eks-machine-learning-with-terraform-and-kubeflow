@@ -1,8 +1,6 @@
 ## Inference Tutorials
 
-### Ray Serve
-
-* Inference Server: [Ray Serve](https://docs.ray.io/en/latest/serve/index.html)
+### [Ray Serve](https://docs.ray.io/en/latest/serve/index.html)
 
 | Model      | Inference Engine | Accelerator | Notes |
 | ----------- | ----------- | ------------ | ----------- | 
@@ -16,11 +14,9 @@
 | [Mistral 8x22B Instruct v0.1](./rayserve/mistral-8x22b-instruct-v01-vllm/README.md)    | [vLLM](https://github.com/vllm-project/vllm)    | Nvidia GPU | Nodes=2, Devices=8, TP=8, PP=2, Multi-node inference |
 
 
-### Triton Inference Server
+### [Triton Inference Server](https://github.com/triton-inference-server/server)
 
-* Inference Server: [Triton Inference Server](https://github.com/triton-inference-server/server)
-
-#### Python Backend
+#### [Python Backend](https://github.com/triton-inference-server/python_backend)
 
 | Model      | Inference Engine | Accelerator | Notes |
 | ----------- | ----------- | ------------ | ----------- |
@@ -31,18 +27,19 @@
 | [XLM Roberta Base](./triton-inference-server/python_backend/xlm-roberta-base-neuron/README.md)    |[PyTorch](https://pytorch.org/)   | AWS Inferentia2 | Cores=1, TP=1, PP=1 |
 
 
-#### vLLM Backend
+#### [vLLM Backend](https://github.com/triton-inference-server/vllm_backend)
+
 | Model      | Inference Engine | Accelerator | Notes |
 | ----------- | ----------- | ------------ | ----------- |
 | [DeepSeek R1 Distill Llama 8B](./triton-inference-server/vllm_backend/deepseek-r1-distill-llama-8b/README.md)    |[vLLM](https://github.com/vllm-project/vllm)   | Nvidia GPU |  Devices=8, TP=8, PP=1 |
-| [DeepSeek R1 Distill Llama 8B](./triton-inference-server/vllm_backend/deepseek-r1-distill-llama-8b-neuron/README.md)    |[vLLM](https://github.com/vllm-project/vllm)   | AWS Trainium, Cores=16, TP=16, PP=1 |
+| [DeepSeek R1 Distill Llama 8B](./triton-inference-server/vllm_backend/deepseek-r1-distill-llama-8b-neuron/README.md)    |[vLLM](https://github.com/vllm-project/vllm)   | AWS Trainium1 |  Cores=16, TP=16, PP=1 |
 | [Llama 3 8B Instruct](./triton-inference-server/vllm_backend/llama3-8b-instruct/README.md)    |[vLLM](https://github.com/vllm-project/vllm)   | Nvidia GPU |  Devices=8, TP=8, PP=1 |
 | [Llama 3 8B Instruct](./triton-inference-server/vllm_backend/llama3-8b-instruct-neuron/README.md)    |[vLLM](https://github.com/vllm-project/vllm)   | AWS Inferentia2 |  Cores=8, TP=8, PP=1 |
 | [Mistral 7B Instruct v0.2](./triton-inference-server/vllm_backend/mistral-7b-instruct-v02/README.md)    |[vLLM](https://github.com/vllm-project/vllm)   | Nvidia GPU |  Devices=8, TP=8, PP=1 |
 | [Mistral 7B Instruct v0.2](./triton-inference-server/vllm_backend/mistral-7b-instruct-v02-neuron/README.md)    |[vLLM](https://github.com/vllm-project/vllm)   | AWS Inferentia2 |  Cores=8, TP=8, PP=1 |
 
 
-#### TensorRT-LLM Backend
+#### [TensorRT-LLM Backend](https://github.com/triton-inference-server/tensorrtllm_backend)
 
 | Model      | Inference Engine | Accelerator | Notes |
 | ----------- | ----------- | ------------ | ----------- | 
@@ -53,11 +50,9 @@
 | [Mistral 7B Instruct v0.1, Llama 3 8B Instruct](./triton-inference-server/tensorrtllm_backend/mistral-7b-instruct-v01_llama3-8b/README.md)    |[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)   | Nvidia GPU |  Devices=8, TP=8, PP=1 |
 
 
-### DJL Serving
+### [DJL Serving](https://github.com/deepjavalibrary/djl-serving)
 
-* Inference Server: [DJL Serving](https://github.com/deepjavalibrary/djl-serving)
-
-#### TensorRT-LLM Engine
+#### [LMI TensorRT-LLM Engine](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/trt_llm_user_guide.html)
 
 | Model      | Inference Engine | Accelerator | Notes |
 | ----------- | ----------- | ------------ | ----------- | 
@@ -65,7 +60,7 @@
 | [Mistral 7B Instruct v0.2](./djl-serving/tensorrt-llm/mistral-7b-instruct-v0.2/README.md)    | [LMI TensorRT-LLM](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/trt_llm_user_guide.html)    | Nvidia GPU |  Devices=8, TP=8, PP=1 |
 
 
-#### Transformers Neuronx Engine
+#### [LMI Transformers Neuronx Engine](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/tnx_user_guide.html)
 
 | Model      | Inference Engine | Accelerator | Notes |
 | ----------- | ----------- | ------------ | ----------- | 
