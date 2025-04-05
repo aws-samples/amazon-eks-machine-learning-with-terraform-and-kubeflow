@@ -125,12 +125,10 @@ spec:
           image: "{{ .Values.image.name }}"
           imagePullPolicy: {{ .Values.image.pull_policy }}
           ports:
-            - name: http
-              containerPort: {{ .Values.server.ports.http }}
-            - name: grpc
-              containerPort: {{ .Values.server.ports.grpc }}
-            - name: metrics
-              containerPort: {{ .Values.server.ports.metrics }}
+          {{- range $port := .Values.server.ports }}
+            - name: {{ $port.name }}
+              containerPort: {{ $port.value }}
+          {{- end }}
           livenessProbe:
             initialDelaySeconds: 15
             failureThreshold: {{ .Values.server.liveness_probe.failure_threshold }}
@@ -197,14 +195,12 @@ metadata:
   name: {{ .Release.Name }}
 spec:
   ports:
-  - protocol: TCP
-    name: http
-    port: {{ .Values.server.ports.http }}
-    targetPort:  {{ .Values.server.ports.http }}
-  - protocol: TCP
-    name: grpc
-    port: {{ .Values.server.ports.grpc }}
-    targetPort:  {{ .Values.server.ports.grpc }}
+  {{- range $port := .Values.server.ports }}
+    - protocol: TCP
+      name: {{ $port.name }}
+      port: {{ $port.value }}
+      targetPort:  {{ $port.value }}
+  {{- end }}
   selector:
     app: {{ .Release.Name }}
   type: ClusterIP

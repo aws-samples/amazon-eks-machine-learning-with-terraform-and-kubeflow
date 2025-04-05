@@ -22,10 +22,7 @@ server:
   name: triton-inference-server 
   args: []
   command: []
-  ports:
-    http: 8000
-    grpc: 8001
-    metrics: 8002
+  ports: []
   readiness_probe:
     period_secs: 5
     failure_threshold: 3

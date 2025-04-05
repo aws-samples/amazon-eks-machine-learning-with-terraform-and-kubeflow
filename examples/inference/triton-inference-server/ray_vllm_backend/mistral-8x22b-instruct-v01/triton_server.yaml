@@ -1,16 +1,12 @@
 image: 
-  name: 
+  name:
   pull_policy: Always
-lws:
-  size: 2
 resources:
   node_type: p4d.24xlarge
   requests:
     "nvidia.com/gpu": 8
-    "vpc.amazonaws.com/efa": 4
   limits:
     "nvidia.com/gpu": 8
-    "vpc.amazonaws.com/efa": 4
 tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"
@@ -18,12 +14,49 @@ tolerations:
 ebs:
   storage: 400Gi
   mount_path: /tmp
+inline_script:
+- |+
+  cat > /tmp/config.pbtxt <<EOF
+  backend: "vllm"
+
+  instance_group [
+    {
+      count: 1
+      kind: KIND_MODEL
+    }
+  ]
+  
+  EOF
+- |+
+  cat > /tmp/model.json <<EOF
+  {
+    "model": "$MODEL_PATH",
+    "tokenizer": "$MODEL_PATH",
+    "tokenizer_mode": "auto",
+    "disable_log_requests": "true",
+    "gpu_memory_utilization": 0.8,
+    "worker_use_ray": true,
+    "dtype": "auto",
+    "enforce_eager": true,
+    "tensor_parallel_size": 8,
+    "pipeline_parallel_size": 2,
+    "max_num_seqs": 8
+  }
+
+  EOF
+
 pre_script: 
   - mkdir -p $LOG_ROOT
   - TP_SIZE=8
   - PP_SIZE=2
   - OUTPUT_LOG="$LOG_ROOT/triton_server.log"
-  - MODEL_REPO=$OUTPUT_ROOT/model_repo
+  - rm -rf $MODEL_REPO
+  - mkdir -p $MODEL_REPO
+  - VERSION=1
+  - MODEL_NAME=mixtral-8x22B-instruct-v01
+  - mkdir -p $MODEL_REPO/$MODEL_NAME/$VERSION
+  - cp /tmp/model.json $MODEL_REPO/$MODEL_NAME/$VERSION/model.json
+  - cp /tmp/config.pbtxt $MODEL_REPO/$MODEL_NAME/config.pbtxt
 server:
   ports:
     - name: 'http'
@@ -32,12 +65,14 @@ server:
       value: '8001'
     - name: 'metric'
       value: '8002'
+    - name: 'head'
+      value: '6379'
   readiness_probe:
     period_secs: 10
     failure_threshold: 3
   startup_probe:
     period_secs: 10
-    failure_threshold: 180
+    failure_threshold: 360
   liveness_probe:
     period_secs: 10
     failure_threshold: 3
@@ -60,6 +95,10 @@ server:
       value: "1"
     - name: "RDMAV_FORK_SAFE"
       value: "1"
+    - name: MODEL_REPO
+      value: /efs/home/{{ .Release.Name }}/model_repository
+    - name: MODEL_PATH
+      value: /fsx/pretrained-models/mistralai/Mixtral-8x22B-Instruct-v0.1
   command:
     - python3
   args:
@@ -67,7 +106,7 @@ server:
     - --tp=${TP_SIZE}
     - --pp=${PP_SIZE}
     - --model-repo=${MODEL_REPO}
-    - --model=tensorrt_llm
+    - --head_port=6379
     - --grpc_port=8001
     - --http_port=8000
     - --metrics_port=8002

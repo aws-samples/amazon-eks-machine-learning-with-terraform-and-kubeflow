@@ -23,9 +23,12 @@ pre_script:
   - MODEL_REPO=$OUTPUT_ROOT/inflight_batcher_llm_tp_${TP_SIZE}_pp_${PP_SIZE}
 server:
   ports:
-    http: 8000
-    grpc: 8001
-    metrics: 8002
+    - name: 'http'
+      value: '8000'
+    - name: 'grpc'
+      value: '8001'
+    - name: 'metric'
+      value: '8002' 
   readiness_probe:
     period_secs: 5
     failure_threshold: 3
