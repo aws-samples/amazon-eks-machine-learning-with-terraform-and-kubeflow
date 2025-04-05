@@ -1,6 +1,6 @@
-# Serve Mistral 8x22B Instruct v0.1 using Triton Inference Server with vLLM
+# Serve Mistral 8x22B Instruct v0.1 using Triton Inference Server with vLLM and Ray
 
-This example shows how to serve [mistralai/Mixtral-8x22B-Instruct-v0.1](https://huggingface.co/mistralai/Mixtral-8x22B-Instruct-v0.1) model in a multi-GPU, multi-node deployment, using [Triton Inference Server](https://github.com/triton-inference-server) with [vLLM backend](https://github.com/triton-inference-server/vllm_backend/tree/main).  
+This example shows how to serve [mistralai/Mixtral-8x22B-Instruct-v0.1](https://huggingface.co/mistralai/Mixtral-8x22B-Instruct-v0.1) model in a multi-GPU, multi-node deployment, using [Triton Inference Server](https://github.com/triton-inference-server) with [vLLM backend](https://github.com/triton-inference-server/vllm_backend/tree/main) and [Ray Cluster](https://docs.ray.io/en/latest/cluster/getting-started.html).  
 
 ## Prerequisites
 
@@ -48,4 +48,4 @@ To stop the service:
 
 ### Logs
 
-Triton server logs are available in `/efs/home/triton-server-mistral-8x22b-instruct-v01-vllm/logs` folder. 
+Triton server logs are available in `/efs/home/triton-server-mistral-8x22b-instruct-v01-ray-vllm/logs` folder. 
