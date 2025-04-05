@@ -50,7 +50,7 @@ RUN sudo apt-get -y install aws-neuronx-tools=2.*
 
 RUN pip3 config set global.extra-index-url https://pip.repos.neuron.amazonaws.com
 RUN pip3 install awscli
-RUN pip3 install neuronx-cc==2.16.* torch-neuronx==2.5.* torchvision transformers-neuronx
+RUN pip3 install neuronx-cc==2.17.* torch-neuronx==2.5.* torchvision  transformers-neuronx neuronx-distributed neuronx-distributed-inference
 
 ENV LD_LIBRARY_PATH=/home/ray/anaconda3/lib:$LD_LIBRARY_PATH
 ENV PATH=/opt/aws/neuron/bin:$PATH
