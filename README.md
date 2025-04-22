@@ -44,7 +44,7 @@ To get started, we need to execute following steps:
 
   1. Setup the build machine
   2. Use [Terraform](https://learn.hashicorp.com/terraform) to create the required infrastructure
-  3. Build and Upload Docker Images to [Amazon EC2 Container Registry](https://aws.amazon.com/ecr/) (ECR)
+  3. Build and Upload Docker Images to [Amazon Elastic Container Registry](https://aws.amazon.com/ecr/) (ECR)
   4. Create `home` folder on [Amazon EFS](https://aws.amazon.com/efs/) and [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) shared file-systems
   
 ### Setup the build machine
