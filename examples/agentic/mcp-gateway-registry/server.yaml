@@ -1,0 +1,91 @@
+image: 
+  name: 763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-inference:2.6.0-gpu-py312-cu124-ubuntu22.04-ec2
+resources:
+  node_type: g5.2xlarge
+  requests:
+    "nvidia.com/gpu": 1
+  limits:
+    "nvidia.com/gpu": 1
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+ebs:
+  storage: 400Gi
+  mount_path: /tmp
+git:
+  repo_url: 'https://github.com/aarora79/mcp-gateway'
+  branch: main
+  commit: a1ccbf157ed3fb6aa07b260fa305c276edb096bd
+pre_script: 
+  - chmod a+rwx /tmp
+  - apt-get update 
+  - apt-get install -y --no-install-recommends nginx
+  - pip3 install --upgrade pip
+  - pip3 install uv
+  - uv pip install --system --requirement pyproject.toml
+  - if [ -z $SSL_CERTS -o -z $SSL_PRIVATE ]
+  - then
+  - mkdir -p /etc/ssl/certs /etc/ssl/private
+  - openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/privkey.pem -out /etc/ssl/certs/fullchain.pem -subj "/C=US/ST=State/L=City/O=Organization/OU=OrgUnit/CN=localhost"
+  - else
+  - mkdir -p /etc/ssl
+  - ln -s $SSL_CERTS /etc/ssl/certs
+  - ln -s $SSL_PRIVATE /etc/ssl/private
+  - fi
+  - ln -s $GIT_CLONE_DIR /app
+  - mkdir -p $LOG_ROOT
+  - ln -s $LOG_ROOT /app/logs
+  - sed -i 's/sudo//g'  /app/docker/entrypoint.sh
+  - chmod u+x /app/docker/entrypoint.sh
+server:
+  ports:
+    - name: 'http'
+      value: '80'
+    - name: 'https'
+      value: '443'
+    - name: 'registry'
+      value: '7860'
+  readiness_probe:
+    period_secs: 30
+    failure_threshold: 5
+    path: /login
+    port: registry
+  startup_probe:
+    period_secs: 30
+    failure_threshold: 5
+    path: /login
+    port: registry
+  liveness_probe:
+    period_secs: 30
+    failure_threshold: 3
+    path: /login
+    port: registry
+  env:
+    - name: HOME
+      value: /tmp
+    - name: LOG_ROOT
+      value: /efs/home/{{ .Release.Name }}/logs
+    - name: ADMIN_USER
+      value: "{{ .Values.admin_user }}"
+    - name: ADMIN_PASSWORD
+      value: "{{ .Values.admin_password }}"
+    - name: POLYGON_API_KEY
+      value: "{{ .Values.polygon_api_key }}"
+    - name: SSL_CERTS
+      value: "{{ .Values.ssl_certs }}"
+    - name: SSL_PRIVATE
+      value: "{{ .Values.ssl_private }}"
+  command:
+    - /app/docker/entrypoint.sh
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 4
+    metrics:
+      - type: Pods
+        pods:
+          metric:
+            name: cpu
+          target:
+            type: Utilization
+            averageValue: 80
