@@ -48,7 +48,7 @@
 
 | Model      | Accelerator | Notes |
 | ----------- | ----------- | -------- |
-| [Llama 3 70B ](./neuronx-distributed-training/llama3_70b/README.md)    | AWS Trainium1    | | Llama3 70B pre-train on Wikicorpus |
+| [Llama 3 70B ](./neuronx-distributed-training/llama3_70b/README.md)    | AWS Trainium1    |  Llama3 70B pre-train on Wikicorpus |
 
 ### [RayTrain](https://docs.ray.io/en/latest/train/train.html)
 

@@ -6,7 +6,7 @@ This example shows how to serve [mistralai/Mixtral-8x22B-Instruct-v0.1](https://
 
 Before proceeding, complete the [Prerequisites](../../../../../README.md#prerequisites) and [Getting started](../../../../../README.md#getting-started). 
 
-See [What is in the YAML file](../../../../../README.md#what-is-in-the-yaml-file) to understand the common fields in the Helm values files. There are some fields that are specific to a machine learning chart.
+See [What is in the YAML file](../../../../../README.md#yaml-recipes) to understand the common fields in the Helm values files. There are some fields that are specific to a machine learning chart.
 
 ## Build and Push Docker Container
 

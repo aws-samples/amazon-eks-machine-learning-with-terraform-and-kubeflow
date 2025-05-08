@@ -6,7 +6,7 @@ This example illustrates how to use [pytorch-elastic](../../../../../charts/mach
 
 Before proceeding, complete the [Prerequisites](../../../../../../README.md#prerequisites) and [Getting started](../../../../../../README.md#getting-started). In particular, if you plan to fine-tune the 70B model, you must [Apply Terraform](../../../../README.md#apply-terraform) by specifying the variable `cuda_efa_az` so you can automatically launch [`p4d.24xlarge`](https://aws.amazon.com/ec2/instance-types/p4/) instances with [AWS Elastic Fabric Adapter (EFA)](https://aws.amazon.com/hpc/efa/) elastic network interface enabled.
 
-See [What is in the YAML file](../../../../../../README.md#what-is-in-the-yaml-file) to understand the common fields in the Helm values files. 
+See [What is in the YAML file](../../../../../../README.md#yaml-recipes) to understand the common fields in the Helm values files. 
 
 ## Hugging Face Llama 2 pre-trained model weights
 
