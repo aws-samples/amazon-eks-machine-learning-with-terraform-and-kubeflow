@@ -1,4 +1,4 @@
-image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.5.1-neuronx-py310-sdk2.21.0-ubuntu22.04'
+image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.5.1-neuronx-py310-sdk2.22.0-ubuntu22.04'
 backoff_limit: 2000
 ebs:
   storage: 200Gi
@@ -20,14 +20,14 @@ tolerations:
 git:
   repo_url: "https://github.com/aws-neuron/neuronx-distributed.git"
   branch: main
-  commit: 3aa65c661c45f133a99052746ed70a0121d0e695
+  commit: a070deb86991affd589c48441bf819e6d4bb159b
 pre_script: 
   - pip3 install --upgrade pip
   - SCRIPT_DIR=$GIT_CLONE_DIR/examples/training/llama/tp_pp_llama_hf_pretrain
   - cp $GIT_CLONE_DIR/examples/training/llama/requirements.txt $SCRIPT_DIR
   - cp $GIT_CLONE_DIR/examples/training/llama/*.py $SCRIPT_DIR
   - cd $SCRIPT_DIR
-  - pip3 install -r requirements.txt
+  - pip3 install -r requirements.txt protobuf==3.20.0
   - LOGS_DIR=$LOG_ROOT/$PET_NODE_RANK
   - 'if [ -d $LOGS_DIR ]; then rm -rf $LOGS_DIR; fi'
   - mkdir -p $LOGS_DIR 
