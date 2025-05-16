@@ -106,6 +106,16 @@ If you need to use [AWS Trainium instances](https://aws.amazon.com/machine-learn
 
 **Note:** Ensure that the AWS Availability Zone you specify for `neuron_az` or `cuda_efa_az` variable above supports requested instance types, and this zone is included in the `azs` variable.
 
+You may toggle the enablement of following components using terraform variables:
+
+| Component  | Terraform Variable | Default Value |
+| ----------- | ----------- | ----------- |
+| [Kubeflow](https://www.kubeflow.org/) | kubeflow_platform_enabled | true |
+| [Kueue](https://kueue.sigs.k8s.io/) | kueue_enabled | false |
+| [ACK for Amazon SageMaker](https://github.com/aws-controllers-k8s/sagemaker-controller) | ack_sagemaker_enabled | false |
+| [DCGM-Exporter](https://github.com/NVIDIA/dcgm-exporter) | dcgm_exporter_enabled | false |
+   
+
 #### Retrieve static user password
 
 This step is only needed if you plan to use the Kubeflow Central Dashboard, which is not required for running any of the examples and tutorials in this project. The static user's password is marked `sensitive` in the Terraform output. To show your static password, execute:

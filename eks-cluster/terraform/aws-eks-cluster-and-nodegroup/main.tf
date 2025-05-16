@@ -876,6 +876,35 @@ resource "helm_release" "prometheus" {
 
 }
 
+resource "helm_release" "kueue" {
+  count = var.kueue_enabled ? 1 : 0
+  
+  name       = "kueue"
+  chart      = "kueue"
+  cleanup_on_fail = true
+  create_namespace = true
+  repository  = "oci://registry.k8s.io/kueue/charts/"
+  version    = var.kueue_version
+  namespace  = var.kueue_namespace
+  timeout = 300
+  wait = true
+
+  set {
+    name  = "enableCertManager"
+    value = true
+  }
+
+  set {
+    name  = "enablePrometheus"
+    value = true
+  }
+
+  
+  depends_on = [  helm_release.cluster-autoscaler ]
+
+}
+
+
 resource "helm_release" "karpenter" {
   count = var.karpenter_enabled ? 1 : 0
   

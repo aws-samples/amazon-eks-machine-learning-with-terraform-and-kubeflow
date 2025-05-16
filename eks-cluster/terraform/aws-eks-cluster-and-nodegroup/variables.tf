@@ -222,6 +222,25 @@ variable "custom_taints" {
   default = []
 }
 
+
+variable "kueue_enabled" {
+  description = "Kueue enabled"
+  type = bool
+  default = false
+}
+
+variable "kueue_namespace" {
+  description = "Kueue name space"
+  type = string
+  default = "kueue-system"
+}
+
+variable "kueue_version" {
+  description = "Kueue version"
+  type = string
+  default = "0.11.4"
+}
+
 variable "karpenter_enabled" {
   description = "Karpenter enabled"
   type = bool
