@@ -3,4 +3,4 @@ name: kubeflow-roles
 description: A Helm chart for Kubeflow roles
 type: application
 version: 1.0.0
-appVersion: "v1.8.0"
+appVersion: "v1.9.2"

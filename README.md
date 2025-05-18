@@ -1,6 +1,6 @@
 # Distributed Training and Inference on Amazon EKS
 
-This project defines a *prototypical* solution for  distributed training and inference on [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/whitepapers/latest/overview-deployment-options/amazon-elastic-kubernetes-service.html). The primary audience for this project is machine learning  researchers, developers, and applied engineers, who need to train, pre-train, fine-tune, or test Generative AI, or general purpose deep neural networks (DNNs).
+This project defines a *prototypical* solution for  distributed training and inference on [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/whitepapers/latest/overview-deployment-options/amazon-elastic-kubernetes-service.html). The primary audience for this project is machine learning (ML) researchers, developers, applied engineers, and platform engineers who train, pre-train, fine-tune, test, or serve Generative AI, or general purpose deep neural networks (DNNs) based models.
 
 The solution offers a framework and  accelerator agnostic approach to distributed training and inference. For training, it works with popular AI machine learning libraries, for example, [Nemo](https://github.com/NVIDIA/NeMo), [Hugging Face Accelerate](https://github.com/huggingface/accelerate), [PyTorch Lightning](https://github.com/Lightning-AI/pytorch-lightning), [DeepSpeed](https://github.com/microsoft/DeepSpeed]), [Megatron-DeepSpeed](https://github.com/microsoft/Megatron-DeepSpeed), [Ray Train](https://docs.ray.io/en/latest/train/train.html), [Neuronx Distributed](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/libraries/neuronx-distributed/index.html), among others. For inference, it supports [Ray Serve](https://docs.ray.io/en/latest/serve/index.html) with [vLLM](https://docs.vllm.ai/en/latest/), [Triton Inference Server](https://github.com/triton-inference-server)  with Python, [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) and [vLLM](https://docs.vllm.ai/en/latest/) backends, and [Deep Java Library (DJL) Large Model Inference (LMI)](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/index.html) with all [supported backends](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/vllm_user_guide.html).
 
@@ -17,7 +17,9 @@ Any training or inference pipeline in this solution can be conceptualized as a s
 
 The included [tutorials](#tutorials) provide examples of training and inference pipelines that use pre-defined Helm charts, along with YAML recipe files that model each pipeline step. Typically, in order to define a new pipeline in this solution, you do not need to write new Helm Charts. The solution comes with a library of pre-defined [machine learning Helm charts](./charts/machine-learning/). However, you are required to write a YAML recipe file for each step in your training or inference pipeline. 
 
-The [tutorials](#tutorials) walk you through each pipeline, step by step, where you manually execute each pipeline step by installing, and uninstalling, a pre-defined Helm chart with its associated [YAML recipe](#yaml-recipes). For complete end-to-end automation, we also provide an [example](./examples/training/accelerate/bert-glue-mrpc/pipeline.ipynb) where you can execute all the pipeline steps automatically using [Kubeflow Pipelines](https://www.kubeflow.org/docs/components/pipelines/concepts/). 
+The [tutorials](#tutorials) walk you through each pipeline, step by step, where you manually execute each pipeline step by installing, and uninstalling, a pre-defined Helm chart with its associated [YAML recipe](#yaml-recipes). 
+
+For complete end-to-end automation, we also provide an [example](./examples/training/accelerate/bert-glue-mrpc/pipeline.ipynb) where you can execute all the pipeline steps automatically using [Kubeflow Pipelines](https://www.kubeflow.org/docs/components/pipelines/concepts/). This option requires you to enable [Kubeflow platform](#enabling-modular-components).
 
 If you are a platform engineer, you may be interested in a [system architecture](#system-architecture) overview of this solution.
 
@@ -106,11 +108,13 @@ If you need to use [AWS Trainium instances](https://aws.amazon.com/machine-learn
 
 **Note:** Ensure that the AWS Availability Zone you specify for `neuron_az` or `cuda_efa_az` variable above supports requested instance types, and this zone is included in the `azs` variable.
 
+#### Enabling modular components
+
 You may toggle the enablement of following components using terraform variables:
 
 | Component  | Terraform Variable | Default Value |
 | ----------- | ----------- | ----------- |
-| [Kubeflow](https://www.kubeflow.org/) | kubeflow_platform_enabled | true |
+| [Kubeflow](https://www.kubeflow.org/) | kubeflow_platform_enabled | false |
 | [Kueue](https://kueue.sigs.k8s.io/) | kueue_enabled | false |
 | [ACK for Amazon SageMaker](https://github.com/aws-controllers-k8s/sagemaker-controller) | ack_sagemaker_enabled | false |
 | [DCGM-Exporter](https://github.com/NVIDIA/dcgm-exporter) | dcgm_exporter_enabled | false |
@@ -216,9 +220,9 @@ The YAML recipe file is a [Helm values](https://helm.sh/docs/chart_template_guid
 
 ## System Architecture
 
-The solution uses [Terraform](https://www.terraform.io/) to deploy [Kubeflow](https://www.kubeflow.org/) machine learning platform on top of [Amazon EKS](https://aws.amazon.com/eks/).  Amazon EC2 machines with Nvidia GPUs or AWS AI Chips ([AWS Trainium](https://aws.amazon.com/ai/machine-learning/trainium/) and [AWS Inferentia](https://aws.amazon.com/ai/machine-learning/inferentia/)) used in machine learning are automatically managed by [Karpenter](https://karpenter.sh/). CPU-only machines used for running system pods are managed by [Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler).
+The solution uses [Terraform](https://www.terraform.io/) to deploy [modular ML platform components](#enabling-modular-components) on top of [Amazon EKS](https://aws.amazon.com/eks/).  The hardware infrastructure is managed by [Karpenter](https://karpenter.sh/) and [Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler). Nvidia GPUs or AWS AI Chips ([AWS Trainium](https://aws.amazon.com/ai/machine-learning/trainium/) and [AWS Inferentia](https://aws.amazon.com/ai/machine-learning/inferentia/)) based machines are automatically managed by [Karpenter](https://karpenter.sh/), while CPU-only machines are automatically managed by [Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler).
 
-The deployed Kubeflow platform version is 1.8.0, and includes [Kubeflow Notebooks](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/notebooks/), [Kubeflow Tensorboard](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/tensorboard/). [Kubeflow Pipelines](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/pipelines/). [Kubeflow Katib](https://www.kubeflow.org/docs/components/katib/overview/), and [Kubeflow Central Dashboard](https://www.kubeflow.org/docs/components/central-dash/).
+The Kubeflow platform version that may be optionally deployed in this project is 1.9.2, and includes [Kubeflow Notebooks](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/notebooks/), [Kubeflow Tensorboard](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/tensorboard/). [Kubeflow Pipelines](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/pipelines/). [Kubeflow Katib](https://www.kubeflow.org/docs/components/katib/overview/), and [Kubeflow Central Dashboard](https://www.kubeflow.org/docs/components/central-dash/).
 
 The solution makes extensive use of [Amazon EFS](https://aws.amazon.com/efs/) and [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) shared file-systems to store the machine learning artifacts. Code, configuration, log files, and training checkpoints are stored on the EFS file-system. Data, and pre-trained model checkpoints are stored on the FSx for Lustre file system. FSx for Lustre file-system is configured to automatically import and export content from, and to, the configured S3 bucket. Any data stored on FSx for Lustre is automatically backed up to your S3 bucket.
 

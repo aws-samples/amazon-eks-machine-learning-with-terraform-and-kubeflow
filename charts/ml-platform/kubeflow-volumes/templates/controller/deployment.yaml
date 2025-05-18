@@ -30,7 +30,7 @@ spec:
             name: pvcviewer-controller-config
         args:
         - --leader-elect
-        image: docker.io/kubeflownotebookswg/pvcviewer-controller:v1.8.0
+        image: docker.io/kubeflownotebookswg/pvcviewer-controller:v1.9.2
         imagePullPolicy: IfNotPresent
         name: manager
         ports:

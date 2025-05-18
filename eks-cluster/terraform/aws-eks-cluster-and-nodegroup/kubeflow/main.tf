@@ -29,7 +29,7 @@ resource "helm_release" "kuberay-operator" {
 }
 
 resource "helm_release" "kubeflow-roles" {
-   name       = "kubeflow-roles"
+  name       = "kubeflow-roles"
   chart      = "${var.local_helm_repo}/kubeflow-roles"
   version  = "1.0.0"
   namespace = var.kubeflow_namespace
@@ -79,6 +79,8 @@ resource "helm_release" "kubeflow-profiles-and-kfam" {
 }
 
 resource "helm_release" "kubeflow-notebooks" {
+  count = var.kubeflow_platform_enabled ? 1 : 0
+
   name       = "kubeflow-notebooks"
   chart      = "${var.local_helm_repo}/kubeflow-notebooks"
   version  = "1.0.0"
@@ -99,6 +101,8 @@ resource "helm_release" "kubeflow-notebooks" {
 }
 
 resource "helm_release" "kubeflow-tensorboards" {
+  count = var.kubeflow_platform_enabled ? 1 : 0
+
   name       = "kubeflow-tensorboards"
   chart      = "${var.local_helm_repo}/kubeflow-tensorboards"
   version  = "1.0.0"
@@ -119,6 +123,8 @@ resource "helm_release" "kubeflow-tensorboards" {
 }
 
 resource "helm_release" "kubeflow-pipelines" {
+  count = var.kubeflow_platform_enabled ? 1 : 0
+
   name       = "kubeflow-pipelines"
   chart      = "${var.local_helm_repo}/kubeflow-pipelines"
   version  = "1.0.0"
@@ -143,6 +149,8 @@ resource "helm_release" "kubeflow-pipelines" {
 }
 
 resource "helm_release" "kubeflow-volumes" {
+  count = var.kubeflow_platform_enabled ? 1 : 0
+
   name       = "kubeflow-volumes"
   chart      = "${var.local_helm_repo}/kubeflow-volumes"
   version  = "1.0.0"
@@ -183,6 +191,8 @@ resource "helm_release" "kubeflow-user-profile" {
 }
 
 resource "helm_release" "kubeflow-katib" {
+  count = var.kubeflow_platform_enabled ? 1 : 0
+
   name       = "kubeflow-katib"
   chart      = "${var.local_helm_repo}/kubeflow-katib"
   version  = "1.0.1"
@@ -222,10 +232,12 @@ resource "helm_release" "kubeflow-user-defaults" {
     EOT
   ]
 
-  depends_on = [ helm_release.kubeflow-user-profile, helm_release.kubeflow-pipelines ]
+  depends_on = [ helm_release.kubeflow-user-profile ]
 }
 
 resource "helm_release" "kubeflow-central-dashboard" {
+  count = var.kubeflow_platform_enabled ? 1 : 0
+
   name       = "kubeflow-central-dashboard"
   chart      = "${var.local_helm_repo}/kubeflow-central-dashboard"
   version  = "1.0.0"

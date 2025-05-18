@@ -59,3 +59,7 @@ variable "efs_fs_id" {
   type = string
 }
 
+variable "kubeflow_platform_enabled" {
+  description = "Install Kubeflow Components, if enabled"
+  type        = bool
+}

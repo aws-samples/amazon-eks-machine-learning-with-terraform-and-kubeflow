@@ -1342,8 +1342,6 @@ resource "helm_release" "lws" {
 }
 
 module "kubeflow-components" {
-  count = var.kubeflow_platform_enabled ? 1 : 0
-
   source = "./kubeflow"
 
   kubeflow_namespace = kubernetes_namespace.kubeflow.metadata[0].name
@@ -1354,6 +1352,8 @@ module "kubeflow-components" {
   user_profile_role_arn = aws_iam_role.user_profile_role.arn
   profile_controller_role_arn = module.profiles-controller-irsa.iam_role_arn
   kubeflow_user_profile = "kubeflow-user-example-com"
+  kubeflow_platform_enabled = var.kubeflow_platform_enabled
+  
   efs_fs_id = aws_efs_file_system.fs.id
   fsx = {
     fs_id = aws_fsx_lustre_file_system.fs.id
