@@ -1104,7 +1104,7 @@ module "istio" {
 
 locals {
   istio_repo_url = "https://istio-release.storage.googleapis.com/charts"
-  istio_repo_version = "1.20.2"
+  istio_repo_version = "1.26.0"
 }
 
 resource "kubernetes_namespace" "ingress" {

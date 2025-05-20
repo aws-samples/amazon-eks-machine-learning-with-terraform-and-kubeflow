@@ -159,11 +159,22 @@ If your web browser client machine is not the same as your build machine, before
 1. [install `kubectl` client](https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html)
 2. [Enable IAM access](https://docs.aws.amazon.com/eks/latest/userguide/add-user-role.html) to your EKS cluster. Before you execute this step, it is **highly recommended** that you backup your current configuration by executing following command on your **build machine**:
 
-    kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml
+    `kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml`
 
-After you have enabled IAM access to your EKS cluster, open a terminal on your client machine and start `kubectl` port-forwarding by using the local and remote ports shown below:
+After you have enabled IAM access to your EKS cluster, open a terminal on your client machine and start `kubectl` port-forwarding by using the local and remote ports as described below. Because we need to forward HTTPs port 
+(443), we need root access to execute steps below:
+
+For Mac:
 
     sudo kubectl port-forward svc/istio-ingressgateway -n ingress 443:443
+
+For Linux:
+
+Ensure `kubectl` is configured for `root` user, and execute below:
+
+    sudo su -
+    kubectl port-forward svc/istio-ingressgateway -n ingress 443:443
+
 
 **Note**: Leave the terminal open.
 
