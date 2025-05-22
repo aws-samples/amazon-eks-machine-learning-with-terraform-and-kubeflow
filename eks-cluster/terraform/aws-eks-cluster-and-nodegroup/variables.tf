@@ -349,6 +349,13 @@ variable "ack_sagemaker_enabled" {
   default = false
 }
 
+variable "kserve_enabled" {
+  description = "Install Kserve, if enabled"
+  type        = bool
+  default = false
+}
+
+
 variable "system_group_desired" {
     description = "System group desired size"
     default = 8

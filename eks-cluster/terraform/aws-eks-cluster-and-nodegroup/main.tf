@@ -1529,6 +1529,60 @@ resource "helm_release" "ack_sagemaker_controller" {
 
 }
 
+resource "helm_release" "kserve-crd" {
+  count = var.kserve_enabled ? 1 : 0
+  
+  name       = "kserve-crd"
+  chart      = "kserve-crd"
+  cleanup_on_fail = true
+  create_namespace = true
+  repository  = "oci://ghcr.io/kserve/charts/"
+  version    = "v0.15.1"
+  namespace  = "kserve"
+  timeout = 300
+  wait = true
+
+  depends_on = [  helm_release.cluster-autoscaler ]
+
+}
+
+resource "helm_release" "kserve" {
+  count = var.kserve_enabled ? 1 : 0
+  
+  name       = "kserve"
+  chart      = "kserve"
+  cleanup_on_fail = true
+  create_namespace = true
+  repository  = "oci://ghcr.io/kserve/charts/"
+  version    = "v0.15.1"
+  namespace  = "kserve"
+  timeout = 300
+  wait = true
+
+  set {
+    name  = "kserve.controller.deploymentMode"
+    value = "RawDeployment"
+  }
+
+  set {
+    name  = "kserve.controller.gateway.ingressGateway.className"
+    value = "istio"
+  }
+
+  set {
+    name  = "kserve.controller.gateway.ingressGateway.createGateway"
+    value = "false"
+  }
+
+  set {
+    name  = "kserve.controller.gateway.ingressGateway.kserveGateway"
+    value = "ingress/istio-ingressgateway"
+  }
+
+  depends_on = [  helm_release.kserve-crd ]
+
+}
+
 resource "helm_release" "dcgm_exporter" {
   count = var.dcgm_exporter_enabled ? 1 : 0
   
