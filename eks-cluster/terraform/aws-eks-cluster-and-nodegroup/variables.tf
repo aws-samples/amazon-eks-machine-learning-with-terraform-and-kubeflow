@@ -340,7 +340,7 @@ variable "cluster_issuer" {
 variable "kubeflow_platform_enabled" {
   description = "Install Kubeflow Components, if enabled"
   type        = bool
-  default = true
+  default = false
 }
 
 variable "ack_sagemaker_enabled" {
