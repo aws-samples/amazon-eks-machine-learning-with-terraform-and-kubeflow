@@ -1537,8 +1537,8 @@ resource "helm_release" "kserve-crd" {
   cleanup_on_fail = true
   create_namespace = true
   repository  = "oci://ghcr.io/kserve/charts/"
-  version    = "v0.15.1"
-  namespace  = "kserve"
+  version    = var.kserve_version
+  namespace  = var.kserve_namespace
   timeout = 300
   wait = true
 
@@ -1554,8 +1554,8 @@ resource "helm_release" "kserve" {
   cleanup_on_fail = true
   create_namespace = true
   repository  = "oci://ghcr.io/kserve/charts/"
-  version    = "v0.15.1"
-  namespace  = "kserve"
+  version    = var.kserve_version
+  namespace  = var.kserve_namespace
   timeout = 300
   wait = true
 
@@ -1580,6 +1580,34 @@ resource "helm_release" "kserve" {
   }
 
   depends_on = [  helm_release.kserve-crd ]
+
+}
+
+resource "helm_release" "airflow" {
+  count = var.airflow_enabled ? 1 : 0
+  
+  name       = "airflow"
+  chart      = "airflow"
+  cleanup_on_fail = true
+  create_namespace = true
+  repository  = "https://airflow.apache.org/"
+  version    = var.airflow_version
+  namespace  = var.airflow_namespace
+  timeout = 300
+  wait = true
+
+  values = [
+    <<-EOT
+      createUserJob:
+        useHelmHooks: false
+        applyCustomEnv: false
+      migrateDatabaseJob:
+        useHelmHooks: false
+        applyCustomEnv: false
+    EOT
+  ]
+
+  depends_on = [  helm_release.cluster-autoscaler ]
 
 }
 

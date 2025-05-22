@@ -355,6 +355,35 @@ variable "kserve_enabled" {
   default = false
 }
 
+variable "kserve_namespace" {
+  description = "KServe namespace"
+  type        = string
+  default = "kserve"
+}
+
+variable "kserve_version" {
+  description = "KServe version"
+  type        = string
+  default = "v0.15.1"
+}
+
+variable "airflow_enabled" {
+  description = "Install Airflow, if enabled"
+  type        = bool
+  default = false
+}
+
+variable "airflow_namespace" {
+  description = "Airflow namespace"
+  type        = string
+  default = "airflow"
+}
+
+variable "airflow_version" {
+  description = "Airflow version"
+  type        = string
+  default = "1.16.0"
+}
 
 variable "system_group_desired" {
     description = "System group desired size"
