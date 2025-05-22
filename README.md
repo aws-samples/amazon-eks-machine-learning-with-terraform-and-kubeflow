@@ -115,6 +115,7 @@ You may toggle the enablement of following components using terraform variables:
 | Component  | Terraform Variable | Default Value |
 | ----------- | ----------- | ----------- |
 | [Kubeflow](https://www.kubeflow.org/) | kubeflow_platform_enabled | false |
+| [KServe](https://kserve.github.io/website/latest/) | kserve_enabled | false |
 | [Kueue](https://kueue.sigs.k8s.io/) | kueue_enabled | false |
 | [ACK for Amazon SageMaker](https://github.com/aws-controllers-k8s/sagemaker-controller) | ack_sagemaker_enabled | false |
 | [DCGM-Exporter](https://github.com/NVIDIA/dcgm-exporter) | dcgm_exporter_enabled | false |
