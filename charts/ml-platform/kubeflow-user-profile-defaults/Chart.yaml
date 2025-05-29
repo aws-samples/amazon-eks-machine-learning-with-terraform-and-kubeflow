@@ -3,4 +3,4 @@ appVersion: v1.9.2
 description: A Helm chart for Kubeflow user Pod Defaults
 name: kubeflow-user-defaults
 type: application
-version: 1.0.6
+version: 1.0.7

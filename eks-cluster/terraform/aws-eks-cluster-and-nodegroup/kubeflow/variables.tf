@@ -6,7 +6,7 @@ variable "kubeflow_namespace" {
 variable "local_helm_repo" {
   description = "Local Helm charts path"
   type        = string
-  default     = "../../../charts/ml-platform"
+  default     = "../../../charts"
 }
 
 variable "ingress_gateway" {

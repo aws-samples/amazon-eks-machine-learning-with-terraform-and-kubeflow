@@ -159,7 +159,7 @@ FSx for Lustre file-system is configured to automatically import and export cont
 If your web browser client machine is not the same as your build machine, before you can access Kubeflow Central Dashboard in a web browser, you must execute following steps on the your client machine:
 
 1. [install `kubectl` client](https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html)
-2. [Enable IAM access](https://docs.aws.amazon.com/eks/latest/userguide/add-user-role.html) to your EKS cluster. Before you execute this step, it is **highly recommended** that you backup your current configuration by executing following command on your **build machine**:
+2. [Enable IAM access](https://docs.aws.amazon.com/eks/latest/userguide/grant-k8s-access.html) to your EKS cluster. Before you execute this step, it is **highly recommended** that you backup your current configuration by executing following command on your **build machine**:
 
     `kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml`
 
@@ -192,7 +192,18 @@ If you want to preserve any content from your EFS file-system, you must upload i
 
 Please verify your content in [Amazon S3](https://aws.amazon.com/s3/) bucket before destroying the infrastructure. You can recreate your infrastructure using the same S3 bucket. 
 
-To destroy all the infrastructure created in this tutorial, execute following commands:
+Use following command to check and uninstall all Helm releases:
+
+    for x in $(helm list -q -n kubeflow-user-example-com); do echo $x; helm uninstall $x -n kubeflow-user-example-com; done
+
+Wait 5 minutes for Helm uninstall to shut down pods. Use following commands to check and delete all remaining pods in `kubeflow-user-example-com` namespace:
+
+    kubectl get pods -n kubeflow-user-example-com
+    kubectl delete --all pods -n kubeflow-user-example-com
+
+Wait 15 minutes to allow accelerator infrastructure to automatically scale down to zero.
+
+Finally, to destroy all the infrastructure created in this tutorial, execute following commands:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster-and-nodegroup
 

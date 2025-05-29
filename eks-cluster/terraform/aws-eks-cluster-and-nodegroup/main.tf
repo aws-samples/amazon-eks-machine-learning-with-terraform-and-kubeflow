@@ -1033,53 +1033,6 @@ resource "helm_release" "nvidia_device_plugin" {
   }
 }
 
-resource "helm_release" "pv_efs" {
-  chart = "${var.local_helm_repo}/pv-efs"
-  name = "pv-efs"
-  version = "1.0.0"
-  namespace = kubernetes_namespace.kubeflow.metadata[0].name
-  
-  set {
-    name  = "namespace"
-    value = kubernetes_namespace.kubeflow.metadata[0].name
-  }
-
-  set {
-    name  = "fs_id"
-    value = aws_efs_file_system.fs.id
-  }
-}
-
-resource "helm_release" "pv_fsx" {
-  chart = "${var.local_helm_repo}/pv-fsx"
-  name = "pv-fsx"
-  version = "1.1.0"
-  namespace = kubernetes_namespace.kubeflow.metadata[0].name
-  
-  set {
-    name  = "namespace"
-    value = kubernetes_namespace.kubeflow.metadata[0].name
-  }
-
-  set {
-    name  = "fs_id"
-    value = aws_fsx_lustre_file_system.fs.id
-  }
-
-  set {
-    name  = "mount_name"
-    value = aws_fsx_lustre_file_system.fs.mount_name
-  }
-
-  set {
-    name  = "dns_name"
-    value = "${aws_fsx_lustre_file_system.fs.id}.fsx.${var.region}.amazonaws.com"
-  }
-
-  depends_on = [ aws_fsx_data_repository_association.this ]
-
-}
-
 resource "kubernetes_namespace" "istio_system" {
   metadata {
     labels = {
@@ -1361,12 +1314,12 @@ module "kubeflow-components" {
     dns_name = "${aws_fsx_lustre_file_system.fs.id}.fsx.${var.region}.amazonaws.com"
   }
 
-  local_helm_repo = "${var.local_helm_repo}/ml-platform"
+  local_helm_repo = "${var.local_helm_repo}"
 
   depends_on = [ 
     helm_release.istio-ingress, 
-    helm_release.pv_fsx, 
-    helm_release.pv_efs
+    aws_fsx_data_repository_association.this, 
+    aws_efs_file_system.fs
   ]
 }
 

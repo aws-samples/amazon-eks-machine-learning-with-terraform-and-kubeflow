@@ -8,9 +8,139 @@ resource "random_password" "minio_secret_key" {
   special          = false
 }
 
+resource "kubernetes_namespace" "kubeflow_user_profile" {
+  metadata {
+    labels = {
+      istio-injection = "enabled"
+    }
+
+    name = "${var.kubeflow_user_profile}"
+  }
+}
+
+resource "helm_release" "pv_efs" {
+  chart = "${var.local_helm_repo}/pv-efs"
+  name = "pv-efs"
+  version = "1.0.0"
+  namespace = var.kubeflow_namespace
+  
+  set {
+    name  = "namespace"
+    value = var.kubeflow_namespace
+  }
+
+  set {
+    name  = "fs_id"
+    value = var.efs_fs_id
+  }
+}
+
+resource "helm_release" "pv_fsx" {
+  chart = "${var.local_helm_repo}/pv-fsx"
+  name = "pv-fsx"
+  version = "1.1.0"
+  namespace = var.kubeflow_namespace
+  
+  set {
+    name  = "namespace"
+    value = var.kubeflow_namespace
+  }
+
+  set {
+    name  = "fs_id"
+    value = var.fsx.fs_id
+  }
+
+  set {
+    name  = "mount_name"
+    value = var.fsx.mount_name
+  }
+
+  set {
+    name  = "dns_name"
+    value = var.fsx.dns_name
+  }
+
+}
+
+resource "helm_release" "user_profile_pv_efs" {
+  chart = "${var.local_helm_repo}/pv-efs"
+  name = "user-profile-pv-efs"
+  version = "1.0.0"
+  namespace = var.kubeflow_namespace
+  
+  set {
+    name  = "volume_name"
+    value = "user-profile-pv-efs"
+  }
+
+  set {
+    name  = "claim_name"
+    value = "pv-efs"
+  }
+
+  set {
+    name  = "class_name"
+    value = "user-profile-efs-sc"
+  }
+
+  set {
+    name  = "namespace"
+    value = kubernetes_namespace.kubeflow_user_profile.metadata[0].name
+  }
+
+  set {
+    name  = "fs_id"
+    value = var.efs_fs_id
+  }
+}
+
+resource "helm_release" "user_profile_pv_fsx" {
+  chart = "${var.local_helm_repo}/pv-fsx"
+  name = "user-profile-pv-fsx"
+  version = "1.1.0"
+  namespace = var.kubeflow_namespace
+  
+   set {
+    name  = "volume_name"
+    value = "user-profile-pv-fsx"
+  }
+
+  set {
+    name  = "claim_name"
+    value = "pv-fsx"
+  }
+
+  set {
+    name  = "class_name"
+    value = "user-profile-fsx-sc"
+  }
+
+  set {
+    name  = "namespace"
+    value = kubernetes_namespace.kubeflow_user_profile.metadata[0].name
+  }
+
+  set {
+    name  = "fs_id"
+    value = var.fsx.fs_id
+  }
+
+  set {
+    name  = "mount_name"
+    value = var.fsx.mount_name
+  }
+
+  set {
+    name  = "dns_name"
+    value = var.fsx.dns_name
+  }
+
+}
+
 resource "helm_release" "kubeflow-training-operator" {
   name       = "kubeflow-training-operator"
-  chart      = "${var.local_helm_repo}/kubeflow-training-operator"
+  chart      = "${var.local_helm_repo}/ml-platform/kubeflow-training-operator"
   version  = "1.0.0"
   namespace = var.kubeflow_namespace
 
@@ -30,15 +160,17 @@ resource "helm_release" "kuberay-operator" {
 
 resource "helm_release" "kubeflow-roles" {
   name       = "kubeflow-roles"
-  chart      = "${var.local_helm_repo}/kubeflow-roles"
+  chart      = "${var.local_helm_repo}/ml-platform/kubeflow-roles"
   version  = "1.0.0"
   namespace = var.kubeflow_namespace
 }
 
 
 resource "helm_release" "kubeflow-admission-webhook" {
+  count = var.kubeflow_platform_enabled ? 1 : 0
+
   name       = "kubeflow-admission-webhook"
-  chart      = "${var.local_helm_repo}/kubeflow-admission-webhook"
+  chart      = "${var.local_helm_repo}/ml-platform/kubeflow-admission-webhook"
   version  = "1.0.0"
   namespace = var.kubeflow_namespace
 
@@ -53,8 +185,10 @@ resource "helm_release" "kubeflow-admission-webhook" {
 }
 
 resource "helm_release" "kubeflow-profiles-and-kfam" {
+  count = var.kubeflow_platform_enabled ? 1 : 0
+
   name       = "kubeflow-profiles-and-kfam"
-  chart      = "${var.local_helm_repo}/kubeflow-profiles-and-kfam"
+  chart      = "${var.local_helm_repo}/ml-platform/kubeflow-profiles-and-kfam"
   version  = "1.0.0"
   namespace = var.kubeflow_namespace
 
@@ -82,7 +216,7 @@ resource "helm_release" "kubeflow-notebooks" {
   count = var.kubeflow_platform_enabled ? 1 : 0
 
   name       = "kubeflow-notebooks"
-  chart      = "${var.local_helm_repo}/kubeflow-notebooks"
+  chart      = "${var.local_helm_repo}/ml-platform/kubeflow-notebooks"
   version  = "1.0.0"
   namespace = var.kubeflow_namespace
 
@@ -104,7 +238,7 @@ resource "helm_release" "kubeflow-tensorboards" {
   count = var.kubeflow_platform_enabled ? 1 : 0
 
   name       = "kubeflow-tensorboards"
-  chart      = "${var.local_helm_repo}/kubeflow-tensorboards"
+  chart      = "${var.local_helm_repo}/ml-platform/kubeflow-tensorboards"
   version  = "1.0.0"
   namespace = var.kubeflow_namespace
 
@@ -126,7 +260,7 @@ resource "helm_release" "kubeflow-pipelines" {
   count = var.kubeflow_platform_enabled ? 1 : 0
 
   name       = "kubeflow-pipelines"
-  chart      = "${var.local_helm_repo}/kubeflow-pipelines"
+  chart      = "${var.local_helm_repo}/ml-platform/kubeflow-pipelines"
   version  = "1.0.0"
   namespace = var.kubeflow_namespace
 
@@ -152,7 +286,7 @@ resource "helm_release" "kubeflow-volumes" {
   count = var.kubeflow_platform_enabled ? 1 : 0
 
   name       = "kubeflow-volumes"
-  chart      = "${var.local_helm_repo}/kubeflow-volumes"
+  chart      = "${var.local_helm_repo}/ml-platform/kubeflow-volumes"
   version  = "1.0.0"
   namespace = var.kubeflow_namespace
 
@@ -172,8 +306,10 @@ resource "helm_release" "kubeflow-volumes" {
 }
 
 resource "helm_release" "kubeflow-user-profile" {
+  count = var.kubeflow_platform_enabled ? 1 : 0
+
   name       = "kubeflow-user-profile"
-  chart      = "${var.local_helm_repo}/kubeflow-user-profile"
+  chart      = "${var.local_helm_repo}/ml-platform/kubeflow-user-profile"
   version  = "1.0.0"
   namespace = var.kubeflow_namespace
 
@@ -194,7 +330,7 @@ resource "helm_release" "kubeflow-katib" {
   count = var.kubeflow_platform_enabled ? 1 : 0
 
   name       = "kubeflow-katib"
-  chart      = "${var.local_helm_repo}/kubeflow-katib"
+  chart      = "${var.local_helm_repo}/ml-platform/kubeflow-katib"
   version  = "1.0.1"
   namespace = var.kubeflow_namespace
 
@@ -213,22 +349,18 @@ resource "helm_release" "kubeflow-katib" {
   depends_on = [ helm_release.kubeflow-pipelines ]
 }
 
-resource "helm_release" "kubeflow-user-defaults" {
-  name       = "kubeflow-user-defaults"
-  chart      = "${var.local_helm_repo}/kubeflow-user-defaults"
-  version  = "1.0.6"
+resource "helm_release" "kubeflow-user-profile-defaults" {
+  count = var.kubeflow_platform_enabled ? 1 : 0
+
+  name       = "kubeflow-user-profile-defaults"
+  chart      = "${var.local_helm_repo}/ml-platform/kubeflow-user-profile-defaults"
+  version  = "1.0.7"
   namespace = var.kubeflow_namespace
 
  values = [
     <<-EOT
       user: 
         profile: ${var.kubeflow_user_profile}
-      efs:
-        fs_id: ${var.efs_fs_id}
-      fsx:
-        fs_id: ${var.fsx.fs_id}
-        dns_name: ${var.fsx.dns_name}
-        mount_name: ${var.fsx.mount_name}
     EOT
   ]
 
@@ -239,7 +371,7 @@ resource "helm_release" "kubeflow-central-dashboard" {
   count = var.kubeflow_platform_enabled ? 1 : 0
 
   name       = "kubeflow-central-dashboard"
-  chart      = "${var.local_helm_repo}/kubeflow-central-dashboard"
+  chart      = "${var.local_helm_repo}/ml-platform/kubeflow-central-dashboard"
   version  = "1.0.0"
   namespace = var.kubeflow_namespace
 
@@ -257,7 +389,11 @@ resource "helm_release" "kubeflow-central-dashboard" {
   ]
 
   depends_on = [
-    helm_release.kubeflow-user-defaults,
+    helm_release.pv_efs,
+    helm_release.pv_fsx,
+    helm_release.user_profile_pv_efs,
+    helm_release.user_profile_pv_fsx,
+    helm_release.kubeflow-user-profile-defaults,
     helm_release.kubeflow-tensorboards,
     helm_release.kubeflow-volumes,
     helm_release.kubeflow-pipelines,
