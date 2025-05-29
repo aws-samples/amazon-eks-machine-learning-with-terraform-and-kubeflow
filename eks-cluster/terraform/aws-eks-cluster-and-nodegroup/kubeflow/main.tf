@@ -30,7 +30,7 @@ resource "helm_release" "pv_efs" {
   }
 
   set {
-    name  = "fs_id"
+    name  = "efs.fs_id"
     value = var.efs_fs_id
   }
 }
@@ -47,17 +47,17 @@ resource "helm_release" "pv_fsx" {
   }
 
   set {
-    name  = "fs_id"
+    name  = "fsx.fs_id"
     value = var.fsx.fs_id
   }
 
   set {
-    name  = "mount_name"
+    name  = "fsx.mount_name"
     value = var.fsx.mount_name
   }
 
   set {
-    name  = "dns_name"
+    name  = "fsx.dns_name"
     value = var.fsx.dns_name
   }
 
@@ -70,17 +70,17 @@ resource "helm_release" "user_profile_pv_efs" {
   namespace = var.kubeflow_namespace
   
   set {
-    name  = "volume_name"
+    name  = "efs.volume_name"
     value = "user-profile-pv-efs"
   }
 
   set {
-    name  = "claim_name"
+    name  = "efs.claim_name"
     value = "pv-efs"
   }
 
   set {
-    name  = "class_name"
+    name  = "efs.class_name"
     value = "user-profile-efs-sc"
   }
 
@@ -90,7 +90,7 @@ resource "helm_release" "user_profile_pv_efs" {
   }
 
   set {
-    name  = "fs_id"
+    name  = "efs.fs_id"
     value = var.efs_fs_id
   }
 }
@@ -102,17 +102,17 @@ resource "helm_release" "user_profile_pv_fsx" {
   namespace = var.kubeflow_namespace
   
    set {
-    name  = "volume_name"
+    name  = "fsx.volume_name"
     value = "user-profile-pv-fsx"
   }
 
   set {
-    name  = "claim_name"
+    name  = "fsx.claim_name"
     value = "pv-fsx"
   }
 
   set {
-    name  = "class_name"
+    name  = "fsx.class_name"
     value = "user-profile-fsx-sc"
   }
 
@@ -122,17 +122,17 @@ resource "helm_release" "user_profile_pv_fsx" {
   }
 
   set {
-    name  = "fs_id"
+    name  = "fsx.fs_id"
     value = var.fsx.fs_id
   }
 
   set {
-    name  = "mount_name"
+    name  = "fsx.mount_name"
     value = var.fsx.mount_name
   }
 
   set {
-    name  = "dns_name"
+    name  = "fsx.dns_name"
     value = var.fsx.dns_name
   }
 

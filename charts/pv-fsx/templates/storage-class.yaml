@@ -1,5 +1,5 @@
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: {{ .Values.class_name | default "fsx-sc" }}
+  name: {{ .Values.fsx.class_name | default "fsx-sc" }}
 provisioner: fsx.csi.aws.com

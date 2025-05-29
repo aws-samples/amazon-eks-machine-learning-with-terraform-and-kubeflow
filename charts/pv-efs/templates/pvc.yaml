@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ .Values.claim_name | default "pv-efs" }}
+  name: {{ .Values.efs.claim_name | default "pv-efs" }}
   namespace: {{ .Values.namespace }}
 spec:
   accessModes:
     - ReadWriteMany
-  storageClassName: {{ .Values.class_name | default "efs-sc" }}
-  volumeName: {{ .Values.volume_name | default "pv-efs" }}
+  storageClassName: {{ .Values.efs.class_name | default "efs-sc" }}
+  volumeName: {{ .Values.efs.volume_name | default "pv-efs" }}
   resources:
     requests:
-      storage: 100Gi
+      storage: {{ .Values.efs.storage | default "1000Gi" }} 

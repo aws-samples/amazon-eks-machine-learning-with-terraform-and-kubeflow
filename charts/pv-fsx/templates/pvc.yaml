@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ .Values.claim_name | default "pv-fsx" }}
+  name: {{ .Values.fsx.claim_name | default "pv-fsx" }}
   namespace: {{ .Values.namespace }}
 spec:
   accessModes:
     - ReadWriteMany
-  storageClassName: {{ .Values.class_name | default "fsx-sc" }}
-  volumeName: {{ .Values.volume_name | default "pv-fsx" }}
+  storageClassName: {{ .Values.fsx.class_name | default "fsx-sc" }}
+  volumeName: {{ .Values.fsx.volume_name | default "pv-fsx" }}
   resources:
     requests:
-      storage: 1200Gi
+      storage: {{ .Values.fsx.storage | default "1200Gi" }} 
