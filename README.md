@@ -202,6 +202,11 @@ Wait 5 minutes for Helm uninstall to shut down pods. Use following commands to c
     kubectl get pods -n kubeflow-user-example-com
     kubectl delete --all pods -n kubeflow-user-example-com
 
+Run following commands to delete `attach-pvc` pod:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    kubectl delete -f eks-cluster/utils/attach-pvc.yaml  -n kubeflow
+    
 Wait 15 minutes to allow accelerator infrastructure to automatically scale down to zero.
 
 Finally, to destroy all the infrastructure created in this tutorial, execute following commands:
