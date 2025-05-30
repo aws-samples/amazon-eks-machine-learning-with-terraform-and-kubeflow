@@ -415,4 +415,28 @@ variable "dcgm_exporter_enabled" {
   default = false
 }
 
+variable "slurm_enabled" {
+  description = "Install Slurm, if enabled"
+  type        = bool
+  default = false
+}
+
+variable "slurm_namespace" {
+  description = "Slurm namespace"
+  type        = string
+  default = "slurm"
+}
+
+variable "slurm_ssh_pub_key" {
+  description = "Slurm SSH public key for node login"
+  type        = string
+  default = "ssh-rsa"
+}
+
+variable "slurm_storage_capacity" {
+  description = "Slurm shared storage capacity"
+  type        = string
+  default = "100Gi"
+}
+
 # END variables

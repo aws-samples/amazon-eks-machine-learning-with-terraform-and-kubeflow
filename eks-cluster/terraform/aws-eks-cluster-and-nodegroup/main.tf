@@ -1591,3 +1591,19 @@ resource "helm_release" "dcgm_exporter" {
   depends_on = [  helm_release.cluster-autoscaler ]
 
 }
+
+module "slurm" {
+  count = var.slurm_enabled ? 1 : 0
+  source = "./slurm"
+
+  slurm_namespace = var.slurm_namespace
+  efs_fs_id = aws_efs_file_system.fs.id
+  ssh_public_key = var.slurm_ssh_pub_key
+  storage_capacity = var.slurm_storage_capacity
+  local_helm_repo = var.local_helm_repo
+  password = "${random_password.static_password.result}"
+
+  depends_on = [ 
+    aws_efs_file_system.fs
+  ]
+}

@@ -120,6 +120,7 @@ You may toggle the enablement of following components using terraform variables:
 | [Kueue](https://kueue.sigs.k8s.io/) | kueue_enabled | false |
 | [Nvidia DCGM Exporter](https://github.com/NVIDIA/dcgm-exporter) | dcgm_exporter_enabled | false |
 | [SageMaker controller](https://github.com/aws-controllers-k8s/sagemaker-controller) | ack_sagemaker_enabled | false |
+| [Slurm](https://github.com/stackhpc/slurm-k8s-cluster/tree/main) | slurm_enabled | false |
 
 
 #### Retrieve static user password
