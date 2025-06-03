@@ -439,4 +439,41 @@ variable "slurm_storage_capacity" {
   default = "100Gi"
 }
 
+
+variable "mlflow_enabled" {
+  description = "Install MLFlow, if enabled"
+  type        = bool
+  default = false
+}
+
+variable "mlflow_namespace" {
+  description = "MLFlow namespace"
+  type        = string
+  default = "mlflow"
+}
+
+variable "mlflow_version" {
+  description = "MLFlow chart version"
+  type        = string
+  default = "0.17.2"
+}
+
+variable "mlflow_force_destroy_bucket" {
+  description = "MLFlow force destroy bucket"
+  type        = bool
+  default = false
+}
+
+variable "mlflow_admin_username" {
+  description = "MLFlow admin username"
+  type        = string
+  default = "admin"
+}
+
+variable "mlflow_db_max_capacity" {
+  description = "MLFlow DB Max Capacity"
+  type        = number
+  default = 16.0
+}
+
 # END variables

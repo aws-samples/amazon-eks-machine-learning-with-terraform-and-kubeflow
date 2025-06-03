@@ -1604,6 +1604,29 @@ module "slurm" {
   password = "${random_password.static_password.result}"
 
   depends_on = [ 
-    aws_efs_file_system.fs
+    aws_efs_file_system.fs,
+    module.eks_blueprints_addons 
+  ]
+}
+
+module "mlflow" {
+  count = var.mlflow_enabled ? 1 : 0
+  source = "./mlflow"
+
+  mlflow_namespace= var.mlflow_namespace
+  mlflow_version = var.mlflow_version
+  force_destroy_bucket = var.mlflow_force_destroy_bucket
+  eks_cluster_id = aws_eks_cluster.eks_cluster.id
+  eks_oidc_provider_arn = aws_iam_openid_connect_provider.eks_oidc_provider.arn
+  eks_oidc_issuer = "${substr(aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer, 8, -1)}"
+  admin_username = "${var.mlflow_admin_username}"
+  admin_password = "${random_password.static_password.result}"
+  db_max_capacity = var.mlflow_db_max_capacity
+  db_subnet_ids      = aws_subnet.private.*.id 
+  db_vpc_id   = aws_vpc.vpc.id
+  db_port = 5432
+
+  depends_on = [ 
+    module.eks_blueprints_addons 
   ]
 }

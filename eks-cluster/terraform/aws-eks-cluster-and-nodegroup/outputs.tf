@@ -69,3 +69,8 @@ output "static_password" {
   sensitive = true
   value = random_password.static_password.result
 }
+
+output "mlflow_db_secret_arn" {
+  description = "MLFlow DB secret ARN"
+  value = module.mlflow.*.db_secret_arn
+}

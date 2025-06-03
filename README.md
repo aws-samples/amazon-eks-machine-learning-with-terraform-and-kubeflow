@@ -1,27 +1,29 @@
-# Distributed Training and Inference on Amazon EKS
+# MLOPs on Amazon EKS
 
-This project defines a *prototypical* solution for  distributed training and inference on [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/whitepapers/latest/overview-deployment-options/amazon-elastic-kubernetes-service.html). The primary audience for this project is machine learning (ML) researchers, developers, applied engineers, and platform engineers who train, pre-train, fine-tune, test, or serve Generative AI, or general purpose deep neural networks (DNNs) based models.
+This project defines a *prototypical* solution for  MLOps on [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/whitepapers/latest/overview-deployment-options/amazon-elastic-kubernetes-service.html). Key use cases for this solution are:
 
-The solution offers a framework and  accelerator agnostic approach to distributed training and inference. For training, it works with popular AI machine learning libraries, for example, [Nemo](https://github.com/NVIDIA/NeMo), [Hugging Face Accelerate](https://github.com/huggingface/accelerate), [PyTorch Lightning](https://github.com/Lightning-AI/pytorch-lightning), [DeepSpeed](https://github.com/microsoft/DeepSpeed]), [Megatron-DeepSpeed](https://github.com/microsoft/Megatron-DeepSpeed), [Ray Train](https://docs.ray.io/en/latest/train/train.html), [Neuronx Distributed](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/libraries/neuronx-distributed/index.html), among others. For inference, it supports [Ray Serve](https://docs.ray.io/en/latest/serve/index.html) with [vLLM](https://docs.vllm.ai/en/latest/), [Triton Inference Server](https://github.com/triton-inference-server)  with Python, [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) and [vLLM](https://docs.vllm.ai/en/latest/) backends, and [Deep Java Library (DJL) Large Model Inference (LMI)](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/index.html) with all [supported backends](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/vllm_user_guide.html).
+* Building a comprehensive sandbox environment for MLOps experimentation on EKS. 
+* Define a canonical *prototype* for building custom MLOPs platforms on EKS.
 
-#### Legacy Note: 
-This project started as a companion to the [Mask R-CNN distributed training blog](https://aws.amazon.com/blogs/opensource/distributed-tensorflow-training-using-kubeflow-on-amazon-eks/), and that part of the project is documented in [this README](./tutorials/maskrcnn-blog/README.md). 
+This solution uses a [modular](#enabling-modular-components) approach to MLOps. For distributed training, the solution works with popular AI machine learning libraries, for example, [Nemo](https://github.com/NVIDIA/NeMo), [Hugging Face Accelerate](https://github.com/huggingface/accelerate), [PyTorch Lightning](https://github.com/Lightning-AI/pytorch-lightning), [DeepSpeed](https://github.com/microsoft/DeepSpeed]), [Megatron-DeepSpeed](https://github.com/microsoft/Megatron-DeepSpeed), [Ray Train](https://docs.ray.io/en/latest/train/train.html), [Neuronx Distributed](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/libraries/neuronx-distributed/index.html), among others. For distributed inference, the solution supports [Ray Serve](https://docs.ray.io/en/latest/serve/index.html) with [vLLM](https://docs.vllm.ai/en/latest/), [Triton Inference Server](https://github.com/triton-inference-server)  with Python, [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) and [vLLM](https://docs.vllm.ai/en/latest/) backends, and [Deep Java Library (DJL) Large Model Inference (LMI)](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/index.html) with all [supported backends](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/vllm_user_guide.html).
+
+**Legacy Note**: This project started as a companion to the [Mask R-CNN distributed training blog](https://aws.amazon.com/blogs/opensource/distributed-tensorflow-training-using-kubeflow-on-amazon-eks/), and that part of the project is documented in [this README](./tutorials/maskrcnn-blog/README.md). 
 
 ## Conceptual Overview
 
-This solution uses [Helm charts](https://helm.sh/docs/intro/using_helm/) to execute inference and training pipelines. See [tutorials](#tutorials) for a quick start.
+The key novel concept to understand is that this solution uses [Helm charts](https://helm.sh/docs/intro/using_helm/) to execute MLOps pipeline steps. See [tutorials](#tutorials) for a quick start.
 
-Helm charts are commonly used to [deploy applications](https://docs.aws.amazon.com/eks/latest/userguide/helm.html) within an Amazon EKS cluster. While typically, the applications deployed using Helm charts are services that run until stopped, Helm charts can be also used to deploy application that are not long running services. We leverage Helm Charts to execute discrete steps within any training or inference pipeline.
+Helm charts are commonly used to [deploy applications](https://docs.aws.amazon.com/eks/latest/userguide/helm.html) within an Amazon EKS cluster. While typical applications deployed using Helm charts are services that run until stopped, this solutions uses Helm Charts to execute discrete steps within arbitrary MLOps pipelines. The Helm chart based pipeline steps can be executed directly via [Helm CLI](https://helm.sh/docs/helm/), or can be used to compose MLOps pipelines using [Kubeflow Pipelines](https://www.kubeflow.org/docs/components/pipelines/), or [Apache Airflow](https://airflow.apache.org/).
 
-Any training or inference pipeline in this solution can be conceptualized as a series of Helm chart installations, managed within a single Helm *Release*. Each step in the workflow is executed via a Helm chart installation using a specific [YAML recipe](#yaml-recipes), whereby, the YAML recipe acts as a [Helm Values File](https://helm.sh/docs/chart_template_guide/values_files/). Once the Helm chart step completes successfully, the Helm chart is uninstalled, and the next Helm chart in the pipeline is deployed within the same Helm *Release*. Using a single Helm *Release* for a given ML pipeline ensures that the discrete steps in the pipeline are executed atomically, and the dependency among the steps is maintained.
+Any MLOps pipeline in this solution can be conceptualized as a series of Helm chart installations, managed within a single Helm *Release*. Each step in the pipeline is executed via a Helm chart installation using a specific [YAML recipe](#yaml-recipes), whereby, the YAML recipe acts as a [Helm Values File](https://helm.sh/docs/chart_template_guide/values_files/). Once the Helm chart step completes, the Helm chart is uninstalled, and the next Helm chart in the pipeline is deployed within the same Helm *Release*. Using a single Helm *Release* for a given ML pipeline ensures that the discrete steps in the pipeline are executed atomically, and the dependency among the steps is maintained.
 
-The included [tutorials](#tutorials) provide examples of training and inference pipelines that use pre-defined Helm charts, along with YAML recipe files that model each pipeline step. Typically, in order to define a new pipeline in this solution, you do not need to write new Helm Charts. The solution comes with a library of pre-defined [machine learning Helm charts](./charts/machine-learning/). However, you are required to write a YAML recipe file for each step in your training or inference pipeline. 
+The included [tutorials](#tutorials) provide examples of MLOps pipelines that use pre-defined Helm charts, along with YAML recipe files that model each pipeline step. Typically, in order to define a new pipeline in this solution, you do not need to write new Helm Charts. The solution comes with a library of pre-defined [machine learning Helm charts](./charts/machine-learning/). However, you are required to write a YAML recipe file for each step in your MLOps pipeline. 
 
 The [tutorials](#tutorials) walk you through each pipeline, step by step, where you manually execute each pipeline step by installing, and uninstalling, a pre-defined Helm chart with its associated [YAML recipe](#yaml-recipes). 
 
-For complete end-to-end automation, we also provide an [example](./examples/training/accelerate/bert-glue-mrpc/pipeline.ipynb) where you can execute all the pipeline steps automatically using [Kubeflow Pipelines](https://www.kubeflow.org/docs/components/pipelines/concepts/). This option requires you to enable [Kubeflow platform](#enabling-modular-components).
+For complete end-to-end automation, we also provide an [example](./examples/training/accelerate/bert-glue-mrpc/pipeline.ipynb) where you can execute all the pipeline steps automatically using [Kubeflow Pipelines](https://www.kubeflow.org/docs/components/pipelines/concepts/). This option requires you to enable [Kubeflow platform module](#enabling-modular-components).
 
-If you are a platform engineer, you may be interested in a [system architecture](#system-architecture) overview of this solution.
+If you are a platform engineer, you may be interested in the [system architecture](#system-architecture) overview of this solution.
 
 ## Tutorials
 
@@ -110,7 +112,7 @@ If you need to use [AWS Trainium instances](https://aws.amazon.com/machine-learn
 
 #### Enabling modular components
 
-You may toggle the enablement of following components using terraform variables:
+This solution offers a suite of modular components for MLOps. All are disabled by default, and are not needed to work through included examples. You may toggle the modular components using following terraform variables:
 
 | Component  | Terraform Variable | Default Value |
 | ----------- | ----------- | ----------- |
@@ -118,6 +120,7 @@ You may toggle the enablement of following components using terraform variables:
 | [Kubeflow](https://www.kubeflow.org/) | kubeflow_platform_enabled | false |
 | [KServe](https://kserve.github.io/website/latest/) | kserve_enabled | false |
 | [Kueue](https://kueue.sigs.k8s.io/) | kueue_enabled | false |
+| [MLFlow](https://mlflow.org/) | mlflow_enabled | false |
 | [Nvidia DCGM Exporter](https://github.com/NVIDIA/dcgm-exporter) | dcgm_exporter_enabled | false |
 | [SageMaker controller](https://github.com/aws-controllers-k8s/sagemaker-controller) | ack_sagemaker_enabled | false |
 | [Slurm](https://github.com/stackhpc/slurm-k8s-cluster/tree/main) | slurm_enabled | false |
@@ -125,9 +128,11 @@ You may toggle the enablement of following components using terraform variables:
 
 #### Retrieve static user password
 
-This step is only needed if you plan to use the Kubeflow Central Dashboard, which is not required for running any of the examples and tutorials in this project. The static user's password is marked `sensitive` in the Terraform output. To show your static password, execute:
+ The static user's password is marked `sensitive` in the Terraform output. To show your static password, execute:
 
     terraform output static_password 
+
+This password is used for Admin user for all web applications deployed within this solution.
 
 ### Create `home` folder on shared file-systems
 
@@ -236,7 +241,7 @@ Now, reconnect to your linux instance.
 
 ### YAML Recipes
 
-The YAML recipe file is a [Helm values](https://helm.sh/docs/chart_template_guide/values_files/) file that defines the runtime environment for a data pre-processing, or training job. The key fields in the Helm values file that are common to all charts are described below:
+The YAML recipe file is a [Helm values](https://helm.sh/docs/chart_template_guide/values_files/) file that defines the runtime environment for a MLOps step. The key fields in the Helm values file that are common to all charts are described below:
 
 * The `image` field specifies the required docker container image.
 * The `resources` field specifies the required infrastructure resources.
