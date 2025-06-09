@@ -1600,8 +1600,14 @@ module "slurm" {
   efs_fs_id = aws_efs_file_system.fs.id
   ssh_public_key = var.slurm_ssh_pub_key
   storage_capacity = var.slurm_storage_capacity
+  storage_type = var.slurm_storage_type
   local_helm_repo = var.local_helm_repo
   password = "${random_password.static_password.result}"
+  fsx = {
+    fs_id = aws_fsx_lustre_file_system.fs.id
+    mount_name = aws_fsx_lustre_file_system.fs.mount_name
+    dns_name = "${aws_fsx_lustre_file_system.fs.id}.fsx.${var.region}.amazonaws.com"
+  }
 
   depends_on = [ 
     aws_efs_file_system.fs,

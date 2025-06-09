@@ -28,7 +28,7 @@ resource "null_resource" "slurm_git_clone" {
       git reset --hard ${local.slurm_git_commit}
       mkdir /tmp/slurm/slurm-cluster-chart/charts
       popd
-      cp -r ${var.local_helm_repo}/pv-efs /tmp/slurm/slurm-cluster-chart/charts/
+      cp -r ${var.local_helm_repo}/pv-${var.storage_type} /tmp/slurm/slurm-cluster-chart/charts/
       rm /tmp/slurm/slurm-cluster-chart/templates/pvc.yaml
       sed -i '/dependencies:/,$d' /tmp/slurm/slurm-cluster-chart/Chart.yaml
       sed -i 's/LoadBalancer/ClusterIP/1' /tmp/slurm/slurm-cluster-chart/templates/login-service.yaml
@@ -39,7 +39,9 @@ resource "null_resource" "slurm_git_clone" {
 
 }
 
-resource "helm_release" "slurm" {
+resource "helm_release" "slurm_efs" {
+  count = var.storage_type == "efs" ? 1 : 0
+
   chart = "/tmp/slurm/slurm-cluster-chart"
   name = "slurm"
   namespace = var.slurm_namespace
@@ -63,6 +65,44 @@ resource "helm_release" "slurm" {
           claim_name: pv-efs
           class_name: slurm-efs-sc
           fs_id: ${var.efs_fs_id}
+          storage: ${var.storage_capacity}
+      openOnDemand:
+        password: "${var.password}"
+      sshPublicKey: "${var.ssh_public_key}"
+    EOT
+  ]
+
+  depends_on = [null_resource.slurm_git_clone]
+}
+
+resource "helm_release" "slurm_fsx" {
+  count = var.storage_type == "fsx" ? 1 : 0
+  
+  chart = "/tmp/slurm/slurm-cluster-chart"
+  name = "slurm"
+  namespace = var.slurm_namespace
+  
+  values = [
+    <<-EOT
+      rooknfs:
+        enabled: false
+      database:
+        image: mariadb:10.10
+        storage: 10Gi
+      storage:
+        mountPath: /home
+        storageClassName: slurm-fsx-sc
+        claimName: pv-fsx
+        capacity: ${var.storage_capacity}
+      pv-fsx:
+        namespace: ${kubernetes_namespace.slurm.metadata[0].name}
+        fsx:
+          volume_name: slurm-pv-fsx
+          claim_name: pv-fsx
+          class_name: slurm-fsx-sc
+          fs_id: ${var.fsx.fs_id}
+          mount_name: ${var.fsx.mount_name}
+          dns_name: ${var.fsx.dns_name}
           storage: ${var.storage_capacity}
       openOnDemand:
         password: "${var.password}"

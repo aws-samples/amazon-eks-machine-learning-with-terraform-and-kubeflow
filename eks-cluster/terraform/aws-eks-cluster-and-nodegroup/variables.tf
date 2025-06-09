@@ -433,10 +433,20 @@ variable "slurm_ssh_pub_key" {
   default = "ssh-rsa"
 }
 
+variable "slurm_storage_type" {
+  description = "Slurm shared storage type: efs or fsx"
+  type        = string
+  validation {
+    condition     = contains(["efs", "fsx"], var.slurm_storage_type)
+    error_message = "The slurm_storage_type must be either 'efs' or 'fsx'."
+  }
+  default = "efs"
+}
+
 variable "slurm_storage_capacity" {
   description = "Slurm shared storage capacity"
   type        = string
-  default = "100Gi"
+  default = "1200Gi"
 }
 
 

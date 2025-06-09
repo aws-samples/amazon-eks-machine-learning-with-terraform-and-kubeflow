@@ -23,7 +23,22 @@ variable "storage_capacity" {
   type        = string
 }
 
+variable "storage_type" {
+  description = "Shared storage type"
+  type        = string
+}
+
 variable "password" {
   description = "Slurm password for user rocky"
   type        = string
+}
+
+variable "fsx" {
+  description = "FSx for Lustre file system"
+
+  type = object({
+    fs_id = string
+    dns_name      = string
+    mount_name  = string
+  })
 }
