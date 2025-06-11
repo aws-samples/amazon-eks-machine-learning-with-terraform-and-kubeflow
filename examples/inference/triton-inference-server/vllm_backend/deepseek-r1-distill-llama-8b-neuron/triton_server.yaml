@@ -127,6 +127,10 @@ server:
       value: /efs/home/{{ .Release.Name }}/model_repository
     - name: MODEL_PATH
       value: /fsx/pretrained-models/deepseek-ai/DeepSeek-R1-Distill-Llama-8B
+    - name: NEURON_COMPILED_ARTIFACTS
+      value: /efs/home/{{ .Release.Name }}/neuron-compiled-artifacts
+    - name: VLLM_NEURON_FRAMEWORK
+      value: "neuronx-distributed-inference"
   command:
     - tritonserver
   args:

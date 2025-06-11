@@ -35,7 +35,6 @@ inline_script:
     "tokenizer_mode": "auto",
     "disable_log_requests": "true",
     "gpu_memory_utilization": 0.8,
-    "worker_use_ray": true,
     "dtype": "auto",
     "enforce_eager": true,
     "tensor_parallel_size": 8,

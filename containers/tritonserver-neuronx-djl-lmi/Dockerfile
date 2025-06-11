@@ -75,24 +75,25 @@ RUN apt-get -y install aws-neuronx-tools=2.*
 
 RUN pip3 config set global.extra-index-url https://pip.repos.neuron.amazonaws.com
 RUN pip3 install awscli
-RUN pip3 install neuronx-cc==2.16.* torch-neuronx==2.5.* torchvision transformers-neuronx
+RUN pip3 install neuronx-cc==2.18.* torch-neuronx==2.6.* torchvision \
+      transformers-neuronx neuronx-distributed neuronx-distributed-inference \
+      git+https://github.com/huggingface/optimum-neuron.git@v0.1.0
 
 RUN pip3 install ray
 
-RUN pip3 install --extra-index-url https://pip.repos.neuron.amazonaws.com optimum[neuronx]
 RUN git clone https://github.com/deepjavalibrary/djl-serving.git /opt/djl-serving
-RUN cd /opt/djl-serving && git fetch origin c343d60b35f0d42f96f678570a553953f055ab32
-RUN cd /opt/djl-serving && git reset --hard c343d60b35f0d42f96f678570a553953f055ab32
+RUN cd /opt/djl-serving && git fetch origin 1be1ab0f4b6375b6cd35547b8b84552f088526cf
+RUN cd /opt/djl-serving && git reset --hard 1be1ab0f4b6375b6cd35547b8b84552f088526cf
 RUN cd /opt/djl-serving/engines/python/setup  && pip3 install -e .
 
 ENV VLLM_TARGET_DEVICE=neuron
 RUN git clone https://github.com/vllm-project/vllm.git /opt/vllm
-RUN cd /opt/vllm && git fetch origin 5b734fb7edfdf3f8a836a3ddee81eba506230fdd
-RUN cd /opt/vllm && git reset --hard 5b734fb7edfdf3f8a836a3ddee81eba506230fdd
-RUN pip3 install -r /opt/vllm/requirements-neuron.txt
+RUN cd /opt/vllm && git fetch origin 5fbbfe9a4c13094ad72ed3d6b4ef208a7ddc0fd7
+RUN cd /opt/vllm && git reset --hard 5fbbfe9a4c13094ad72ed3d6b4ef208a7ddc0fd7
+RUN pip3 install -r /opt/vllm/requirements/neuron.txt
 RUN cd /opt/vllm && pip3 install -e .
 
-RUN pip3 install triton==2.2.0 pynvml==11.5.3 transformers==4.44.2
+RUN pip3 install triton==3.2.0 pynvml==11.5.3 transformers==4.48.3 protobuf==3.20.3
 
 RUN cp -r /server/build/opt/* /opt/
 RUN rm -rf /server

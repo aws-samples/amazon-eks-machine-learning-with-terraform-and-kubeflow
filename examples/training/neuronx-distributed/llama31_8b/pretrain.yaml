@@ -1,4 +1,4 @@
-image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.5.1-neuronx-py310-sdk2.22.0-ubuntu22.04'
+image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.6.0-neuronx-py310-sdk2.23.0-ubuntu22.04'
 backoff_limit: 2000
 ebs:
   storage: 200Gi

@@ -75,9 +75,13 @@ RUN apt-get -y install aws-neuronx-tools=2.*
 
 RUN pip3 config set global.extra-index-url https://pip.repos.neuron.amazonaws.com
 RUN pip3 install awscli
-RUN pip3 install neuronx-cc==2.17.* torch-neuronx==2.5.* torchvision  transformers-neuronx neuronx-distributed neuronx-distributed-inference
-
+RUN pip3 install neuronx-cc==2.18.* torch-neuronx==2.6.* torchvision \
+      transformers-neuronx neuronx-distributed neuronx-distributed-inference \
+      git+https://github.com/huggingface/optimum-neuron.git@v0.1.0
+      
 RUN pip3 install ray
+
+RUN pip3 install triton==3.2.0 pynvml==11.5.3 transformers==4.48.3 protobuf==3.20.3
 
 RUN cp -r /server/build/opt/* /opt/
 RUN rm -rf /server
