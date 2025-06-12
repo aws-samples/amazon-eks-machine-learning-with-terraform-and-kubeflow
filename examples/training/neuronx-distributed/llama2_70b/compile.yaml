@@ -20,7 +20,7 @@ tolerations:
 git:
   repo_url: "https://github.com/aws-neuron/neuronx-distributed.git"
   branch: main
-  commit: a070deb86991affd589c48441bf819e6d4bb159b
+  commit: e83494557cb4c5b7e185ccf6c9240bfed9a1993d
 pre_script: 
   - pip3 install --upgrade pip
   - SCRIPT_DIR=$GIT_CLONE_DIR/examples/training/llama/tp_pp_llama_hf_pretrain

@@ -14,7 +14,7 @@ tolerations:
     effect: "NoSchedule"
 git:
   repo_url: "https://github.com/aws-neuron/neuronx-distributed.git"
-  commit: a070deb86991affd589c48441bf819e6d4bb159b
+  commit: e83494557cb4c5b7e185ccf6c9240bfed9a1993d
   branch: main
 pre_script: 
   - pip3 install --upgrade pip

@@ -20,12 +20,12 @@ tolerations:
 git:
   repo_url: "https://github.com/aws-neuron/neuronx-distributed-training.git"
   branch: main
-  commit: 9fbb7665548065d2d4cb37069ea95ef0aaa4bb80
+  commit: 34722584530c0c771b0d84636b39ae2fea96777a
 pre_script: 
   - git clone https://github.com/aws-neuron/neuronx-distributed.git /tmp/neuronx-distributed
   - cd /tmp/neuronx-distributed
-  - git fetch origin a070deb86991affd589c48441bf819e6d4bb159b
-  - git reset --hard a070deb86991affd589c48441bf819e6d4bb159b
+  - git fetch origin e83494557cb4c5b7e185ccf6c9240bfed9a1993d
+  - git reset --hard e83494557cb4c5b7e185ccf6c9240bfed9a1993d
   - cd $GIT_CLONE_DIR/examples
   - cp /tmp/neuronx-distributed/examples/training/llama/tp_pp_llama_hf_pretrain/70B_config_llama3/config.json config.json
   - LOGS_DIR=$LOG_ROOT/$PET_NODE_RANK
