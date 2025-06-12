@@ -50,9 +50,11 @@ RUN sudo apt-get -y install aws-neuronx-tools=2.*
 
 RUN pip3 config set global.extra-index-url https://pip.repos.neuron.amazonaws.com
 RUN pip3 install awscli
-RUN pip3 install neuronx-cc==2.17.* torch-neuronx==2.5.* torchvision  transformers-neuronx neuronx-distributed neuronx-distributed-inference
-
-ENV LD_LIBRARY_PATH=/home/ray/anaconda3/lib:$LD_LIBRARY_PATH
+RUN pip3 install neuronx-cc==2.18.* torch-neuronx==2.6.* torchvision \
+      transformers-neuronx neuronx-distributed neuronx-distributed-inference \
+      git+https://github.com/huggingface/optimum-neuron.git@v0.1.0
+      
+ENV LD_LIBRARY_PATH=/opt/aws/neuron/lib:/home/ray/anaconda3/lib:$LD_LIBRARY_PATH
 ENV PATH=/opt/aws/neuron/bin:$PATH
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -60,10 +62,11 @@ ENV PJRT_DEVICE=NEURON
 
 ENV VLLM_TARGET_DEVICE=neuron
 RUN git clone https://github.com/vllm-project/vllm.git
-RUN cd vllm && git fetch origin 3015d5634e74d59704e2b39bab0dbe2e6f86a38a
-RUN cd vllm && git reset --hard 3015d5634e74d59704e2b39bab0dbe2e6f86a38a
+RUN cd vllm && git fetch origin 5fbbfe9a4c13094ad72ed3d6b4ef208a7ddc0fd7
+RUN cd vllm && git reset --hard 5fbbfe9a4c13094ad72ed3d6b4ef208a7ddc0fd7
 RUN pip3 install -r vllm/requirements/neuron.txt
 RUN cd vllm && pip3 install -e .
-RUN pip3 install pynvml==12.0.0 triton==2.2.0
+
+RUN pip3 install pynvml==11.5.3 transformers==4.48.3 triton==3.2.0 protobuf==3.20.3
 
 CMD ["/bin/bash"]

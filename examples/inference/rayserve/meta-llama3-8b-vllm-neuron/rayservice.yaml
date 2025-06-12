@@ -31,6 +31,10 @@ ray:
       value: "--model-type transformer --enable-fast-loading-neuron-binaries"
     - name: NEURON_COMPILE_CACHE_URL
       value: "/tmp"
+    - name: NEURON_COMPILED_ARTIFACTS
+      value: /efs/home/{{ .Release.Name }}/config
+    - name: VLLM_NEURON_FRAMEWORK
+      value: "neuronx-distributed-inference"
   serve_config_v2: 
     serveConfigV2: |
       applications:

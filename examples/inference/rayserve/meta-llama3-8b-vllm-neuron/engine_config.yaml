@@ -15,6 +15,7 @@ inline_script:
   EOF
 pre_script:
   - mkdir -p $CONFIG_ROOT
+  - chmod a+rwx $CONFIG_ROOT
   - cp /tmp/engine.json $CONFIG_ROOT/engine.json
 process:
   env:
