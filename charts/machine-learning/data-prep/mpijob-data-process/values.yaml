@@ -4,7 +4,7 @@ backoff_limit: 2000
 resources:
   num_nodes: 2
   procs_per_node: 1
-  node_instance_type: "g4dn.xlarge"
+  node_instance_type: "g6.xlarge"
   requests:
     "nvidia.com/gpu": 1
   limits:

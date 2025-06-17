@@ -2,12 +2,12 @@ image: 'nvcr.io/nvidia/pytorch:24.10-py3'
 backoff_limit: 2000
 resources:
   requests:
-    "nvidia.com/gpu": 4 
+    "nvidia.com/gpu": 8 
   limits:
-    "nvidia.com/gpu": 4 
+    "nvidia.com/gpu": 8
   nnodes: 1 
-  nproc_per_node: 4 
-  node_type: 'g5.12xlarge' 
+  nproc_per_node: 8
+  node_type: 'g6.48xlarge' 
 tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"

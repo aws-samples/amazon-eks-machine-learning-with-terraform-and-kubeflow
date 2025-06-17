@@ -5,7 +5,10 @@ This project defines a *prototypical* solution for  MLOps on [Amazon Elastic Kub
 * Building a comprehensive sandbox environment for MLOps experimentation on EKS. 
 * Defining a canonical *prototype* for building custom MLOPs platforms on EKS.
 
-This solution uses a [modular](#enabling-modular-components) approach to MLOps. For distributed training, the solution works with popular AI machine learning libraries, for example, [Nemo](https://github.com/NVIDIA/NeMo), [Hugging Face Accelerate](https://github.com/huggingface/accelerate), [PyTorch Lightning](https://github.com/Lightning-AI/pytorch-lightning), [DeepSpeed](https://github.com/microsoft/DeepSpeed]), [Megatron-DeepSpeed](https://github.com/microsoft/Megatron-DeepSpeed), [Ray Train](https://docs.ray.io/en/latest/train/train.html), [Neuronx Distributed](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/libraries/neuronx-distributed/index.html), among others. For distributed inference, the solution supports [Ray Serve](https://docs.ray.io/en/latest/serve/index.html) with [vLLM](https://docs.vllm.ai/en/latest/), [Triton Inference Server](https://github.com/triton-inference-server)  with Python, [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) and [vLLM](https://docs.vllm.ai/en/latest/) backends, and [Deep Java Library (DJL) Large Model Inference (LMI)](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/index.html) with all [supported backends](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/vllm_user_guide.html).
+This solution uses a [modular](#enabling-modular-components) approach to MLOps, whereby, you can enable, or disable, various MLOPs modules, as needed. Supported ML Ops modules include: [Airflow](https://airflow.apache.org/), [Kubeflow](https://www.kubeflow.org/), [KServe](https://kserve.github.io/website/latest/), [Kueue](https://kueue.sigs.k8s.io/), [MLFlow](https://mlflow.org/), and 
+[Slinky Slurm](https://github.com/slinkyproject).
+
+For distributed training, the solution works with popular AI machine learning libraries, for example, [Nemo](https://github.com/NVIDIA/NeMo), [Hugging Face Accelerate](https://github.com/huggingface/accelerate), [PyTorch Lightning](https://github.com/Lightning-AI/pytorch-lightning), [DeepSpeed](https://github.com/microsoft/DeepSpeed]), [Megatron-DeepSpeed](https://github.com/microsoft/Megatron-DeepSpeed), [Ray Train](https://docs.ray.io/en/latest/train/train.html), [Neuronx Distributed](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/libraries/neuronx-distributed/index.html), among others. For distributed inference, the solution supports [Ray Serve](https://docs.ray.io/en/latest/serve/index.html) with [vLLM](https://docs.vllm.ai/en/latest/), [Triton Inference Server](https://github.com/triton-inference-server)  with Python, [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) and [vLLM](https://docs.vllm.ai/en/latest/) backends, and [Deep Java Library (DJL) Large Model Inference (LMI)](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/index.html) with all [supported backends](https://docs.djl.ai/master/docs/serving/serving/docs/lmi/user_guides/vllm_user_guide.html).
 
 **Legacy Note**: This project started as a companion to the [Mask R-CNN distributed training blog](https://aws.amazon.com/blogs/opensource/distributed-tensorflow-training-using-kubeflow-on-amazon-eks/), and that part of the project is documented in [this README](./tutorials/maskrcnn-blog/README.md). 
 
@@ -27,7 +30,7 @@ If you are a platform engineer, you may be interested in the [system architectur
 
 ## Tutorials
 
-Use the directory below to navigate tutorials.
+After completing [prerequisites](#prerequisites), use the directory below to navigate the tutorials.
 
 | Category      | Frameworks/Libraries |
 | ----------- | ----------- |
@@ -37,24 +40,29 @@ Use the directory below to navigate tutorials.
 
 ## Prerequisites
 
-1. [Create and activate an AWS Account](https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/)
-2. Select your AWS Region. For the tutorial below, we assume the region to be ```us-west-2```
-3. [Manage your Amazon EC2 service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) in your selected AWS Region. Increase service limits to at least 8 each for [p4d.24xlarge](https://aws.amazon.com/ec2/instance-types/p4/), [g5.xlarge, g5.12xlarge, g5.48xlarge](https://aws.amazon.com/ec2/instance-types/g5/), [`inf2.48xlarge`](https://aws.amazon.com/machine-learning/inferentia/) and [`trn1.32xlarge`](https://aws.amazon.com/machine-learning/trainium/). 
-4. If you use other Amazon EC2 GPU or AWS Trainium/Inferentia instance types, ensure your EC2 service limits are increased appropriately.
+* [Create and activate an AWS Account](https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/)
+* Select your AWS Region. For the tutorial below, we assume the region to be ```us-west-2```
+* [Manage your Amazon EC2 service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) in your selected AWS Region. Increase service limits to at least 8 each for [p4d.24xlarge](https://aws.amazon.com/ec2/instance-types/p4/), [g6.xlarge, g6.2xlarge, g6.48xlarge](https://aws.amazon.com/ec2/instance-types/g5/), [inf2.xlarge, inf2.48xlarge](https://aws.amazon.com/machine-learning/inferentia/) and [trn1.32xlarge](https://aws.amazon.com/machine-learning/trainium/). If you use other Amazon EC2 GPU or AWS Trainium/Inferentia instance types in the tutorials, ensure your EC2 service limits are increased appropriately.
+* If you do not already have an Amazon EC2 key pair, [create a new Amazon EC2 key pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html#prepare-key-pair). You will need the key pair name to specify the ```KeyName``` parameter when [launching the build machine desktop](#launch-build-machine-desktop).
+* You will need an [Amazon S3](https://aws.amazon.com/s3/) bucket. If you don't have one, [create a new Amazon S3 bucket](https://docs.aws.amazon.com/AmazonS3/latest/userguide/create-bucket-overview.html) in the AWS region you selected. The S3 bucket can be empty at this point.
+* Use [AWS check ip](http://checkip.amazonaws.com/) to get your public IP address of your laptop. This will be the IP address you will need to specify the ```DesktopAccessCIDR``` parameter when creating the build machine desktop. 
+* Clone this Git repository on your laptop using [```git clone ```](https://git-scm.com/book/en/v2/Git-Basics-Getting-a-Git-Repository).
 
-## Getting started
+## Launch Build Machine Desktop
 
-To get started, we need to execute following steps:
+To launch the *build machine*, you will need [Administrator job function](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html) access to [AWS Management Console](https://aws.amazon.com/console/). Use the AWS CloudFormation template [ml-ops-desktop.yaml](./ml-ops-desktop.yaml) from your cloned  repository to create a new CloudFormation stack using the [ AWS Management console](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-create-stack.html), or using the [AWS CLI](https://docs.aws.amazon.com/cli/latest/reference/cloudformation/create-stack.html). 
 
-  1. Setup the build machine
-  2. Use [Terraform](https://learn.hashicorp.com/terraform) to create the required infrastructure
-  3. Create `home` folder on [Amazon EFS](https://aws.amazon.com/efs/) and [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) shared file-systems
-  
-### Setup the build machine
+The template [ml-ops-desktop.yaml](./ml-ops-desktop.yaml) creates [AWS Identity and Access Management (IAM)](https://aws.amazon.com/iam/) resources. If you are creating CloudFormation Stack using the console, in the review step, you must check 
+**I acknowledge that AWS CloudFormation might create IAM resources.** If you use the ```aws cloudformation create-stack``` CLI, you must use ```--capabilities CAPABILITY_NAMED_IAM```. 
 
-For the *build machine*, we need a machine capable of building Docker images for the `linux/amd64` operating system architecture. The build machine will minimally need [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-welcome.html) and [Docker](https://www.docker.com/) installed. The AWS CLI must be configured for [Administrator job function](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html). It is highly recommended that you  [launch an EC2 instance for the build machine](#optional-launch-ec2-instance-for-the-build-machine).
+### Connect to Build Machine Desktop using SSH
 
-#### Clone git repository
+* Once the stack status in CloudFormation console is ```CREATE_COMPLETE```, find the ML Ops desktop instance launched in your stack in the Amazon EC2 console, and [connect to the instance using SSH](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AccessingInstancesLinux.html) as user ```ubuntu```, using your SSH key pair.
+* When you connect using SSH, and you see the message ```"Cloud init in progress! Logs: /var/log/cloud-init-output.log"```, disconnect and try later after about 15 minutes. The desktop installs the Amazon DCV server on first-time startup, and reboots after the install is complete.
+* If you see the message ```Amazon DCV server is enabled!```, run the command ```sudo passwd ubuntu``` to set a new password for user ```ubuntu```. Now you are ready to connect to the desktop using the [Amazon DCV client](https://docs.aws.amazon.com/dcv/latest/userguide/client.html)
+* The build machine desktop uses EC2 [user-data](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html) to initialize the desktop. Most *transient* failures in the desktop initialization can be fixed by rebooting the desktop.
+
+#### Clone Git Repository
 
 Clone this git repository on the build machine using the following commands:
 
@@ -63,26 +71,16 @@ Clone this git repository on the build machine using the following commands:
 
 #### Install Kubectl
 
-To install ```kubectl``` on Linux, execute following commands:
+Install ```kubectl``` on the build machine using following commands:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     ./eks-cluster/utils/install-kubectl-linux.sh
 
-For non-Linux, [install and configure kubectl for EKS](https://docs.aws.amazon.com/eks/latest/userguide/configure-kubectl.html), install [aws-iam-authenticator](https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html), and make sure the command ```aws-iam-authenticator help``` works. 
+### Use Terraform to Create ML Ops PLatform
 
-#### Install Terraform
+ We use Terraform to create the ML Ops platform.
 
-[Install Terraform](https://learn.hashicorp.com/terraform/getting-started/install.html). Terraform configuration files in this repository are consistent with Terraform v1.1.4 syntax, but may work with other Terraform versions, as well.
-
-#### Install Helm
-
-[Helm](https://helm.sh/docs/intro/install/) is package manager for Kubernetes. It uses a package format named *charts*. A Helm chart is a collection of files that define Kubernetes resources. [Install helm](https://helm.sh/docs/intro/install/).
-
-### Use Terraform to create infrastructure
-
- We use Terraform to create the EKS cluster, and deploy Kubeflow platform.
-
-#### Enable S3 backend for Terraform
+#### Enable S3 Backend for Terraform
 
 Replace `S3_BUCKET`and `S3_PREFIX` with your S3 bucket name, and s3 prefix (no leading or trailing `/`), and execute the commands below
 
@@ -96,7 +94,11 @@ Replace `S3_BUCKET`and `S3_PREFIX` with your S3 bucket name, and s3 prefix (no l
 
 #### Apply Terraform
 
-Not all the AWS Availability Zones in an AWS Region have all the EC2 instance types. Specify at least three AWS Availability Zones from your AWS Region in `azs` below, ensuring that you  have access to your desired EC2 instance types. Replace `S3_BUCKET` with your S3 bucket name and execute:
+Logout from AWS Public ECR as otherwise `terraform apply` commands below may fail:
+
+    docker logout public.ecr.aws
+
+Specify at least three AWS Availability Zones from your AWS Region in `azs` below, ensuring that you  have access to your desired EC2 instance types. Replace `S3_BUCKET` with your S3 bucket name and execute:
 
     terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET/ml-platform/"
 
@@ -110,7 +112,7 @@ If you need to use [AWS Trainium instances](https://aws.amazon.com/machine-learn
 
 **Note:** Ensure that the AWS Availability Zone you specify for `neuron_az` or `cuda_efa_az` variable above supports requested instance types, and this zone is included in the `azs` variable.
 
-#### Enabling modular components
+#### Enabling Modular Components
 
 This solution offers a suite of modular components for MLOps. All are disabled by default, and are not needed to work through included examples. You may toggle the modular components using following terraform variables:
 
@@ -123,10 +125,10 @@ This solution offers a suite of modular components for MLOps. All are disabled b
 | [MLFlow](https://mlflow.org/) | mlflow_enabled | false |
 | [Nvidia DCGM Exporter](https://github.com/NVIDIA/dcgm-exporter) | dcgm_exporter_enabled | false |
 | [SageMaker controller](https://github.com/aws-controllers-k8s/sagemaker-controller) | ack_sagemaker_enabled | false |
-| [Slurm](https://github.com/stackhpc/slurm-k8s-cluster/tree/main) | slurm_enabled | false |
+| [Slinky Slurm](https://github.com/slinkyproject) | slurm_enabled | false |
 
 
-#### Retrieve static user password
+#### Retrieve Static User Password
 
  The static user's password is marked `sensitive` in the Terraform output. To show your static password, execute:
 
@@ -134,7 +136,7 @@ This solution offers a suite of modular components for MLOps. All are disabled b
 
 This password is used for Admin user for all web applications deployed within this solution.
 
-### Create `home` folder on shared file-systems
+### Create Home Folder on EFS and FSx for Lustre
 
 Attach to the shared file-systems by executing following steps:
 
@@ -162,6 +164,8 @@ FSx for Lustre file-system is configured to automatically import and export cont
 
 ### Access Kubeflow Central Dashboard (Optional)
 
+This section only applies if you [enable Kubeflow platform module](#enabling-modular-components).
+
 If your web browser client machine is not the same as your build machine, before you can access Kubeflow Central Dashboard in a web browser, you must execute following steps on the your client machine:
 
 1. [install `kubectl` client](https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html)
@@ -178,13 +182,16 @@ For Mac:
 
 For Linux:
 
-Ensure `kubectl` is configured for `root` user, and execute below:
+Ensure `kubectl` is configured for `root` user by executing following commands (one time only):
 
     sudo su -
+    aws eks update-kubeconfig --region us-west-2 --name my-eks-cluster
+
+Connect using `kubectl port-forward`:
+
     kubectl port-forward svc/istio-ingressgateway -n ingress 443:443
 
-
-**Note**: Leave the terminal open.
+**Note**: Leave the `kubectl port-forward` terminal open for next step below.
 
 Next, modify your `/etc/hosts` file to add following entry:
 
@@ -192,17 +199,19 @@ Next, modify your `/etc/hosts` file to add following entry:
 
 Open your web browser to the [KubeFlow Central Dashboard](https://istio-ingressgateway.ingress.svc.cluster.local/) URL to access the dashboard. For login, use the static username `user@example.com`, and [retrieve the static password from terraform](#retrieve-static-user-password).
 
-### Use Terraform to destroy infrastructure
+**Note:** When you are not using the KubeFlow Central Dashboard, you can close the `kubectl port-forward` terminal.
+
+### Use Terraform to Destroy ML Ops Platform
 
 If you want to preserve any content from your EFS file-system, you must upload it to your [Amazon S3](https://aws.amazon.com/s3/) bucket, manually. The content stored on the  FSx for Lustre file-system is automatically exported to your [Amazon S3](https://aws.amazon.com/s3/) bucket under the `ml-platform` top-level folder.
 
-Please verify your content in [Amazon S3](https://aws.amazon.com/s3/) bucket before destroying the infrastructure. You can recreate your infrastructure using the same S3 bucket. 
+Please verify your content in [Amazon S3](https://aws.amazon.com/s3/) bucket before destroying the ML Ops platform. You can recreate your ML Ops platform using the same S3 bucket. 
 
 Use following command to check and uninstall all Helm releases:
 
     for x in $(helm list -q -n kubeflow-user-example-com); do echo $x; helm uninstall $x -n kubeflow-user-example-com; done
 
-Wait 5 minutes for Helm uninstall to shut down pods. Use following commands to check and delete all remaining pods in `kubeflow-user-example-com` namespace:
+Wait at least 5 minutes for Helm uninstall to shut down all pods. Use following commands to check and delete all remaining pods in `kubeflow-user-example-com` namespace:
 
     kubectl get pods -n kubeflow-user-example-com
     kubectl delete --all pods -n kubeflow-user-example-com
@@ -212,30 +221,13 @@ Run following commands to delete `attach-pvc` pod:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     kubectl delete -f eks-cluster/utils/attach-pvc.yaml  -n kubeflow
     
-Wait 15 minutes to allow accelerator infrastructure to automatically scale down to zero.
+Wait 15 minutes to allow infrastructure to automatically scale down to zero.
 
 Finally, to destroy all the infrastructure created in this tutorial, execute following commands:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster-and-nodegroup
 
     terraform destroy -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2d","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET/ml-platform/"
-
-
-#### (Optional) Launch EC2 instance for the build machine 
-To launch an EC2 instance for the *build machine*, you will need [Administrator job function](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html) access to [AWS Management Console](https://aws.amazon.com/console/). In the console, execute following steps:
-
-1. Create an [Amazon EC2 key pair](https://docs.aws.amazon.com/en_pv/AWSEC2/latest/UserGuide/ec2-key-pairs.html) in your selected AWS region, if you do not already have one
-2. Create an [AWS Service role for an EC2 instance](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_terms-and-concepts.html#iam-term-service-role-ec2), and add [AWS managed policy for Administrator access](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html#jf_administratorhttps://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html#jf_administrator) to this IAM Role.
-3. [Launch](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/EC2_GetStarted.html) a [m5.xlarge](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/LaunchingAndUsingInstances.html) instance from [Amazon Linux 2 AMI](https://aws.amazon.com/marketplace/pp/prodview-zc4x2k7vt6rpu) using  the IAM Role created in the previous step. Use 200 GB for ```Root``` volume size. 
-4. After the instance state is ```Running```, [connect to your linux instance](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AccessingInstances.html) as ```ec2-user```. On the linux instance, install the required software tools as described below:
-
-        sudo yum install -y docker git
-        sudo systemctl enable docker.service
-        sudo systemctl start docker.service
-        sudo usermod -aG docker ec2-user
-        exit
-
-Now, reconnect to your linux instance. 
 
 ## Reference
 

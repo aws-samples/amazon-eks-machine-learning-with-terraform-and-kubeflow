@@ -1,3 +1,8 @@
+variable "eks_cluster_id" {
+  description = "EKS cluster id"
+  type        = string
+}
+
 variable "local_helm_repo" {
   description = "Local Helm charts path"
   type        = string
@@ -13,9 +18,15 @@ variable "efs_fs_id" {
   type = string
 }
 
-variable "ssh_public_key" {
-  description = "Slurm SSH public key for node login"
-  type        = string
+variable "root_ssh_authorized_keys" {
+  description = "Slurm Root SSH public keys"
+  type        = list
+}
+
+
+variable "login_enabled" {
+  description = "Slurm login enabled"
+  type        = bool
 }
 
 variable "storage_capacity" {
@@ -28,11 +39,6 @@ variable "storage_type" {
   type        = string
 }
 
-variable "password" {
-  description = "Slurm password for user rocky"
-  type        = string
-}
-
 variable "fsx" {
   description = "FSx for Lustre file system"
 
@@ -41,4 +47,24 @@ variable "fsx" {
     dns_name      = string
     mount_name  = string
   })
+}
+
+variable "db_max_capacity" {
+  description = "DB max capacity"
+  type        = number
+}
+
+variable "db_subnet_ids" {
+  description = "DB subnet ids"
+  type        = list
+}
+
+variable "db_vpc_id" {
+  description = "DB VPC id"
+  type        = string
+}
+
+variable "db_port" {
+  description = "DB port"
+  type        = number
 }

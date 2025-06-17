@@ -29,7 +29,7 @@ resources:
   limits:
     "nvidia.com/gpu": 1 
   nnodes: 1 
-  node_type: 'g5.xlarge' 
+  node_type: 'g6.2xlarge' 
 tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"

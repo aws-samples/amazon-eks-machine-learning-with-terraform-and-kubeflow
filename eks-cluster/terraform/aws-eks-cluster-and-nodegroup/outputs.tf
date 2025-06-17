@@ -74,3 +74,9 @@ output "mlflow_db_secret_arn" {
   description = "MLFlow DB secret ARN"
   value = module.mlflow.*.db_secret_arn
 }
+
+output "slurm_db_password" {
+  description = "Slurm DB password"
+  sensitive = true
+  value = module.slurm.*.db_password
+}

@@ -48,7 +48,7 @@ resources:
     "nvidia.com/gpu": 8
   limits:
     "nvidia.com/gpu": 8
-  node_type: 'g5.48xlarge' 
+  node_type: 'g6.48xlarge' 
 tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"

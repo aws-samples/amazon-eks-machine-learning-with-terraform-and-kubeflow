@@ -1,7 +1,7 @@
 image: 
   name: nvcr.io/nvidia/tritonserver:25.01-vllm-python-py3
 resources:
-  node_type: g5.48xlarge
+  node_type: g6.48xlarge
   requests:
     "nvidia.com/gpu": 8
   limits:

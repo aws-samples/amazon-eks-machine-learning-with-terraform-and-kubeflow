@@ -1,7 +1,7 @@
 image: 
   name: 763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-inference:2.6.0-gpu-py312-cu124-ubuntu22.04-ec2
 resources:
-  node_type: g5.2xlarge
+  node_type: g6.2xlarge
   requests:
     "nvidia.com/gpu": 1
   limits:

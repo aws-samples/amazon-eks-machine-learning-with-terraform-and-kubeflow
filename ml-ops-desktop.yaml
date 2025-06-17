@@ -1,0 +1,459 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  ML Ops Desktop with Amazon DCV Server. 
+  Connect using a DCV Client.
+Parameters:
+  AWSUbuntuAMIType:
+    Description: >- 
+      Ubuntu AMI Type
+    Type: String
+    Default: "UbuntuPro2404LTS"
+    AllowedValues:
+      - "UbuntuPro2404LTS"
+  DesktopVpcId:
+    Description: Desktop VPC ID
+    Type: 'AWS::EC2::VPC::Id'
+  DesktopVpcSubnetId:
+    Description: Desktop VPC Subnet ID. Subnet must be public with IGW access, if DesktopHasPublicIpAddress is 'true', else private with NAT gateway access.
+    Type: 'AWS::EC2::Subnet::Id'
+  DesktopHasPublicIpAddress:
+    Description: Should a Public Ip Address be associated with the Desktop?
+    Type: String
+    Default: "true"
+    AllowedValues:
+     - "true"
+     - "false"
+  EbsVolumeSize:
+    Default: 1000
+    Description: Ebs volume size (GB)
+    Type: Number
+    MinValue: 1000
+  EbsVolumeType:
+    Default: 'gp3'
+    Description: Ebs volume type
+    Type: String
+    AllowedValues:
+      - 'gp3'
+  DesktopSecurityGroupId:
+    Description: >-
+      (Optional) Advanced option to specify existing Desktop Security Group Id. 
+      Leave blank to create new Security Group.
+    Type: String
+    AllowedPattern: '(^sg-[0-9a-z]+)$|()$'
+    Default: ''
+    ConstraintDescription: Should be a Valid SecurityGroup Id in selected VPC, or blank
+
+  KeyName:
+    Description: >-
+      Name of an existing Amazon EC2 KeyPair to enable SSH and DCV access to the
+      desktop
+    Type: 'AWS::EC2::KeyPair::KeyName'
+  DesktopInstanceType:
+    Description: EC2 instance type for desktop
+    Type: String
+    Default: m7a.xlarge
+    AllowedValues:
+      - m7a.xlarge
+      - m7a.2xlarge
+  DesktopAccessCIDR:
+    Description: >-
+      Restrict desktop access for SSH and DCV client from a valid CIDR range
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: Must be a valid CIDR range of the form x.x.x.x/x
+  EBSOptimized:
+    Description: >-
+      Is the instance EBS optimized?
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'false'
+      - 'true'
+  UbuntuAMIOverride:
+    Description: >-
+      (Optional) Advanced option to override the default Ubuntu AMI.  
+      Leave blank, if unsure.
+    Type: String
+    AllowedPattern: '(ami-[0-9a-z]{17})?'
+
+Mappings:
+  UbuntuPro2404LTS:
+    us-east-1:
+      AMI: ami-0a7620d611d3ceae4
+    us-east-2:
+      AMI: ami-0cbf25dcbfefddd8b
+    us-west-2:
+      AMI: ami-0026a04369a3093cc
+    eu-west-1:
+      AMI: ami-0286d0aea4d6c7a34
+    eu-central-1:
+      AMI: ami-0ccb7fb77fc31decd
+    ap-southeast-1:
+      AMI: ami-07945fd9edc6f05f4
+    ap-southeast-2:
+      AMI: ami-08b7eb416c0794df3
+    ap-south-1:
+      AMI: ami-0cd173613e262de82
+    ap-northeast-1:
+      AMI: ami-0ce9ed7bc1a296fe7
+    ap-northeast-2:
+      AMI: ami-02501420b6298dfc3
+Conditions:
+  OverrideAMI: !Not 
+    - !Equals 
+      - !Ref UbuntuAMIOverride
+      - ''
+  CreateNewSecurityGroup: !Equals 
+    - !Ref DesktopSecurityGroupId
+    - ''
+
+Resources:
+  
+  DesktopSecurityGroup:
+    Condition: CreateNewSecurityGroup
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Desktop security group
+      VpcId: !Ref DesktopVpcId
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+
+  DesktopSecurityGroupCIDRIngressDCV: 
+    Condition: CreateNewSecurityGroup
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      Description: Ingress from CIDR for NICE-DCV access to graphics desktop
+      GroupId: !GetAtt DesktopSecurityGroup.GroupId
+      CidrIp: !Ref DesktopAccessCIDR
+      IpProtocol: tcp
+      FromPort: 8443
+      ToPort: 8443
+
+  DesktopSecurityGroupCIDRIngressSSH:
+    Condition: CreateNewSecurityGroup
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      Description: Ingress from CIDR for SSH access to graphics desktop
+      GroupId: !GetAtt DesktopSecurityGroup.GroupId
+      CidrIp: !Ref DesktopAccessCIDR
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+  
+  DesktopSecurityGroupIngressSelf: 
+    Condition: CreateNewSecurityGroup
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      Description: Ingress from self security group
+      GroupId: !GetAtt DesktopSecurityGroup.GroupId
+      IpProtocol: "-1"
+      FromPort: 0
+      ToPort: 65535
+      SourceSecurityGroupId: !GetAtt DesktopSecurityGroup.GroupId
+
+  DesktopSecurityGroupEgressSelf: 
+    Condition: CreateNewSecurityGroup
+    Type: 'AWS::EC2::SecurityGroupEgress'
+    Properties:
+      Description: Egress to self security group
+      GroupId: !GetAtt DesktopSecurityGroup.GroupId
+      IpProtocol: "-1"
+      FromPort: 0
+      ToPort: 65535
+      DestinationSecurityGroupId: !GetAtt DesktopSecurityGroup.GroupId
+  
+  DesktopSecurityGroupCIDREgress: 
+    Condition: CreateNewSecurityGroup
+    Type: 'AWS::EC2::SecurityGroupEgress'
+    Properties:
+      Description: Egress rule for out bound traffic
+      GroupId: !GetAtt DesktopSecurityGroup.GroupId
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 65535
+      CidrIp: '0.0.0.0/0'
+
+  InstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/PowerUserAccess
+      Policies:
+        - PolicyName: iam-policies
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - "iam:GetRole"
+                  - "iam:CreateRole"
+                  - "iam:PassRole"
+                  - "iam:AttachRolePolicy"
+                  - "iam:PutRolePolicy"
+                  - "iam:DeleteRolePolicy"
+                  - "iam:DetachRolePolicy"
+                  - "iam:DeleteRole"
+                  - "iam:ListRolePolicies"
+                  - "iam:ListAttachedRolePolicies"
+                  - "iam:ListInstanceProfilesForRole"
+                  - "iam:GetPolicy"
+                  - "iam:CreatePolicy"
+                  - "iam:DeletePolicy"
+                  - "iam:GetRolePolicy"
+                  - "iam:GetPolicyVersion"
+                  - "iam:CreateOpenIDConnectProvider"
+                  - "iam:ListPolicyVersions"
+                  - "iam:CreatePolicyVersion"
+                Resource: 
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/*'
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:policy/*'
+              - Effect: Allow
+                Action: 
+                  - "iam:CreateOpenIDConnectProvider"
+                  - "iam:GetOpenIDConnectProvider"
+                  - "iam:DeleteOpenIDConnectProvider"
+                Resource: 
+                  - !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/oidc.eks.${AWS::Region}.amazonaws.com/id/*
+
+  InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref InstanceRole
+  
+  DesktopLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties: 
+      LaunchTemplateData: 
+        MetadataOptions:
+          HttpTokens: "required"
+          HttpEndpoint: "enabled"
+        NetworkInterfaces: 
+        - AssociatePublicIpAddress: !Ref DesktopHasPublicIpAddress
+          DeviceIndex: "0"
+          Groups: 
+            - !If
+              - CreateNewSecurityGroup
+              - !GetAtt DesktopSecurityGroup.GroupId
+              - !Ref DesktopSecurityGroupId
+          SubnetId: !Ref DesktopVpcSubnetId
+        BlockDeviceMappings:
+        - DeviceName: "/dev/sda1"
+          Ebs:
+            VolumeSize: !Ref EbsVolumeSize
+            VolumeType: !Ref EbsVolumeType
+            Encrypted: true
+            DeleteOnTermination: true
+        ImageId: !If 
+          - OverrideAMI
+          - !Ref UbuntuAMIOverride
+          - !FindInMap 
+            - !Ref 'AWSUbuntuAMIType'
+            - !Ref 'AWS::Region'
+            - AMI
+        EbsOptimized: !Ref EBSOptimized
+
+  DesktopInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref DesktopLaunchTemplate
+        Version: !GetAtt DesktopLaunchTemplate.LatestVersionNumber
+      InstanceType: !Ref DesktopInstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      KeyName: !Ref KeyName
+      Tags: 
+        - Key: "Name"
+          Value: !Sub '${AWS::StackName}-ml-ops-desktop'
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              Content-Type: multipart/mixed; boundary="//"
+              MIME-Version: 1.0
+
+              --//
+              Content-Type: text/cloud-config; charset="us-ascii"
+              MIME-Version: 1.0
+              Content-Transfer-Encoding: 7bit
+              Content-Disposition: attachment; filename="cloud-config.txt"
+
+              #cloud-config
+              cloud_final_modules:
+              - [scripts-user, always]
+
+              --//
+              Content-Type: text/x-shellscript; charset="us-ascii"
+              MIME-Version: 1.0
+              Content-Transfer-Encoding: 7bit
+              Content-Disposition: attachment; filename="userdata.txt"
+              #!/bin/bash -xe
+              echo "Cloud init in progress! Logs: /var/log/cloud-init-output.log" > /etc/motd
+              . /etc/os-release
+
+              distro=ubuntu${VERSION_ID//[.]/""}
+              arch="x86_64"
+              echo "Ubuntu  $distro/$arch"
+
+              # setup graphics desktop
+              export DEBIAN_FRONTEND=noninteractive
+              export DEBCONF_NONINTERACTIVE_SEEN=true
+
+              # setup software repo for docker
+              wget -qO - https://download.docker.com/linux/ubuntu/gpg > ./GPG_DOCKER.PUB
+              gpg --no-default-keyring --keyring ./docker_keyring.gpg --import  ./GPG_DOCKER.PUB
+              gpg --no-default-keyring --keyring ./docker_keyring.gpg  --export > ./docker.gpg
+              mv ./docker.gpg /etc/apt/trusted.gpg.d/
+              rm ./GPG_DOCKER.PUB
+              
+              add-apt-repository -y  "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+
+              # add key for NICE-DCV
+              wget -qO - https://d1uj6qtbmh3dt5.cloudfront.net/NICE-GPG-KEY > ./NICE-GPG-KEY
+              gpg --no-default-keyring --keyring ./nice_dcv_keyring.gpg --import  ./NICE-GPG-KEY
+              gpg --no-default-keyring --keyring ./nice_dcv_keyring.gpg  --export > ./nice_dcv.gpg
+              mv ./nice_dcv.gpg /etc/apt/trusted.gpg.d/
+              rm ./NICE-GPG-KEY
+
+              # update and install required packages
+              apt-get update
+
+              apt-get -y install git tar
+              apt-get -y install software-properties-common
+              
+              # install docker if it is not installed
+              if [ ! -x "$(command -v docker)" ]; then
+                apt-get -y install docker-ce docker-ce-cli containerd.io      
+                usermod -aG docker ubuntu
+              fi
+              
+              apt-get -y install tzdata
+              apt-get -y install keyboard-configuration
+              apt-get -y install gnupg2
+              apt-get -y install openmpi-bin libopenmpi-dev 
+              apt-get -y install protobuf-compiler
+
+              apt-get -y install ubuntu-desktop
+
+              if [[ ! -x "$(command -v dcv)" ]]
+              then
+              apt-get -y install gdm3
+              echo "/usr/sbin/gdm3" > /etc/X11/default-display-manager
+              dpkg-reconfigure gdm3
+              sed -i -e "s/#WaylandEnable=false/WaylandEnable=false/g" /etc/gdm3/custom.conf
+              systemctl restart gdm3
+
+              apt-get -y install mesa-utils || echo "nameserver 8.8.8.8" >> /etc/resolv.conf && apt-get -y install mesa-utils
+              apt-get -y install xserver-xorg-video-dummy
+              cat >/etc/X11/xorg.conf <<EOL
+              Section "Device"
+                Identifier "DummyDevice"
+                Driver "dummy"
+                Option "UseEDID" "false"
+                VideoRam 512000
+              EndSection
+              Section "Monitor"
+                Identifier "DummyMonitor"
+                HorizSync 5.0 - 1000.0
+                VertRefresh 5.0 - 200.0
+                Option "ReducedBlanking"
+              EndSection
+              Section "Screen"
+                Identifier "DummyScreen"
+                Device "DummyDevice"
+                Monitor "DummyMonitor"
+                DefaultDepth 24
+                SubSection "Display"
+                  Viewport 0 0
+                  Depth 24
+                  Virtual 4096 2160
+                EndSubSection
+              EndSection
+              EOL
+
+              #restart X server
+              echo "restart X-server"
+              systemctl set-default graphical.target
+              systemctl isolate graphical.target
+             
+              wget https://d1uj6qtbmh3dt5.cloudfront.net/2024.0/Servers/nice-dcv-2024.0-19030-ubuntu2404-x86_64.tgz && \
+              tar -xvzf nice-dcv-2024.0-19030-ubuntu2404-x86_64.tgz && \
+              cd nice-dcv-2024.0-19030-ubuntu2404-x86_64 && \
+              apt-get -y install ./nice-dcv-server_2024.0.19030-1_amd64.ubuntu2404.deb
+              reboot
+              fi
+
+              #restart X server
+              systemctl set-default graphical.target
+              systemctl isolate graphical.target
+  
+              # Create DCV server configuration file
+              [[ -d /opt/dcv-session-store ]] || mkdir /opt/dcv-session-store
+              echo "[license]" >> dcv.conf
+              echo "[log]" >> dcv.conf
+              echo "[session-management]" >> dcv.conf
+              echo "create-session = true" >> dcv.conf
+              echo "[session-management/defaults]" >> dcv.conf
+              echo "[session-management/automatic-console-session]" >> dcv.conf
+              echo "owner=ubuntu" >> dcv.conf
+              echo "storage-root=\"/opt/dcv-session-store/\"" >> dcv.conf
+              echo "[display]" >> dcv.conf
+              echo "[connectivity]" >> dcv.conf
+              echo "[security]" >> dcv.conf
+              echo "authentication=\"system\"" >> dcv.conf
+              echo "[clipboard]" >> dcv.conf
+              echo "primary-selection-copy=true" >> dcv.conf
+              echo "primary-selection-paste=true" >> dcv.conf
+              mv dcv.conf /etc/dcv/dcv.conf
+
+              # Create DCV session permissions files
+              rm -f /home/ubuntu/dcv.perms
+              echo "[permissions]" >> /home/ubuntu/dcv.perms
+              echo "%owner% allow builtin" >> /home/ubuntu/dcv.perms
+
+              # Enable DCV server
+              systemctl enable dcvserver
+              systemctl restart dcvserver
+              
+              echo "install DCV server complete"
+
+              # install nfs-common
+              apt-get -y install nfs-common
+            
+              # install aws cli
+              snap install aws-cli --classic
+
+              # Install terraform
+              snap install terraform --classic
+              
+              # install helm
+              snap install helm --classic
+
+            - AWS_REGION=
+            - !Ref AWS::Region
+            - |+
+
+            - |
+              # Create config file
+              [[ -d /home/ubuntu/.aws ]] || mkdir /home/ubuntu/.aws
+              cat >/home/ubuntu/.aws/config <<EOL
+              [default]
+              region = ${AWS_REGION}
+              output=json
+              EOL
+              
+              chown ubuntu:ubuntu -R /home/ubuntu/.aws
+
+              echo "ML Ops desktop is enabled!" > /etc/motd

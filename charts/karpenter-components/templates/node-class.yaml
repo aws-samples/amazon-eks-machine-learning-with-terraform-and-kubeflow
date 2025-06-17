@@ -1,17 +1,20 @@
 ---
-apiVersion: karpenter.k8s.aws/v1beta1
+apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
   name: default
   namespace: {{ .Values.namespace }}
 spec:
-  amiFamily: AL2                
+  amiFamily: AL2023                
   subnetSelectorTerms:          
     - tags:
         karpenter.sh/discovery: "{{ .Values.cluster_id }}"
   securityGroupSelectorTerms:   
     - tags:
         "kubernetes.io/cluster/{{ .Values.cluster_id }}": "owned"
+
+  amiSelectorTerms:
+    - alias: al2023@v20250610
   
   role: "{{ .Values.role_name }}"
 
@@ -64,13 +67,13 @@ spec:
       done
     fi
 ---
-apiVersion: karpenter.k8s.aws/v1beta1
+apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
   name: neuron
   namespace: {{ .Values.namespace }}
 spec:
-  amiFamily: AL2                
+  amiFamily: AL2023                
   subnetSelectorTerms:          
     - tags:
         karpenter.sh/discovery/neuron: "{{ .Values.cluster_id }}"
@@ -78,6 +81,9 @@ spec:
     - tags:
         "kubernetes.io/cluster/{{ .Values.cluster_id }}": "owned"
   
+  amiSelectorTerms:
+    - alias: al2023@v20250610
+
   role: "{{ .Values.role_name }}"
 
   tags:                  
@@ -129,13 +135,13 @@ spec:
       done
     fi
 ---
-apiVersion: karpenter.k8s.aws/v1beta1
+apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
   name: cudaefa
   namespace: {{ .Values.namespace }}
 spec:
-  amiFamily: AL2                
+  amiFamily: AL2023                
   subnetSelectorTerms:          
     - tags:
         karpenter.sh/discovery/cudaefa: "{{ .Values.cluster_id }}"
@@ -143,6 +149,9 @@ spec:
     - tags:
         "kubernetes.io/cluster/{{ .Values.cluster_id }}": "owned"
   
+  amiSelectorTerms:
+    - alias: al2023@v20250610
+
   role: "{{ .Values.role_name }}"
 
   tags:                  

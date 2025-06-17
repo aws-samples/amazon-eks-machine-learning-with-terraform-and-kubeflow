@@ -1,12 +1,12 @@
 image:
 resources:
   requests:
-    "nvidia.com/gpu": 4
+    "nvidia.com/gpu": 8
   limits:
-    "nvidia.com/gpu": 4
+    "nvidia.com/gpu": 8
   nnodes: 2 
-  nproc_per_node: 4 
-  node_type: 'g5.12xlarge' 
+  nproc_per_node: 8
+  node_type: 'g6.48xlarge' 
 ebs:
   storage: 100Gi
   mount_path: /tmp
@@ -39,7 +39,7 @@ pre_script:
              \"train_micro_batch_size_per_gpu\": 8,
              \"gradient_accumulation_steps\": 1
            }'  > $HOME/ds_config.json"
-  - export GPT_ARGS="--tensor-model-parallel-size 2 
+  - export GPT_ARGS="--tensor-model-parallel-size 4 
     --pipeline-model-parallel-size 2 
     --num-layers 24 
     --hidden-size 1024 

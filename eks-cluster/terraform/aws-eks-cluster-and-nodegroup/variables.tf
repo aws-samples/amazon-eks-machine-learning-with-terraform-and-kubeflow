@@ -19,7 +19,7 @@ variable "cluster_name" {
 
 variable "k8s_version" {
   description = "kubernetes version"
-  default = "1.31"
+  default = "1.33"
   type    = string
 }
 
@@ -160,15 +160,22 @@ variable "efa_enabled" {
     "p4d.24xlarge" = 4
     "p4de.24xlarge" = 4
     "p5.48xlarge" = 32
+    "p5e.48xlarge" = 32
+    "p5en.48xlarge" = 32
     "trn1.32xlarge" = 8
-    "trn1n.32xlarge" = 8
+    "trn1n.32xlarge" = 16
+    "trn2.48xlarge" = 32
   }
 }
 
-variable "node_instances" {
-  description = "List of instance types for accelerator node groups. Ignored if karpenter_enabled=true."
+variable "nvidia_instances" {
+  description = "Nvidia instances. Ignored if karpenter_enabled=true."
   type = list(string)
-  default = ["g5.xlarge", "g5.12xlarge", "g5.48xlarge",  "p4d.24xlarge"]
+  default = [
+    "g6.2xlarge",
+    "g6.48xlarge",
+    "p4d.24xlarge"
+  ]
 }
 
 variable "system_instances" {
@@ -200,15 +207,12 @@ variable "system_volume_size" {
 }
 
 variable "neuron_instances" {
-  description = "Neuron instances"
+  description = "Neuron instances. Ignored if karpenter_enabled=true."
   type = list(string)
   default = [
     "inf2.xlarge",
-    "inf2.8xlarge",
-    "inf2.24xlarge",
     "inf2.48xlarge",
-    "trn1.32xlarge",
-    "trn1n.32xlarge"
+    "trn1.32xlarge"
   ]
 }
 
@@ -256,8 +260,9 @@ variable "karpenter_namespace" {
 variable "karpenter_version" {
   description = "Karpenter version"
   type = string
-  default = "v0.33.2"
+  default = "1.5.0"
 }
+
 variable "karpenter_capacity_type" {
   description = "Karpenter capacity type: 'on-demand' or 'spot'"
   type = string
@@ -427,10 +432,16 @@ variable "slurm_namespace" {
   default = "slurm"
 }
 
-variable "slurm_ssh_pub_key" {
-  description = "Slurm SSH public key for node login"
-  type        = string
-  default = "ssh-rsa"
+variable "slurm_root_ssh_authorized_keys" {
+  description = "Slurm Root SSH public keys"
+  type        = list
+  default = []
+}
+
+variable "slurm_login_enabled" {
+  description = "Slurm login enabled"
+  type        = bool
+  default = false
 }
 
 variable "slurm_storage_type" {
@@ -447,6 +458,12 @@ variable "slurm_storage_capacity" {
   description = "Slurm shared storage capacity"
   type        = string
   default = "1200Gi"
+}
+
+variable "slurm_db_max_capacity" {
+  description = "Slurm DB Max Capacity"
+  type        = number
+  default = 16.0
 }
 
 

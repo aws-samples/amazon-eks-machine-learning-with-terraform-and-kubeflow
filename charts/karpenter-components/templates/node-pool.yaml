@@ -1,5 +1,5 @@
 ---
-apiVersion: karpenter.sh/v1beta1
+apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: neuron
@@ -11,6 +11,8 @@ spec:
   template:
     spec:
       nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
         name: neuron
       requirements:
       - key: kubernetes.io/arch
@@ -32,6 +34,7 @@ spec:
           - "trn1.2xlarge"
           - "trn1.32xlarge"
           - "trn1n.32xlarge"
+          - "trn2.48xlarge"
       taints:
       - key: aws.amazon.com/neuron
         value: "true"
@@ -50,7 +53,7 @@ spec:
     aws.amazon.com/neurondevice: 512
     aws.amazon.com/neuroncore: 1024
 ---
-apiVersion: karpenter.sh/v1beta1
+apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: cuda
@@ -62,6 +65,8 @@ spec:
   template:
     spec:
       nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
         name: default
       requirements:
       - key: kubernetes.io/arch
@@ -109,6 +114,8 @@ spec:
           - "p4d.24xlarge"
           - "p4de.24xlarge"
           - "p5.48xlarge"
+          - "p5e.48xlarge"
+          - "p5en.48xlarge"
       taints:
       - key: nvidia.com/gpu
         value: "true"
@@ -125,7 +132,7 @@ spec:
   limits:
     nvidia.com/gpu: 1024
 ---
-apiVersion: karpenter.sh/v1beta1
+apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: cudaefa
@@ -137,6 +144,8 @@ spec:
   template:
     spec:
       nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
         name: cudaefa
       requirements:
       - key: kubernetes.io/arch

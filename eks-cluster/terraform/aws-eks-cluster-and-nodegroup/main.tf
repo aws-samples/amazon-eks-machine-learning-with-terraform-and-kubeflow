@@ -291,7 +291,7 @@ resource "aws_fsx_data_repository_association" "this" {
 }
 
 locals {
-  use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.31": var.k8s_version
+  use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.33": var.k8s_version
   s3_bucket = split("/", substr(var.import_path, 5, -1))[0]
 }
 
@@ -314,15 +314,6 @@ resource "aws_eks_cluster" "eks_cluster" {
     command = "aws --region ${var.region} eks update-kubeconfig --name ${aws_eks_cluster.eks_cluster.name}"
   }
 
-}
-
-resource "aws_security_group_rule" "eks_cluster_egress" {
-  type              = "egress"
-  from_port         = 0
-  to_port           = 65535
-  protocol          = "all"
-  source_security_group_id = aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id
-  security_group_id = aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id
 }
 
 resource "aws_security_group_rule" "eks_cluster_ingress" {
@@ -364,7 +355,7 @@ module "ebs_csi_driver_irsa" {
 module "eks_blueprints_addons" {
 
   source = "aws-ia/eks-blueprints-addons/aws"
-  version = "1.20.0"
+  version = "1.21.0"
 
   cluster_name      = aws_eks_cluster.eks_cluster.id
   cluster_endpoint  = aws_eks_cluster.eks_cluster.endpoint
@@ -378,8 +369,15 @@ module "eks_blueprints_addons" {
 
   aws_load_balancer_controller = {
     namespace     = "kube-system"
-    chart_version = "v1.11.0"
+    chart_version = "v1.13.2"
     wait = true
+
+    set = [
+      {
+        name  = "vpcId"
+        value =  aws_vpc.vpc.id
+      }
+    ]
   }
 
   aws_efs_csi_driver = {
@@ -394,7 +392,7 @@ module "eks_blueprints_addons" {
 
   eks_addons = {
     aws-ebs-csi-driver = {
-      addon_version              = "v1.31.0-eksbuild.1"
+      addon_version              = "v1.33.0-eksbuild.1"
       service_account_role_arn = module.ebs_csi_driver_irsa.iam_role_arn
     }
   }
@@ -484,53 +482,99 @@ module "cert_manager" {
   depends_on = [ module.eks_blueprints_addons ]
 }
 
+resource "aws_iam_role" "cluster_autoscaler" {
+  name = "${var.cluster_name}-cluster-autoscaler-role"
+
+  assume_role_policy = <<POLICY
+{
+  "Version": "2012-10-17",
+  "Statement": [
+      {
+      "Effect": "Allow",
+      "Principal": {
+          "Federated": "${aws_iam_openid_connect_provider.eks_oidc_provider.arn}"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+          "StringEquals": {
+          "${substr(aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer, 8, -1)}:aud": "sts.amazonaws.com"
+          }
+      }
+      }
+  ]
+}
+POLICY
+}
+
+resource "aws_iam_role_policy" "cluster_autoscaler" {
+   name = "cluster-autoscaler-policy"
+   role = aws_iam_role.cluster_autoscaler.id
+
+    policy = jsonencode({
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "autoscaling:SetDesiredCapacity",
+                "autoscaling:TerminateInstanceInAutoScalingGroup"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringEquals": {
+                    "aws:ResourceTag/k8s.io/cluster-autoscaler/enabled": "true",
+                    "aws:ResourceTag/k8s.io/cluster-autoscaler/${aws_eks_cluster.eks_cluster.id}": "owned"
+                }
+            }
+        },
+        {
+            "Action": [
+                "autoscaling:DescribeAutoScalingGroups",
+                "autoscaling:DescribeAutoScalingInstances",
+                "autoscaling:DescribeLaunchConfigurations",
+                "autoscaling:DescribeScalingActivities",
+                "autoscaling:DescribeTags",
+                "ec2:DescribeImages",
+                "ec2:DescribeInstanceTypes",
+                "ec2:DescribeLaunchTemplateVersions",
+                "ec2:GetInstanceTypesFromInstanceRequirements",
+                "eks:DescribeNodegroup"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        }
+      ]
+    })
+}
 
 resource "helm_release" "cluster-autoscaler" {
   name       = "cluster-autoscaler"
   repository = "https://kubernetes.github.io/autoscaler"
   chart      = "cluster-autoscaler"
-  version    = "9.34.1"
+  version    = "9.46.6"
   namespace  = "kube-system"
+  timeout = 300
+  wait = true
 
-  set {
-    name  = "cloudProvider"
-    value = "aws"
-  }
-
-  set {
-    name  = "awsRegion"
-    value = var.region
-  }
-
-  set {
-    name  = "autoDiscovery.clusterName"
-    value = aws_eks_cluster.eks_cluster.id
-  }
-
-  set {
-    name  = "extraArgs.skip-nodes-with-system-pods"
-    value = "false"
-  }
-
-  set {
-    name  = "extraArgs.skip-nodes-with-local-storage"
-    value = "false"
-  }
-
-  set {
-    name  = "extraArgs.expander"
-    value = "least-waste"
-  }
-
-  set {
-    name  = "extraArgs.balance-similar-node-groups"
-    value = "true"
-  }
-
-  set {
-    name  = "podAnnotations.cluster-autoscaler\\.kubernetes\\.io/safe-to-evict"
-    value = "\"false\""
-  }
+  values = [
+    <<-EOT
+      cloudProvider: "aws"
+      awsRegion: "${var.region}"
+      autoDiscovery:
+        clusterName: "${aws_eks_cluster.eks_cluster.id}"
+      extraArgs:
+        skip-nodes-with-system-pods: "false"
+        skip-nodes-with-local-storage: "false"
+        expander: "least-waste"
+        balance-similar-node-groups: "true"
+      podAnnotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+      rbac:
+        serviceAccount:
+          annotations:
+            eks.amazonaws.com/role-arn: "${aws_iam_role.cluster_autoscaler.arn}" 
+    EOT
+  ]
 
   depends_on = [ aws_eks_node_group.system_ng ]
 
@@ -552,9 +596,12 @@ resource "helm_release" "aws-efa-k8s-device-plugin" {
         values:
           - "trn1.32xlarge"
           - "trn1n.32xlarge"
+          - "trn2.48xlarge"
           - "p4d.24xlarge"
           - "p4de.24xlarge"
           - "p5.48xlarge"
+          - "p5e.48xlarge"
+          - "p5en.48xlarge"
       tolerations:
         - key: "nvidia.com/gpu"
           operator: "Exists"
@@ -640,31 +687,6 @@ resource "aws_iam_role" "node_role" {
   })
 }
 
-resource "aws_iam_role_policy" "node_autoscaler_policy" {
-   name = "node-autoscaler-policy"
-   role = aws_iam_role.node_role.id
-
-    policy = jsonencode({
-      "Version": "2012-10-17",
-      "Statement": [
-        {
-            "Action": [
-                "autoscaling:DescribeAutoScalingGroups",
-                "autoscaling:DescribeAutoScalingInstances",
-                "autoscaling:DescribeLaunchConfigurations",
-                "autoscaling:DescribeTags",
-                "autoscaling:SetDesiredCapacity",
-                "autoscaling:TerminateInstanceInAutoScalingGroup",
-                "ec2:DescribeLaunchTemplateVersions",
-                "eks:DescribeNodegroup"
-            ],
-            "Resource": "*",
-            "Effect": "Allow"
-        }
-      ]
-    })
-}
-
 resource "aws_iam_role_policy_attachment" "node_AmazonEKSWorkerNodePolicy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
   role       = aws_iam_role.node_role.name
@@ -692,7 +714,7 @@ resource "aws_eks_node_group" "system_ng" {
   subnet_ids      = aws_subnet.private.*.id 
   instance_types  = var.system_instances
   disk_size       = var.system_volume_size
-  ami_type        = "AL2_x86_64"
+  ami_type        = "AL2023_x86_64_STANDARD"
   capacity_type = var.system_capacity_type
 
   scaling_config {
@@ -709,19 +731,19 @@ resource "aws_eks_node_group" "system_ng" {
   }
 
   depends_on = [ 
-                aws_subnet.private, 
-                aws_subnet.public, 
-                aws_route_table_association.private, 
-                aws_route_table_association.public,
-                kubectl_manifest.aws_auth
-              ]
+    aws_subnet.private, 
+    aws_subnet.public, 
+    aws_route_table_association.private, 
+    aws_route_table_association.public,
+    kubectl_manifest.aws_auth
+  ]
 }
 
-resource "aws_launch_template" "this" {
+resource "aws_launch_template" "nvidia" {
 
-  count = var.karpenter_enabled ? 0 : length(var.node_instances)
+  count = var.karpenter_enabled ? 0 : length(var.nvidia_instances)
 
-  instance_type = var.node_instances[count.index]
+  instance_type = var.nvidia_instances[count.index]
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -743,7 +765,7 @@ resource "aws_launch_template" "this" {
   }
 
   dynamic "network_interfaces" {
-    for_each = range(0, lookup(var.efa_enabled, var.node_instances[count.index], 0), 1)
+    for_each = range(0, lookup(var.efa_enabled, var.nvidia_instances[count.index], 0), 1)
     iterator = nic
     content {
       device_index          = nic.value != 0 ? 1 : nic.value
@@ -759,19 +781,19 @@ resource "aws_launch_template" "this" {
   user_data = filebase64("../../user-data.txt")
 }
 
-resource "aws_eks_node_group" "this" {
-  count = var.karpenter_enabled ? 0 : length(var.node_instances)
+resource "aws_eks_node_group" "nvidia" {
+  count = var.karpenter_enabled ? 0 : length(var.nvidia_instances)
 
   cluster_name    = var.cluster_name
-  node_group_name = "nodegroup-${count.index}"
+  node_group_name = "nvidia-${count.index}"
   node_role_arn   = aws_iam_role.node_role.arn
   subnet_ids      = aws_subnet.private.*.id
-  ami_type        = "AL2_x86_64_GPU"
+  ami_type        = "AL2023_x86_64_NVIDIA"
   capacity_type = var.capacity_type
 
  launch_template {
-    id = aws_launch_template.this[count.index].id
-    version = aws_launch_template.this[count.index].latest_version
+    id = aws_launch_template.nvidia[count.index].id
+    version = aws_launch_template.nvidia[count.index].latest_version
   }
 
   scaling_config {
@@ -786,7 +808,94 @@ resource "aws_eks_node_group" "this" {
   }
 
   taint {
-    key = contains(var.neuron_instances, var.node_instances[count.index]) ? "aws.amazon.com/neuron" : "nvidia.com/gpu"
+    key = "nvidia.com/gpu"
+    value = "true"
+    effect = "NO_SCHEDULE"
+  }
+
+  dynamic "taint" {
+    for_each = var.custom_taints
+
+    content {
+      key = taint.value.key
+      value = taint.value.value
+      effect = taint.value.effect
+    }
+  }
+
+  depends_on = [ helm_release.cluster-autoscaler ]
+}
+
+resource "aws_launch_template" "neuron" {
+
+  count = var.karpenter_enabled ? 0 : length(var.neuron_instances)
+
+  instance_type = var.neuron_instances[count.index]
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+    instance_metadata_tags      = "enabled"
+  }
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size = var.node_volume_size
+      volume_type = "gp3"
+      iops =  3000
+      encrypted = true
+      delete_on_termination = true
+      throughput = 125
+    }
+  }
+
+  dynamic "network_interfaces" {
+    for_each = range(0, lookup(var.efa_enabled, var.neuron_instances[count.index], 0), 1)
+    iterator = nic
+    content {
+      device_index          = nic.value != 0 ? 1 : nic.value
+      delete_on_termination = true
+      associate_public_ip_address = false
+      interface_type = "efa"
+      network_card_index = nic.value
+    }
+  }
+
+  key_name = var.key_pair != "" ? var.key_pair : null
+  
+  user_data = filebase64("../../user-data.txt")
+}
+
+resource "aws_eks_node_group" "neuron" {
+  count = var.karpenter_enabled ? 0 : length(var.neuron_instances)
+
+  cluster_name    = var.cluster_name
+  node_group_name = "neuron-${count.index}"
+  node_role_arn   = aws_iam_role.node_role.arn
+  subnet_ids      = aws_subnet.private.*.id
+  ami_type        = "AL2023_x86_64_NEURON"
+  capacity_type = var.capacity_type
+
+ launch_template {
+    id = aws_launch_template.neuron[count.index].id
+    version = aws_launch_template.neuron[count.index].latest_version
+  }
+
+  scaling_config {
+    desired_size = var.node_group_desired 
+    max_size     = var.node_group_max 
+    min_size     = var.node_group_min 
+  }
+
+  taint {
+    key = "fsx.csi.aws.com/agent-not-ready"
+    effect = "NO_EXECUTE"
+  }
+
+  taint {
+    key =  "aws.amazon.com/neuron"
     value = "true"
     effect = "NO_SCHEDULE"
   }
@@ -808,7 +917,7 @@ module "karpenter" {
   count = var.karpenter_enabled ? 1 : 0
 
   source  = "terraform-aws-modules/eks/aws//modules/karpenter"
-  version = "20.33.1"
+  version = "20.37.0"
 
   cluster_name = aws_eks_cluster.eks_cluster.id
 
@@ -819,6 +928,8 @@ module "karpenter" {
   create_node_iam_role = true
   enable_irsa  = true
   create_access_entry = false
+  iam_role_name = "${aws_eks_cluster.eks_cluster.id}-karpenter-controller"
+  node_iam_role_name = "${aws_eks_cluster.eks_cluster.id}-karpenter-node"
 
   node_iam_role_attach_cni_policy = true
   node_iam_role_additional_policies = {
@@ -889,21 +1000,27 @@ resource "helm_release" "kueue" {
   timeout = 300
   wait = true
 
-  set {
-    name  = "enableCertManager"
-    value = true
-  }
-
-  set {
-    name  = "enablePrometheus"
-    value = true
-  }
-
+  values = [
+    <<-EOT
+      enableCertManager: true
+      enablePrometheus: true
+    EOT
+  ]
   
   depends_on = [  helm_release.cluster-autoscaler ]
 
 }
 
+
+resource "helm_release" "karpenter-crd" {
+  count = var.karpenter_enabled ? 1 : 0
+  
+  name       = "karpenter-crd"
+  chart      = "karpenter-crd"
+  repository  = "oci://public.ecr.aws/karpenter/"
+  version    = var.karpenter_version
+  namespace  = var.karpenter_namespace
+}
 
 resource "helm_release" "karpenter" {
   count = var.karpenter_enabled ? 1 : 0
@@ -918,42 +1035,29 @@ resource "helm_release" "karpenter" {
   timeout = 300
   wait = true
 
-  set {
-    name  = "settings.clusterName"
-    value = aws_eks_cluster.eks_cluster.id
-  }
+  values = [
+    <<-EOT
+      controller:
+        resources:
+          limits:
+            cpu: 1
+            memory: 2Gi
+          requests:
+            cpu: 1
+            memory: 2Gi
+      settings:
+        clusterName: "${aws_eks_cluster.eks_cluster.id}"
+        clusterEndpoint: "${aws_eks_cluster.eks_cluster.endpoint}"
+        interruptionQueue: "${module.karpenter[0].queue_name}"
+      serviceAccount:
+        annotations:
+          eks.amazonaws.com/role-arn: "${module.karpenter[0].iam_role_arn}"
+      webhook:
+        enabled: false
+    EOT
+  ]
 
-  set {
-    name  = "controller.resources.requests.cpu"
-    value = "1"
-  }
-
-  set {
-    name  = "controller.resources.requests.memory"
-    value = "2Gi"
-  }
-
-  set {
-    name  = "controller.resources.limits.cpu"
-    value = "1"
-  }
-
-  set {
-    name  = "controller.resources.limits.memory"
-    value = "2Gi"
-  }
-
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = module.karpenter[0].iam_role_arn
-  }
-
-  set {
-    name  = "settings.interruptionQueue"
-    value = module.karpenter[0].queue_name
-  }
-
-  depends_on = [  helm_release.cluster-autoscaler ]
+  depends_on = [  helm_release.karpenter-crd, helm_release.cluster-autoscaler ]
 
 }
 
@@ -962,38 +1066,19 @@ resource "helm_release" "karpenter_components" {
 
   chart = "${var.local_helm_repo}/karpenter-components"
   name = "karpenter-components"
-  version = "1.0.4"
+  version = "1.0.5"
   namespace = var.karpenter_namespace
-  
-  set {
-    name  = "namespace"
-    value = var.karpenter_namespace
-  }
 
-  set {
-    name  = "role_name"
-    value = module.karpenter[0].node_iam_role_name
-  }
-
-  set {
-    name  = "cluster_id"
-    value = aws_eks_cluster.eks_cluster.id
-  }
-
-  set {
-    name  = "consolidate_after"
-    value = var.karpenter_consolidate_after
-  }
-
-  set {
-    name  = "capacity_type"
-    value = var.karpenter_capacity_type
-  }
-
-  set {
-    name  = "max_pods"
-    value = var.karpenter_max_pods
-  }
+  values = [
+    <<-EOT
+      namespace: "${var.karpenter_namespace}"
+      role_name: "${module.karpenter[0].node_iam_role_name}"
+      cluster_id: "${aws_eks_cluster.eks_cluster.id}"
+      consolidate_after: "${var.karpenter_consolidate_after}"
+      capacity_type: "${var.karpenter_capacity_type}"
+      max_pods: "${var.karpenter_max_pods}"
+    EOT
+  ]
 
   depends_on = [ helm_release.karpenter ]
 }
@@ -1004,21 +1089,18 @@ resource "helm_release" "neuron_helm_chart" {
   version = "1.1.1"
   namespace = "kube-system"
   
-  set {
-    name  = "scheduler.enabled"
-    value = "true"
-  }
+  values = [
+    <<-EOT
+      scheduler:
+        enabled: true
+        customScheduler:
+          fullnameOverride: "neuron-scheduler"
+      npd:
+        enabled: false
+    EOT
+  ]
 
-  set {
-    name  = "npd.enabled"
-    value = "false"
-  }
-
-  set {
-    name = "scheduler.customScheduler.fullnameOverride"
-    value = "neuron-scheduler"
-  }
-
+  depends_on = [  helm_release.cluster-autoscaler ]
 }
 
 resource "helm_release" "nvidia_device_plugin" {
@@ -1249,7 +1331,7 @@ module "profiles-controller-irsa" {
 resource "helm_release" "ebs-sc" {
   name       = "ebs-sc"
   chart      = "${var.local_helm_repo}/ebs-sc"
-  version    = "1.0.1"
+  version    = "1.0.2"
   wait       = "false"
 
   depends_on = [ module.eks_blueprints_addons ]
@@ -1411,11 +1493,11 @@ resource helm_release "oauth2-proxy-route" {
   
   values = [
     <<-EOT
-    oauth2_proxy:
-      namespace: ${kubernetes_namespace.auth.metadata[0].name}
-    ingress:
-      namespace: ${kubernetes_namespace.ingress.metadata[0].name}
-      gateway: ${var.ingress_gateway}
+      oauth2_proxy:
+        namespace: ${kubernetes_namespace.auth.metadata[0].name}
+      ingress:
+        namespace: ${kubernetes_namespace.ingress.metadata[0].name}
+        gateway: ${var.ingress_gateway}
     EOT
   ]
 
@@ -1467,16 +1549,15 @@ resource "helm_release" "ack_sagemaker_controller" {
   timeout = 300
   wait = true
 
-
-  set {
-    name  = "aws.region"
-    value = var.region
-  }
-
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = aws_iam_role.ack_sagemaker_role[count.index].arn
-  }
+  values = [
+    <<-EOT
+      aws:
+        region: ${var.region}
+      serviceAccount:
+        annotations:
+          eks.amazonaws.com/role-arn: ${aws_iam_role.ack_sagemaker_role[count.index].arn}
+    EOT
+  ]
 
   depends_on = [  helm_release.cluster-autoscaler ]
 
@@ -1512,25 +1593,18 @@ resource "helm_release" "kserve" {
   timeout = 300
   wait = true
 
-  set {
-    name  = "kserve.controller.deploymentMode"
-    value = "RawDeployment"
-  }
-
-  set {
-    name  = "kserve.controller.gateway.ingressGateway.className"
-    value = "istio"
-  }
-
-  set {
-    name  = "kserve.controller.gateway.ingressGateway.createGateway"
-    value = "false"
-  }
-
-  set {
-    name  = "kserve.controller.gateway.ingressGateway.kserveGateway"
-    value = "ingress/istio-ingressgateway"
-  }
+  values = [
+    <<-EOT
+      kserve:
+        controller:
+          deploymentMode: "RawDeployment"
+          gateway:
+            ingressGateway:
+              className:  "istio"
+              createGateway: "false"
+              kserveGateway: "ingress/istio-ingressgateway"
+    EOT
+  ]
 
   depends_on = [  helm_release.kserve-crd ]
 
@@ -1598,11 +1672,18 @@ module "slurm" {
 
   slurm_namespace = var.slurm_namespace
   efs_fs_id = aws_efs_file_system.fs.id
-  ssh_public_key = var.slurm_ssh_pub_key
+  root_ssh_authorized_keys = var.slurm_root_ssh_authorized_keys
   storage_capacity = var.slurm_storage_capacity
   storage_type = var.slurm_storage_type
   local_helm_repo = var.local_helm_repo
-  password = "${random_password.static_password.result}"
+  login_enabled = var.slurm_login_enabled
+  eks_cluster_id = aws_eks_cluster.eks_cluster.id
+
+  db_max_capacity = var.slurm_db_max_capacity
+  db_subnet_ids      = aws_subnet.private.*.id 
+  db_vpc_id   = aws_vpc.vpc.id
+  db_port = 3306
+
   fsx = {
     fs_id = aws_fsx_lustre_file_system.fs.id
     mount_name = aws_fsx_lustre_file_system.fs.mount_name
@@ -1611,6 +1692,7 @@ module "slurm" {
 
   depends_on = [ 
     aws_efs_file_system.fs,
+    aws_fsx_lustre_file_system.fs,
     module.eks_blueprints_addons 
   ]
 }
