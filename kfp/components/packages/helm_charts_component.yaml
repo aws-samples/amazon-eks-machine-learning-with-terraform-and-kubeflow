@@ -57,7 +57,7 @@ deploymentSpec:
           \                if exit_code == 0:\n                    exit_code = self.wait_for_pods()\n\
           \            except Exception as e:\n                print(str(e))\n   \
           \         finally:\n                exit_code = self.uninstall_release()\
-          \ and exit_code\n\n            return exit_code\n\n        def __exit_gracefully(self,\
+          \ or exit_code\n\n            return exit_code\n\n        def __exit_gracefully(self,\
           \ signum, frame):\n            self.uninstall_release()\n            sys.exit(f\"\
           Signal: {signum}\")\n\n        @staticmethod\n        def run_cmd(cmd:str)\
           \ -> int:\n\n            print(f\"run command: {cmd}\")\n            exit_code\

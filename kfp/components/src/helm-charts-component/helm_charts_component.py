@@ -35,7 +35,7 @@ def helm_charts_component(chart_configs: List[Dict]) -> str:
             except Exception as e:
                 print(str(e))
             finally:
-                exit_code = self.uninstall_release() and exit_code
+                exit_code = self.uninstall_release() or exit_code
             
             return exit_code
         
