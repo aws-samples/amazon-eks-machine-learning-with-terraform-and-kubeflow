@@ -13,6 +13,9 @@ resource "kubernetes_namespace" "kubeflow_user_profile" {
     labels = {
       istio-injection = "enabled"
     }
+    annotations = {
+      "owner" = "user@example.com"
+    }
 
     name = "${var.kubeflow_user_profile}"
   }
