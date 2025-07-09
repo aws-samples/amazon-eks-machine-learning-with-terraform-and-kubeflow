@@ -33,7 +33,7 @@ pre_script:
   - export PROJECT_DIR=$HOME/project/$HOSTNAME
   - mkdir -p $PROJECT_DIR
   - export DISTRIBUTED_ARGS="--nnodes $PET_NNODES --nproc_per_node $PET_NPROC_PER_NODE --rdzv_id $PET_RDZV_ID --rdzv_backend c10d --rdzv_endpoint $PET_RDZV_ENDPOINT"
-  - echo "DISTRIBUTED_ARGS=S$DISTRIBUTED_ARGS"
+  - echo "DISTRIBUTED_ARGS=$DISTRIBUTED_ARGS"
 train:
   env:
     - name: HOME
