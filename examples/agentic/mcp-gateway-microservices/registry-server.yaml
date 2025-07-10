@@ -1,0 +1,185 @@
+image: 
+  # Use same base image as working Dockerfile
+  name: python:3.12-slim
+resources:
+  node_type: t3a.large
+  requests:
+    cpu: 500m
+    memory: 2Gi
+  limits:
+    cpu: 1
+    memory: 4Gi
+tolerations: []
+git:
+  repo_url: 'https://github.com/agentic-community/mcp-gateway-registry'
+  branch: main
+pre_script: 
+  # Replicate dockerfile.registry and registry-entrypoint.sh setup
+  - export DEBIAN_FRONTEND=noninteractive
+  - chmod a+rwx /tmp
+  
+  # Install system dependencies (mirror dockerfile.registry)
+  - apt-get update && apt-get install -y --no-install-recommends nginx nginx-extras lua-cjson curl procps openssl git build-essential ca-certificates
+  - apt-get clean && rm -rf /var/lib/apt/lists/*
+  
+  # Install uv and setup Python environment (mirror dockerfile.registry)
+  - pip install uv
+  - cd /app && uv venv .venv --python 3.12
+  - cd /app && . .venv/bin/activate && uv pip install -e .
+  - cd /app && . .venv/bin/activate && pip install huggingface_hub
+  
+  # --- Environment Variable Setup (from registry-entrypoint.sh) ---
+  - echo "Setting up environment variables..."
+  # Generate secret key if not provided
+  - if [ -z "$SECRET_KEY" ]; then SECRET_KEY=$(python -c 'import secrets; print(secrets.token_hex(32))'); fi
+  - ADMIN_USER_VALUE=${ADMIN_USER:-admin}
+  # Check ADMIN_PASSWORD
+  - if [ -z "$ADMIN_PASSWORD" ]; then echo "ERROR: ADMIN_PASSWORD environment variable is not set."; exit 1; fi
+  
+  # Create .env file for registry (from registry-entrypoint.sh)
+  - REGISTRY_ENV_FILE="/app/registry/.env"
+  - echo "Creating Registry .env file..."
+  - echo "SECRET_KEY=${SECRET_KEY}" > "$REGISTRY_ENV_FILE"
+  - echo "ADMIN_USER=${ADMIN_USER_VALUE}" >> "$REGISTRY_ENV_FILE"  
+  - echo "ADMIN_PASSWORD=${ADMIN_PASSWORD}" >> "$REGISTRY_ENV_FILE"
+  - echo "Registry .env created."
+  
+  # --- SSL Certificate Generation (from registry-entrypoint.sh) ---
+  - SSL_CERT_DIR="/etc/ssl/certs"
+  - SSL_KEY_DIR="/etc/ssl/private"
+  - SSL_CERT_PATH="$SSL_CERT_DIR/fullchain.pem"
+  - SSL_KEY_PATH="$SSL_KEY_DIR/privkey.pem"
+  - curl -k https://raw.githubusercontent.com/openssl/openssl/master/apps/openssl.cnf -o /usr/lib/ssl/openssl.cnf
+  - echo "Checking for SSL certificates..."
+  - if [ ! -f "$SSL_CERT_PATH" ] || [ ! -f "$SSL_KEY_PATH" ]; then echo "Generating self-signed SSL certificate for Nginx..."; mkdir -p "$SSL_CERT_DIR" "$SSL_KEY_DIR"; openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout "$SSL_KEY_PATH" -out "$SSL_CERT_PATH" -subj "/C=US/ST=State/L=City/O=Organization/OU=OrgUnit/CN=localhost"; echo "SSL certificate generated."; else echo "SSL certificates already exist, skipping generation."; fi
+  
+  # --- Lua Module Setup (from registry-entrypoint.sh) ---
+  - echo "Setting up Lua support for nginx..."
+  - LUA_SCRIPTS_DIR="/etc/nginx/lua"
+  - mkdir -p "$LUA_SCRIPTS_DIR"
+  - echo 'local cjson = require "cjson"; ngx.req.read_body(); local body_data = ngx.req.get_body_data(); if body_data then ngx.req.set_header("X-Body", body_data); ngx.log(ngx.INFO, "Captured request body"); else ngx.log(ngx.INFO, "No request body found"); end' > "$LUA_SCRIPTS_DIR/capture_body.lua"
+  - echo "Lua script created."
+  
+  # --- Nginx Configuration (from registry-entrypoint.sh with EKS modifications) ---
+  - echo "Setting up Nginx configuration for EKS..."
+  # Copy original config and process placeholders for EKS environment
+  - cp "/app/docker/nginx_rev_proxy.conf" "/tmp/nginx_rev_proxy_original.conf" 
+  # Replace EC2_PUBLIC_DNS with localhost for EKS (no EC2 metadata in containers)
+  - sed 's/{{EC2_PUBLIC_DNS}}/localhost/g' /tmp/nginx_rev_proxy_original.conf > /tmp/nginx_rev_proxy_processed.conf
+  # For now, leave LOCATION_BLOCKS empty - registry will generate them dynamically
+  - sed -i 's/{{LOCATION_BLOCKS}}//g' /tmp/nginx_rev_proxy_processed.conf
+  - cp /tmp/nginx_rev_proxy_processed.conf /etc/nginx/conf.d/nginx_rev_proxy.conf
+  - echo "Nginx configuration processed and copied."
+  
+  # --- Model Download (from registry-entrypoint.sh) ---
+  - EMBEDDINGS_MODEL_NAME="all-MiniLM-L6-v2"
+  - EMBEDDINGS_MODEL_DIR="/app/registry/models/$EMBEDDINGS_MODEL_NAME"
+  - echo "Checking for sentence-transformers model..."
+  - mkdir -p "$EMBEDDINGS_MODEL_DIR"
+  - echo "Ensuring CA certificates are installed..."
+  - apt-get update && apt-get install -y ca-certificates && update-ca-certificates
+  - echo "Downloading model using huggingface-cli..."
+  - cd /app && ./.venv/bin/huggingface-cli download sentence-transformers/$EMBEDDINGS_MODEL_NAME --local-dir "$EMBEDDINGS_MODEL_DIR" --quiet || echo "Model download failed, will continue"
+  - echo "Model setup completed"
+  
+  # Create shared directories on EFS (equivalent to docker volume mounts)
+  - mkdir -p /efs/mcp-gateway/servers /efs/mcp-gateway/models /efs/mcp-gateway/logs
+  - mkdir -p /efs/mcp-gateway/ssl/certs /efs/mcp-gateway/ssl/private  
+  - mkdir -p /efs/mcp-gateway/auth_server /efs/mcp-gateway/secrets/fininfo
+  
+  # Map shared EFS directories to expected application paths (mirror docker-compose volumes)
+  - ln -sf /efs/mcp-gateway/servers /app/registry/servers || echo "servers symlink failed"
+  - ln -sf /efs/mcp-gateway/models /app/registry/models || echo "models symlink failed"
+  - ln -sf /efs/mcp-gateway/logs /app/logs || echo "logs symlink failed"
+  - mkdir -p /app/auth_server
+  - ln -sf /efs/mcp-gateway/scopes.yml /app/auth_server/scopes.yml || echo "scopes.yml will be created by auth server"
+  
+  # --- Start Background Services (from registry-entrypoint.sh) ---
+  - export EMBEDDINGS_MODEL_NAME=$EMBEDDINGS_MODEL_NAME
+  - export EMBEDDINGS_MODEL_DIMENSIONS=384
+  - echo "Starting MCP Registry in the background..."
+  - cd /app && ./.venv/bin/uvicorn registry.main:app --host 0.0.0.0 --port 7860 &
+  - echo "MCP Registry started."
+  
+  # Give registry a moment to initialize
+  - sleep 10
+  
+  - echo "Starting Nginx..."
+  - nginx
+  - echo "Nginx started."
+  
+  - echo "Registry service fully started."
+
+server:
+  ports:
+    - name: 'http'
+      value: 80
+    - name: 'https'  
+      value: 443
+    - name: 'registry'
+      value: 7860
+  # Use uvicorn backend (port 7860) for health checks - more reliable than nginx proxy
+  readiness_probe:
+    period_secs: 30
+    failure_threshold: 5
+    path: /health
+    port: 7860
+  startup_probe:
+    period_secs: 40
+    failure_threshold: 20
+    path: /health
+    port: 7860
+  liveness_probe:
+    period_secs: 30
+    failure_threshold: 3
+    path: /health
+    port: 7860
+  env:
+    - name: HOME
+      value: /app
+    - name: PYTHONUNBUFFERED
+      value: "1" 
+    - name: DEBIAN_FRONTEND
+      value: "noninteractive"
+    - name: SECRET_KEY
+      value: "{{ .Values.secret_key }}"
+    - name: ADMIN_USER
+      value: "{{ .Values.admin_user | default \"admin\" }}"
+    - name: ADMIN_PASSWORD
+      value: "{{ .Values.admin_password }}"
+    - name: AUTH_SERVER_URL
+      value: "http://auth-server:8888"
+    - name: AUTH_SERVER_EXTERNAL_URL
+      value: "{{ .Values.auth_server_external_url }}"
+    - name: GITHUB_CLIENT_ID
+      value: "{{ .Values.github_client_id }}"
+    - name: GITHUB_CLIENT_SECRET
+      value: "{{ .Values.github_client_secret }}"
+    - name: COGNITO_CLIENT_ID
+      value: "{{ .Values.cognito_client_id }}"
+    - name: COGNITO_CLIENT_SECRET
+      value: "{{ .Values.cognito_client_secret }}"
+    - name: COGNITO_USER_POOL_ID
+      value: "{{ .Values.cognito_user_pool_id }}"
+    - name: AWS_REGION
+      value: "{{ .Values.aws_region | default \"us-east-1\" }}"
+  # Keep container alive (mirror registry-entrypoint.sh: tail -f /dev/null)
+  command:
+    - /bin/bash
+  args:
+    - -c
+    - "echo 'Registry service running. Keeping container alive...' && tail -f /dev/null"
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 2
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 80
+pvc:
+  # Mount EFS for shared storage (mirror docker-compose volumes)
+  - name: pv-efs
+    mount_path: /efs 
