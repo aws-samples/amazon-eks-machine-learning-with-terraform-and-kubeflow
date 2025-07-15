@@ -1,0 +1,108 @@
+image: 
+  # Use base image with git pre-installed (like server.yaml)
+  name: python:3.12
+resources:
+  node_type: t3a.large
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+tolerations: []
+git:
+  repo_url: 'https://github.com/agentic-community/mcp-gateway-registry'
+  branch: main
+pvc:
+  # Mount EFS for shared storage
+  - name: pv-efs
+    mount_path: /efs 
+pre_script: 
+  # Install system dependencies exactly like Dockerfile.auth
+  - export PYTHONUNBUFFERED=1
+  - apt-get update && apt-get install -y --no-install-recommends curl git build-essential
+  - apt-get clean && rm -rf /var/lib/apt/lists/*
+  
+  # Debug: Check repository structure after git clone
+  - echo "Repository structure:"
+  - ls -la /app/
+  - echo "Looking for auth server:"
+  - find /app -name "*auth*" -type d || echo "No auth directories found"
+  - find /app -name "server.py" -o -name "*server*" | head -10
+  
+  # Work directly from the cloned repository
+  - cd /app/auth_server || (echo "auth_server directory not found, using /app" && cd /app)
+  
+  # Install uv and setup Python environment exactly like Dockerfile.auth
+  - pip install uv
+  - uv venv .venv --python 3.12
+  - . .venv/bin/activate
+  
+  # Use the auth server's own pyproject.toml for correct dependencies (ensure we're in auth_server dir)
+  - pwd && ls -la pyproject.toml
+  - uv pip install --requirement /app/auth_server/pyproject.toml
+  
+  # Create EFS directories first before symlinking
+  - mkdir -p /efs/mcp-gateway/logs /efs/mcp-gateway/auth_server
+  - touch /efs/mcp-gateway/auth_server/scopes.yml || echo "Could not create scopes.yml"
+  
+  # Create symlinks only if directories exist
+  - ln -sf /efs/mcp-gateway/logs /app/logs || echo "logs symlink failed"
+  - ln -sf /efs/mcp-gateway/auth_server/scopes.yml /app/scopes.yml || echo "scopes.yml symlink failed"
+server:
+  ports:
+    - name: 'auth'
+      value: 8888
+  # Internal service only - no external access needed
+  readiness_probe:
+    period_secs: 30
+    failure_threshold: 5
+    path: /health
+    port: 8888
+  startup_probe:
+    period_secs: 30
+    failure_threshold: 20
+    path: /health
+    port: 8888
+  liveness_probe:
+    period_secs: 30
+    failure_threshold: 3
+    path: /health
+    port: 8888
+  env:
+    - name: HOME
+      value: /app
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: REGISTRY_URL
+      value: "http://registry:7860"
+    - name: SECRET_KEY
+      value: "{{ .Values.secret_key }}"
+    - name: GITHUB_CLIENT_ID
+      value: "{{ .Values.github_client_id }}"
+    - name: GITHUB_CLIENT_SECRET
+      value: "{{ .Values.github_client_secret }}"
+    - name: COGNITO_CLIENT_ID
+      value: "{{ .Values.cognito_client_id }}"
+    - name: COGNITO_CLIENT_SECRET
+      value: "{{ .Values.cognito_client_secret }}"
+    - name: COGNITO_USER_POOL_ID
+      value: "{{ .Values.cognito_user_pool_id }}"
+    - name: AWS_REGION
+      value: "{{ .Values.aws_region | default \"us-east-1\" }}"
+  # Use the exact same startup command as Dockerfile.auth
+  command:
+    - /bin/bash
+  args:
+    - -c
+    - "cd /app/auth_server || cd /app; source .venv/bin/activate && python -c 'import os; print(\"Working dir:\", os.getcwd()); print(\"Files:\", os.listdir())'; find . -name 'server.py' -o -name '*.py' | head -5; uvicorn server:app --host 0.0.0.0 --port 8888 || uvicorn main:app --host 0.0.0.0 --port 8888"
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 2
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 80 

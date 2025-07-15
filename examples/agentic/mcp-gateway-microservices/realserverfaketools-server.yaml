@@ -1,0 +1,91 @@
+image: 
+  # Use same base image as Dockerfile.mcp-server
+  name: python:3.12
+resources:
+  node_type: t3a.large
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 250m
+    memory: 512Mi
+tolerations: []
+git:
+  repo_url: 'https://github.com/agentic-community/mcp-gateway-registry'
+  branch: main
+pvc:
+  # Mount EFS for shared storage
+  - name: pv-efs
+    mount_path: /efs 
+pre_script: 
+  # Install system dependencies exactly like Dockerfile.mcp-server
+  - export PYTHONUNBUFFERED=1
+  - apt-get update && apt-get install -y --no-install-recommends curl git build-essential netcat-openbsd
+  - apt-get clean && rm -rf /var/lib/apt/lists/*
+  # The git repository is now automatically cloned to /app by the chart template
+  # Setup MCP server application directory (SERVER_PATH=servers/realserverfaketools)
+  - mkdir -p /app/mcp_working && cd /app/servers/realserverfaketools && cp -r * /app/mcp_working/
+  # Copy shared scopes.yml from EFS (for authentication)
+  - mkdir -p /app/auth_server
+  - cp /efs/mcp-gateway/scopes.yml /app/auth_server/scopes.yml || echo "Failed to copy scopes.yml"
+  - cd /app/mcp_working
+  # Install uv and setup Python environment exactly like Dockerfile.mcp-server
+  - pip install uv
+  - uv venv .venv --python 3.12
+  # Install dependencies from pyproject.toml if it exists
+  - . .venv/bin/activate
+  - if [ -f pyproject.toml ]; then uv pip install --requirement pyproject.toml; fi
+  # Use same shared directories 
+  - mkdir -p /efs/mcp-gateway/logs
+server:
+  ports:
+    - name: 'mcp'
+      value: 8002
+  # Internal MCP server - accessed through registry/gateway only
+  readiness_probe:
+    period_secs: 30
+    failure_threshold: 5
+    exec:
+      command:
+        - /bin/bash
+        - -c
+        - "nc -z localhost ${PORT:-8002}"
+  startup_probe:
+    period_secs: 30
+    failure_threshold: 10
+    exec:
+      command:
+        - /bin/bash
+        - -c
+        - "nc -z localhost ${PORT:-8002}"
+  liveness_probe:
+    period_secs: 500
+    failure_threshold: 3
+    exec:
+      command:
+        - /bin/bash
+        - -c
+        - "nc -z localhost ${PORT:-8002}"
+  env:
+    - name: HOME
+      value: /app
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: PORT
+      value: "8002"
+  # Direct server startup command (like auth server)
+  command:
+    - /bin/bash
+  args:
+    - -c
+    - "cd /app/mcp_working && source .venv/bin/activate && python server.py --port ${PORT:-8002} --transport sse"
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 2
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 80 
