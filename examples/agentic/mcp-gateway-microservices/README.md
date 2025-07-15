@@ -37,7 +37,7 @@ The system consists of 6 microservices with clean service naming that matches `d
 ### 1. Clone and Navigate
 
 ```bash
-git clone 
+git clone https://github.com/aws-samples/amazon-eks-machine-learning-with-terraform-and-kubeflow
 cd amazon-eks-machine-learning-with-terraform-and-kubeflow/examples/agentic/mcp-gateway-microservices
 ```
 
