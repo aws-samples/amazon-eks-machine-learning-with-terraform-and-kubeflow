@@ -51,10 +51,12 @@ Parameters:
   DesktopInstanceType:
     Description: EC2 instance type for desktop
     Type: String
-    Default: m7a.xlarge
+    Default: m7i.xlarge
     AllowedValues:
       - m7a.xlarge
       - m7a.2xlarge
+      - m7i.xlarge
+      - m7i.2xlarge
   DesktopAccessCIDR:
     Description: >-
       Restrict desktop access for SSH and DCV client from a valid CIDR range
@@ -215,6 +217,7 @@ Resources:
                   - "iam:CreateOpenIDConnectProvider"
                   - "iam:ListPolicyVersions"
                   - "iam:CreatePolicyVersion"
+                  - "iam:DeletePolicyVersion"
                 Resource: 
                   - !Sub 'arn:aws:iam::${AWS::AccountId}:role/*'
                   - !Sub 'arn:aws:iam::${AWS::AccountId}:policy/*'
@@ -349,13 +352,13 @@ Resources:
 
               if [[ ! -x "$(command -v dcv)" ]]
               then
+              sleep 60
               apt-get -y install gdm3
               echo "/usr/sbin/gdm3" > /etc/X11/default-display-manager
               dpkg-reconfigure gdm3
               sed -i -e "s/#WaylandEnable=false/WaylandEnable=false/g" /etc/gdm3/custom.conf
-              systemctl restart gdm3
-
-              apt-get -y install mesa-utils || echo "nameserver 8.8.8.8" >> /etc/resolv.conf && apt-get -y install mesa-utils
+              (systemctl stop gdm3 && systemctl start gdm3 && apt-get -y install mesa-utils) || (sync &&  reboot)
+              
               apt-get -y install xserver-xorg-video-dummy
               cat >/etc/X11/xorg.conf <<EOL
               Section "Device"
