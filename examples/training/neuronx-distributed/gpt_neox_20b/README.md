@@ -1,8 +1,8 @@
 # Pre-train GPT Neox 20b on Wikicorpus dataset using Neuronx Distributed library
 
-This example shows how to use [pytorch-distributed](../../../charts/machine-learning/training/pytorchjob-elastic/Chart.yaml) Helm chart to pre-train GPT-NEOX model on Wikicorpus dataset with [Neuronx-Distributed](https://github.com/aws-neuron/neuronx-distributed/tree/main) library, using distributed data-parallel, tensor-parallel, and [ZeRO-1](https://pytorch.org/tutorials/recipes/zero_redundancy_optimizer.html). 
+This example shows how to use [pytorch-distributed](../../../charts/machine-learning/training/pytorchjob-elastic/Chart.yaml) Helm chart to pre-train GPT-NEOX model on Wikicorpus dataset with [Neuronx-Distributed](https://github.com/aws-neuron/neuronx-distributed/tree/main) library, using distributed data-parallel, and tensor-parallel. 
 
-The example also shows use of [data-process](../../../charts/machine-learning/data-prep/data-process/Chart.yaml) Helm chart to pre-process the [Hugging Face Wikicorpus](https://huggingface.co/datasets/wikicorpus) dataset for use with GPT2-NEOX-20B model.
+The example also shows use of [data-process](../../../charts/machine-learning/data-prep/data-process/Chart.yaml) Helm chart to pre-process the [Hugging Face Wikicorpus](https://huggingface.co/datasets/wikicorpus) dataset.
 
 ## Prerequisites
 

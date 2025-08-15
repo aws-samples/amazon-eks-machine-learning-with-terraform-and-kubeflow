@@ -1,8 +1,8 @@
 # Pre-train Llama2-13B on Wikicorpus dataset using Neuronx Distributed library
 
-This example shows how to use [pytorch-distributed](../../../charts/machine-learning/training/pytorchjob-elastic/Chart.yaml) Helm chart to pre-train Llama2-13B model on Wikicorpus dataset with [Neuronx-Distributed](https://github.com/aws-neuron/neuronx-distributed/tree/main) library, using distributed data-parallel, tensor-parallel, and [ZeRO-1](https://pytorch.org/tutorials/recipes/zero_redundancy_optimizer.html). 
+This example shows how to use [pytorch-distributed](../../../charts/machine-learning/training/pytorchjob-elastic/Chart.yaml) Helm chart to pre-train Llama2-13B model on Wikicorpus dataset with [Neuronx-Distributed](https://github.com/aws-neuron/neuronx-distributed/tree/main) library, using distributed data-parallel and model-parallel. 
 
-The example also shows use of [data-process](../../../charts/machine-learning/data-prep/data-process/Chart.yaml) Helm chart to pre-process the [Hugging Face Wikicorpus](https://huggingface.co/datasets/wikicorpus) dataset for use with LLAMA2-13B model.
+The example also shows use of [data-process](../../../charts/machine-learning/data-prep/data-process/Chart.yaml) Helm chart to pre-process the [Hugging Face Wikicorpus](https://huggingface.co/datasets/wikicorpus) dataset.
 
 Before proceeding, complete the [Prerequisites](../../../../README.md#prerequisites) and [Getting started](../../../../README.md#getting-started). In particular, you must [Apply Terraform](../../../../README.md#apply-terraform) by specifying the variable `neuron_az` so you can automatically launch `trn1.32xlarge` instances.
 
