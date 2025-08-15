@@ -1,8 +1,8 @@
 # Pre-train Llama3-70B on Wikicorpus dataset using Neuronx Distributed library
 
-This example shows how to use [pytorch-distributed](../../../charts/machine-learning/training/pytorchjob-elastic/Chart.yaml) Helm chart to pre-train Llama3-70B model on Wikicorpus dataset with [Neuronx-Distributed](https://github.com/aws-neuron/neuronx-distributed/tree/main) library, using distributed data-parallel and model-parallel. 
+This example shows how to use [pytorch-distributed](../../../charts/machine-learning/training/pytorchjob-elastic/Chart.yaml) Helm chart to pre-train Llama3-8B model on Wikicorpus dataset with [Neuronx-Distributed](https://github.com/aws-neuron/neuronx-distributed/tree/main) library, using distributed data-parallel, tensor-parallel, and [ZeRO-1](https://pytorch.org/tutorials/recipes/zero_redundancy_optimizer.html). 
 
-The example also shows use of [data-process](../../../charts/machine-learning/data-prep/data-process/Chart.yaml) Helm chart to pre-process the [Hugging Face Wikicorpus](https://huggingface.co/datasets/wikicorpus) dataset.
+The example also shows use of [data-process](../../../charts/machine-learning/data-prep/data-process/Chart.yaml) Helm chart to pre-process the [Hugging Face Wikicorpus](https://huggingface.co/datasets/wikicorpus) dataset for use with LLAMA2-7B model.
 
 ## Prerequisites
 
@@ -24,7 +24,7 @@ Following variables are implicitly defined by the [pytorch-distributed](../../..
 
 ## Hugging Face Llama3 70B model
 
-To download Hugging Face Llama3 70B model configuration (without model weights, since we are pre-training from scratch), replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
+To download Hugging Face Llama2 7B model configuration (without model weights, since we are pre-training from scratch), replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nxd-llama3-70b-ptl    \
