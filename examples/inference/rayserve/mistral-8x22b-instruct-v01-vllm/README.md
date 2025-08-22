@@ -38,7 +38,7 @@ To build Ray Serve engine config:
 
 Uninstall the Helm chart at completion:
 
-    helm uninstall rayserve-mistral-8x22b-instruct-v01-n kubeflow-user-example-com
+    helm uninstall rayserve-mistral-8x22b-instruct-v01 -n kubeflow-user-example-com
 
 ## Build Ray Serve Engine
 

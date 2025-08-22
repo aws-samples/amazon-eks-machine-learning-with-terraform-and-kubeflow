@@ -160,11 +160,11 @@ variable "efa_enabled" {
     "p4d.24xlarge" = 4
     "p4de.24xlarge" = 4
     "p5.48xlarge" = 32
-    "p5e.48xlarge" = 32
-    "p5en.48xlarge" = 32
+    "p5e.48xlarge" = 16
+    "p5en.48xlarge" = 16
     "trn1.32xlarge" = 8
     "trn1n.32xlarge" = 16
-    "trn2.48xlarge" = 32
+    "trn2.48xlarge" = 16
   }
 }
 
@@ -212,7 +212,8 @@ variable "neuron_instances" {
   default = [
     "inf2.xlarge",
     "inf2.48xlarge",
-    "trn1.32xlarge"
+    "trn1.32xlarge",
+    "trn2.48xlarge"
   ]
 }
 
@@ -501,6 +502,18 @@ variable "mlflow_db_max_capacity" {
   description = "MLFlow DB Max Capacity"
   type        = number
   default = 16.0
+}
+
+variable neuron_capacity_reservation_id {
+  description = "targetted odcr id for neuron type devices"
+  type = string
+  default = ""
+}
+
+variable nvidia_capacity_reservation_id {
+  description = "targetted odcr id for nvidia devices"
+  type = string
+  default = ""
 }
 
 # END variables
