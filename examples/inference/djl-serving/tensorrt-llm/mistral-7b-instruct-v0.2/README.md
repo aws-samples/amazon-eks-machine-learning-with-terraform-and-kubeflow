@@ -39,7 +39,7 @@ To launch the server:
 To stop the service:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm uninstall djl-lmi-mistral-7b-instruct-v02-trtllm-n kubeflow-user-example-com
+    helm uninstall djl-lmi-mistral-7b-instruct-v02-trtllm -n kubeflow-user-example-com
 
 ### Logs
 

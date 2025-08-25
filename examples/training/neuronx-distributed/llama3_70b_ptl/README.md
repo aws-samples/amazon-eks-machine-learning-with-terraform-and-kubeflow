@@ -35,7 +35,7 @@ To download Hugging Face Llama3 70B model configuration (without model weights, 
 
 Uninstall the Helm chart at completion:
 
-    helm uninstall nxd-llama3-70b-ptl-n kubeflow-user-example-com
+    helm uninstall nxd-llama3-70b-ptl -n kubeflow-user-example-com
 
 ## Pre-process Wikicorpus dataset
 
@@ -50,7 +50,7 @@ To launch the data processing job, execute:
 
 To monitor the logs, execute:
 
-    kubectl logs -f data-process-nxd-llama3-70b-ptl-n kubeflow-user-example-com
+    kubectl logs -f data-process-nxd-llama3-70b-ptl -n kubeflow-user-example-com
 
 Uninstall the Helm chart at completion:
 
@@ -92,7 +92,7 @@ To monitor the logs, execute:
 
 To uninstall the Helm chart:
 
-    helm uninstall nxd-llama3-70b-ptl-n kubeflow-user-example-com
+    helm uninstall nxd-llama3-70b-ptl -n kubeflow-user-example-com
 
 ## Output
 
