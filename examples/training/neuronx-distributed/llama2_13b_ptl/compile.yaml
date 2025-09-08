@@ -1,4 +1,4 @@
-image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.6.0-neuronx-py310-sdk2.23.0-ubuntu22.04'
+image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.7.0-neuronx-py310-sdk2.25.0-ubuntu22.04'
 backoff_limit: 2000
 ebs:
   storage: 200Gi
@@ -20,7 +20,7 @@ tolerations:
 git:
   repo_url: "https://github.com/aws-neuron/neuronx-distributed.git"
   branch: main
-  commit: e83494557cb4c5b7e185ccf6c9240bfed9a1993d
+  commit: 99a4d30f5f9b6421f9951de0ef6d063edfb25de2
 pre_script: 
   - pip3 install --upgrade pip
   - SCRIPT_DIR=$GIT_CLONE_DIR/examples/training/llama/lightning
