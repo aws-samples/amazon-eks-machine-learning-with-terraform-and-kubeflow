@@ -3,3 +3,8 @@
 **/Dockerfile.*
 **/.ipynb_checkpoints/*
 **/.DS_Store
+logs/*
+.env
+*.log
+aloasi.txt
+eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform.tfvars

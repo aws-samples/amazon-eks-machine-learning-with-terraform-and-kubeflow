@@ -35,7 +35,7 @@ To download Hugging Face Llama3 8B model configuration (without model weights, s
 
 Uninstall the Helm chart at completion:
 
-    helm uninstall nxd-llama3-8b-n kubeflow-user-example-com
+    helm uninstall nxd-llama3-8b -n kubeflow-user-example-com
 
 ## Pre-process Wikicorpus dataset
 
@@ -54,7 +54,7 @@ To monitor the logs, execute:
 
 Uninstall the Helm chart at completion:
 
-    helm uninstall nxd-llama3-8b-n kubeflow-user-example-com
+    helm uninstall nxd-llama3-8b -n kubeflow-user-example-com
 
 ## Compile
 

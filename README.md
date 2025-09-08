@@ -112,6 +112,14 @@ If you need to use [AWS Trainium instances](https://aws.amazon.com/machine-learn
 
 **Note:** Ensure that the AWS Availability Zone you specify for `neuron_az` or `cuda_efa_az` variable above supports requested instance types, and this zone is included in the `azs` variable.
 
+
+if you want logs with your terraform runs you can use: 
+
+    eks-cluster/terraform/aws-eks-cluster-and-nodegroup/create_eks.sh
+
+if you use this script make sure to copy eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform.tfvars.example to terraform.tfvars and change/add the variables to suit your needs. 
+
+
 #### Enabling Modular Components
 
 This solution offers a suite of modular components for MLOps. All are disabled by default, and are not needed to work through included examples. You may toggle the modular components using following terraform variables:
@@ -228,6 +236,15 @@ Finally, to destroy all the infrastructure created in this tutorial, execute fol
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster-and-nodegroup
 
     terraform destroy -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2d","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET/ml-platform/"
+
+You can also use the following utility script to destroy your cluster. This script will retry 10 times in case terraform destroy errors out. Make sure you set your variables in eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform.tfvars by making a copy of eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform.tfvars.example
+
+    eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform_destroy_retry.sh 
+
+
+You can also use the script to clear out your terraform state in case you manually delete the cluster and its resources. Make sure to set the s3 bucket name and prefix where you store state
+
+    eks-cluster/terraform/aws-eks-cluster-and-nodegroup/rm_tf_state.sh
 
 ## Reference
 

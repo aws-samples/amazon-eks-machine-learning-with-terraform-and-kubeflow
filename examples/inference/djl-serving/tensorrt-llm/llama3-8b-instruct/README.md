@@ -21,7 +21,7 @@ To download Hugging Face Meta Llama 3 8B Instruct  pre-trained model weights, re
 
 Uninstall the Helm chart at completion:
 
-    helm uninstall djl-lmi-llama3-8b-instruct-trtllm-n kubeflow-user-example-com
+    helm uninstall djl-lmi-llama3-8b-instruct-trtllm -n kubeflow-user-example-com
 
 
 ## Launch DJL LMI Server
