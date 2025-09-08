@@ -38,8 +38,6 @@ process:
     - --max_num_tokens 32768
     - --gpus_per_node 8
     - --remove_input_padding enable
-    - --gemm_plugin float16
-    - --gpt_attention_plugin float16 
     - --paged_kv_cache enable
     - --context_fmha enable
     - --output_dir ${TMP_ENGINE_DIR}

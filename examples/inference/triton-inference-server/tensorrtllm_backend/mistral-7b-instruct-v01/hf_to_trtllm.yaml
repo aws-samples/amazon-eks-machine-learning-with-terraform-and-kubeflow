@@ -19,7 +19,7 @@ pre_script:
   - PP_SIZE=1
   - OUTPUT_LOG=$LOG_ROOT/hf_to_trtllm_tp_${TP_SIZE}_pp_${PP_SIZE}.log
   - TMP_OUTPUT_PATH=/tmp/ckpt_tp_${TP_SIZE}_pp_${PP_SIZE}
-  - SCRIPT_DIR=TensorRT-LLM/examples/llama
+  - SCRIPT_DIR=TensorRT-LLM/examples/models/core/llama
   - cd $SCRIPT_DIR
   - pip3 install datasets==3.1.0 evaluate~=0.4.3 rouge_score~=0.1.2 sentencepiece~=0.2.0
 post_script:
@@ -38,6 +38,6 @@ process:
     - convert_checkpoint.py 
     - --model_dir=$MODEL_PATH
     - --output_dir=$TMP_OUTPUT_PATH
-    - --dtype=float16
+    - --dtype=auto
     - --tp_size=$TP_SIZE
     - '2>&1 | tee $OUTPUT_LOG'

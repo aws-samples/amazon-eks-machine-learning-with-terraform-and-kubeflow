@@ -14,7 +14,7 @@ ebs:
   storage: 400Gi
   mount_path: /tmp
 pre_script: 
-  - SCRIPT_DIR=tensorrtllm_backend
+  - SCRIPT_DIR=TensorRT-LLM/triton_backend
   - cd $SCRIPT_DIR
   - mkdir -p $LOG_ROOT
   - TP_SIZE=8
