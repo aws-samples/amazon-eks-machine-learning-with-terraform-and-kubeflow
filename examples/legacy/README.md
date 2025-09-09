@@ -11,6 +11,7 @@
 
 ### [Neuronx Nemo Megatron](https://github.com/aws-neuron/neuronx-nemo-megatron)
 
+**Following examples are deprecated.**
 
 | Model      | Accelerator | Notes |
 | ----------- | ----------- | -------- |
