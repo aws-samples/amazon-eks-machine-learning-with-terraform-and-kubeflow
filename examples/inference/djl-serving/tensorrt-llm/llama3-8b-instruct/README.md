@@ -1,5 +1,7 @@
 # Serve Meta Llama 3 8B Instruct using TensorRT-LLM Engine in LMI
 
+## This example is deprecated.
+
 This example shows how to serve [Meta Llama 3 8B Instruct](https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct) model using [TensorRT-LLM Engine in LMI](https://docs.djl.ai/docs/serving/serving/docs/lmi/user_guides/trt_llm_user_guide.html).
 
 ## Prerequisites

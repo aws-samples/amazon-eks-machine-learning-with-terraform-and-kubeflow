@@ -1,5 +1,7 @@
 # Serve Meta Mistral 7B Instruct v0.2 using TensorRT-LLM Engine in LMI
 
+## This example is deprecated.
+
 This example shows how to serve [Mistral 7B Instruct v0.2](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2) model using model using [TensorRT-LLM Engine in LMI](https://docs.djl.ai/docs/serving/serving/docs/lmi/user_guides/trt_llm_user_guide.html).
 
 ## Prerequisites
