@@ -1,5 +1,7 @@
 # Serve Meta Llama 3 8B Instruct using Triton Inference Server on AWS Neuron
 
+## This example is deprecated.
+
 This example shows how to serve [Meta Llama 3 8B Instruct](https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct) model using [Triton Inference Server](https://github.com/triton-inference-server) on [AWS Neuron](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/index.html) with [transformers-neuronx](https://github.com/aws-neuron/transformers-neuronx).
 
 ## Prerequisites

@@ -1,5 +1,7 @@
 # Serve Mistral 7B Instruct v0.1 using Triton Inference Server on AWS Neuron
 
+## This example is deprecated.
+
 This example shows how to serve [Mistral 7B Instruct V0.1 ](https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.1) model using [Triton Inference Server](https://github.com/triton-inference-server) on [AWS Neuron](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/index.html) with [transformers-neuronx](https://github.com/aws-neuron/transformers-neuronx).
 
 ## Prerequisites
