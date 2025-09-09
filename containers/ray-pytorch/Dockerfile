@@ -1,9 +1,9 @@
-FROM rayproject/ray:2.44.0-py311-cu125
+FROM rayproject/ray:2.45.0-py311-cu128
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DEBCONF_NONINTERACTIVE_SEEN=true
 
 RUN pip install --upgrade pip
-RUN pip install torch==2.5.1 torchvision torchaudio
+RUN pip install torch==2.7.1 torchvision torchaudio
 
 CMD ["/bin/bash"]
