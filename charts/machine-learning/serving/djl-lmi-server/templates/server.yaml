@@ -76,6 +76,8 @@ spec:
       annotations:
         karpenter.sh/do-not-disrupt: "true"
         sidecar.istio.io/inject: 'false'
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
     spec:
       volumes:
         - name: config
@@ -178,6 +180,9 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: {{ .Release.Name }}
+  annotations:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -192,6 +197,9 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ .Release.Name }}
+  annotations:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   ports:
   - protocol: TCP

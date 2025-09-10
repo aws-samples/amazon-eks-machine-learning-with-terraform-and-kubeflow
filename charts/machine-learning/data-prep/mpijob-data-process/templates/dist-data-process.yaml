@@ -114,6 +114,8 @@ spec:
           annotations:
             karpenter.sh/do-not-disrupt: "true"
             sidecar.istio.io/inject: 'false'
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            app.kubernetes.io/managed-by: {{ .Release.Service }}
         spec:
           restartPolicy: Never
           volumes:
