@@ -166,6 +166,9 @@ spec:
           - "p4d.24xlarge"
           - "p4de.24xlarge"
           - "p5.48xlarge"
+          - "p5e.48xlarge"
+          - "p5en.48xlarge"
+          - "g6e.48xlarge"
       taints:
       - key: nvidia.com/gpu
         value: "true"

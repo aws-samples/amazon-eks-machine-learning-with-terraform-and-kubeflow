@@ -597,6 +597,7 @@ resource "helm_release" "aws-efa-k8s-device-plugin" {
           - "p5.48xlarge"
           - "p5e.48xlarge"
           - "p5en.48xlarge"
+          - "g6e.48xlarge"
       tolerations:
         - key: "nvidia.com/gpu"
           operator: "Exists"

@@ -62,6 +62,8 @@ spec:
                   - p4d.24xlarge
                   - p4de.24xlarge
                   - p5.48xlarge
+                  - p5e.48xlarge
+                  - p5en.48xlarge
       containers:
       - image: nvcr.io/nvidia/k8s-device-plugin:{{ .Chart.AppVersion }}
         name: nvidia-device-plugin-ctr
