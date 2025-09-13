@@ -26,8 +26,13 @@ ray:
           import_path: vllm_asyncllmengine:deployment
           runtime_env:
             working_dir: file:///fsx/rayserve/engines/vllm_asyncllmengine.zip
+            env_vars:
+              LD_LIBRARY_PATH: "/home/ray/anaconda3/lib/python3.11/site-packages/cusparselt/lib:/usr/local/cuda/lib64"
             pip:
-              - "vllm==0.8.1"
+              - "vllm==0.9.2"
+              - "pandas==2.3.0"
+              - "pyarrow==21.0.0"
+              - "transformers==4.53.3"
           deployments:
           - name: VLLMDeployment
             max_ongoing_requests: 64
