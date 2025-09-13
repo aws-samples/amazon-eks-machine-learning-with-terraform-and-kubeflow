@@ -278,6 +278,11 @@ resource "aws_fsx_data_repository_association" "this" {
       events = ["NEW", "CHANGED", "DELETED"]
     }
   }
+
+  timeouts {
+    create = "30m"  # Increase from default 10m to 30m
+    delete = "30m"  # Optional: also increase delete timeout
+  }
 }
 
 locals {
