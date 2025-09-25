@@ -5,7 +5,7 @@ metadata:
   labels:
     app: test-gpu-efa
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: test-gpu-efa
@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: test-gpu-efa
-        image: '763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-training:2.2.0-gpu-py310-cu121-ubuntu20.04-ec2'
+        image: 'nvcr.io/nvidia/tritonserver:25.08-vllm-python-py3'
         command: ["/bin/bash"]
         securityContext:
           privileged: true
@@ -27,10 +27,10 @@ spec:
         resources:
           requests:
             "nvidia.com/gpu": 8 
-            "vpc.amazonaws.com/efa": 1
+            "vpc.amazonaws.com/efa": 4
           limits:
             "nvidia.com/gpu": 8
-            "vpc.amazonaws.com/efa": 1
+            "vpc.amazonaws.com/efa": 4
       volumes:
       - name:  fsx
         persistentVolumeClaim:
