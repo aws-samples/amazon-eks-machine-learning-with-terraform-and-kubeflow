@@ -1,7 +1,7 @@
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
-  name: rayservice-{{ .Release.Name }}
+  name: {{ .Release.Name }}
   labels:
     app.kubernetes.io/name: {{ .Release.Name }}
     app.kubernetes.io/instance: {{ .Release.Name }}
@@ -33,6 +33,11 @@ spec:
               - name: {{ $v.name }}
                 containerPort: {{ $v.port }}
             {{- end }}
+            env:
+              {{- range $v := .Values.ray.env }}
+              - name: {{ $v.name }}
+                value: "{{ tpl $v.value $ }}"
+              {{- end }} 
             volumeMounts:
               {{- $pv_index := 1 }}
               {{- range $pv := .Values.pvc }}
@@ -78,6 +83,7 @@ spec:
     - replicas: {{ .Values.resources.min_replicas }}
       minReplicas: {{ .Values.resources.min_replicas }}
       maxReplicas: {{ .Values.resources.max_replicas }}
+      numOfHosts: 1
       groupName: serving
       rayStartParams: {}
       template:

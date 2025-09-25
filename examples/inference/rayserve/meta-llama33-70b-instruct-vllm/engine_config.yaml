@@ -5,9 +5,10 @@ inline_script:
   {
     "model": "/fsx/pretrained-models/meta-llama/Llama-3.3-70B-Instruct",
     "tokenizer": "/fsx/pretrained-models/meta-llama/Llama-3.3-70B-Instruct",
-    "disable_log_requests": true,
+    "enable_log_requests": false,
     "tensor_parallel_size": 8,
-    "pipeline_parallel_size": 2
+    "pipeline_parallel_size": 2,
+    "device_type": "cuda"
   }
 
   EOF

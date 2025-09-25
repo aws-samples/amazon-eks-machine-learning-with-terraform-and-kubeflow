@@ -5,7 +5,7 @@ inline_script:
   {
     "model": "/fsx/pretrained-models/meta-llama/Llama-3.2-11B-Vision-Instruct",
     "tokenizer": "/fsx/pretrained-models/meta-llama/Llama-3.2-11B-Vision-Instruct",
-    "disable_log_requests": true,
+    "enable_log_requests": false,
     "tensor_parallel_size": 8,
     "max_model_len": 4096,
     "dtype": "auto",

@@ -7,9 +7,18 @@ inline_script:
     "disable_log_requests": true,
     "tensor_parallel_size": 8,
     "max_num_seqs": 4,
-    "dtype": "float16",
+    "dtype": "auto",
     "max_model_len": 8192,
-    "block_size": 8192
+    "gpu_memory_utilization": 0.9,
+    "enforce_eager": false,
+    "enable_prefix_caching": true,
+    "preemption_mode": "swap",
+    "override_neuron_config": {
+      "continuous_batching": {
+        "max_num_seqs": 4,
+        "optimized_paged_attention": true
+      }
+    }
   }
 
   EOF

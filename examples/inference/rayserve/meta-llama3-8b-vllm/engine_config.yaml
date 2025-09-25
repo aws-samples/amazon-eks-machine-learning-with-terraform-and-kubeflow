@@ -5,7 +5,7 @@ inline_script:
   {
     "model": "/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct",
     "tokenizer": "/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct",
-    "disable_log_requests": true,
+    "enable_log_requests": false,
     "tensor_parallel_size": 8
   }
 

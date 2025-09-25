@@ -1,4 +1,4 @@
-FROM rayproject/ray:2.45.0-py311
+FROM rayproject/ray:2.49.0-py311
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DEBCONF_NONINTERACTIVE_SEEN=true
@@ -50,8 +50,10 @@ RUN sudo apt-get -y install aws-neuronx-tools=2.*
 
 RUN pip3 config set global.extra-index-url https://pip.repos.neuron.amazonaws.com
 RUN pip3 install awscli
-RUN pip3 install neuronx-cc==2.20.* torch-neuronx==2.7.* torchvision \
-       transformers-neuronx neuronx-distributed neuronx-distributed-inference==v0.5.9230
+RUN pip3 install libneuronxla==2.2.8201.0+f46ac1ef neuronx-cc==2.20.9961.0+0acef03a \
+      torch-neuronx==2.7.0.2.9.9357+08e1f40d torchvision \
+      neuronx-distributed==0.14.18461+9ac233f2 neuronx-distributed-inference==0.5.9230+dcf1e2da \
+      transformers-neuronx==0.13.322
 
 RUN pip3 install triton==3.3.1 pynvml==12.0.0 transformers==4.51.3 protobuf==6.32.0
 

@@ -157,7 +157,7 @@ resource "helm_release" "kuberay-operator" {
   name       = "kuberay-operator"
   chart      = "kuberay-operator"
   repository  = "https://ray-project.github.io/kuberay-helm/"
-  version    = "1.0.0"
+  version    = "1.4.2"
   namespace  = var.kubeflow_namespace
 }
 
