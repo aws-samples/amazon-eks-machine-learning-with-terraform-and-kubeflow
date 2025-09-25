@@ -50,7 +50,7 @@ To convert checkpoint:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug triton-mistral-7b-llama3-8b-trtllm  \
         charts/machine-learning/data-prep/data-process \
-        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-llama3-8b/mistral_7b_hf_to_trtllm.yaml -n kubeflow-user-example-com
+        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-instruct-v01_llama3-8b/mistral_7b_hf_to_trtllm.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -67,7 +67,7 @@ To convert checkpoint:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug triton-mistral-7b-llama3-8b-trtllm \
         charts/machine-learning/data-prep/data-process \
-        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-llama3-8b/llama3_8b_hf_to_trtllm.yaml -n kubeflow-user-example-com
+        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-instruct-v01_llama3-8b/llama3_8b_hf_to_trtllm.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -85,7 +85,7 @@ To build TensorRT-LLM engine:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug triton-mistral-7b-llama3-8b-trtllm  \
         charts/machine-learning/data-prep/data-process \
-        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-llama3-8b/trtllm_mistral_7b_engine.yaml -n kubeflow-user-example-com
+        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-instruct-v01_llama3-8b/trtllm_mistral_7b_engine.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -102,7 +102,7 @@ To build TensorRT-LLM engine:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug triton-mistral-7b-llama3-8b-trtllm  \
         charts/machine-learning/data-prep/data-process \
-        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-llama3-8b/trtllm_llama3_8b_engine.yaml -n kubeflow-user-example-com
+        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-instruct-v01_llama3-8b/trtllm_llama3_8b_engine.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -119,7 +119,7 @@ To build Triton model:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug triton-mistral-7b-llama3-8b-trtllm  \
         charts/machine-learning/data-prep/data-process \
-        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-llama3-8b/triton_mistral_7b_model.yaml -n kubeflow-user-example-com
+        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-instruct-v01_llama3-8b/triton_mistral_7b_model.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -136,7 +136,7 @@ To build Triton model:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug triton-mistral-7b-llama3-8b-trtllm  \
         charts/machine-learning/data-prep/data-process \
-        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-llama3-8b/triton_llama3_8b_model.yaml -n kubeflow-user-example-com
+        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-instruct-v01_llama3-8b/triton_llama3_8b_model.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -153,7 +153,7 @@ To launch Triton server:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug triton-mistral-7b-llama3-8b-trtllm  \
         charts/machine-learning/serving/triton-inference-server \
-        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-llama3-8b/triton_server.yaml -n kubeflow-user-example-com
+        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-instruct-v01_llama3-8b/triton_server.yaml -n kubeflow-user-example-com
 
 
 ## Stop Service
