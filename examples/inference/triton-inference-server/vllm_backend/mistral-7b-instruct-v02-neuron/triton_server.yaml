@@ -74,7 +74,7 @@ inline_script:
   cat > /tmp/model.json <<EOF
   {
     "model": "$MODEL_PATH",
-    "disable_log_requests": true,
+    "enable_log_requests": false,
     "tensor_parallel_size": 8,
     "dtype": "float16",
     "max_num_seqs": 4,

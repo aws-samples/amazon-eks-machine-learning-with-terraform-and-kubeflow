@@ -6,7 +6,7 @@ resources:
   limits:
     "nvidia.com/gpu": 8
 ebs:
-  storage: 400Gi
+  storage: 800Gi
   mount_path: /tmp
 tolerations:
   - key: "nvidia.com/gpu"

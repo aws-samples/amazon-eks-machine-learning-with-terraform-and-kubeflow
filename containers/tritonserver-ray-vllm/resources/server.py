@@ -180,6 +180,7 @@ def start_ray_cluster(args):
         if i == 0:
             cmd_args += [
                 f'--head', 
+                f'--node-ip-address={ip_addrs}',
                 f'--port={args.head_port}',
             ]
         else:
