@@ -74,11 +74,16 @@ inline_script:
   cat > /tmp/model.json <<EOF
   {
     "model": "$MODEL_PATH",
-    "enable_log_requests": false,
+    "tokenizer": "$MODEL_PATH",
+    "disable_log_stats": true,
     "tensor_parallel_size": 8,
-    "dtype": "float16",
     "max_num_seqs": 4,
+    "dtype": "auto",
     "max_model_len": 16384,
+    "gpu_memory_utilization": 0.9,
+    "enforce_eager": false,
+    "enable_prefix_caching": true,
+    "preemption_mode": "swap",
     "override_neuron_config": {
       "continuous_batching": {
         "max_num_seqs": 4,

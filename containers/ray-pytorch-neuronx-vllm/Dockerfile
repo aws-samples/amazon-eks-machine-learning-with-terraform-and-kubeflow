@@ -50,9 +50,11 @@ RUN sudo apt-get -y install aws-neuronx-tools=2.*
 
 RUN pip3 config set global.extra-index-url https://pip.repos.neuron.amazonaws.com
 RUN pip3 install awscli
-RUN pip3 install libneuronxla==2.2.8201.0+f46ac1ef neuronx-cc==2.20.9961.0+0acef03a \
-      torch-neuronx==2.7.0.2.9.9357+08e1f40d torchvision \
-      neuronx-distributed==0.14.18461+9ac233f2 neuronx-distributed-inference==0.5.9230+dcf1e2da \
+RUN pip3 install libneuronxla==2.2.12677.0+470fa032 \
+      neuronx-cc==2.21.18209.0+043b1bf7 \
+      neuronx-distributed==0.15.22404+1f27bddf \
+      neuronx-distributed-inference==0.6.10598+a59fdc00 \
+      torch-neuronx==2.8.0.2.10.13553+1e4dd6ca \
       transformers-neuronx==0.13.322
       
 ENV LD_LIBRARY_PATH=/opt/aws/neuron/lib:/home/ray/anaconda3/lib:$LD_LIBRARY_PATH
@@ -66,7 +68,5 @@ RUN git clone https://github.com/vllm-project/vllm.git
 RUN cd vllm && git fetch origin 5fbbfe9a4c13094ad72ed3d6b4ef208a7ddc0fd7
 RUN cd vllm && git reset --hard 5fbbfe9a4c13094ad72ed3d6b4ef208a7ddc0fd7
 RUN cd vllm && pip3 install -e .
-
-RUN pip3 install triton==3.3.1 pynvml==12.0.0 transformers==4.51.3 protobuf==6.32.0
 
 CMD ["/bin/bash"]
