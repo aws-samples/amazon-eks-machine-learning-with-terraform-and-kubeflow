@@ -1,0 +1,65 @@
+ray:
+  version: '2.49.0'
+  dashboard:
+    host: '0.0.0.0'
+  ports:
+    - name: gcs
+      port: 6379
+    - name: client
+      port: 10001
+    - name: dashboard
+      port: 8265
+    - name: serve
+      port: 8000
+  resources:
+    requests:
+      cpu: 300m 
+    limits:
+      cpu: 2
+  env:
+    - name: ENGINE_CONFIG
+      value: /efs/home/{{ .Release.Name }}/config/engine.json
+  serve_config_v2: 
+    serveConfigV2: |
+      applications:
+        - name: qwen25-vl-32b-instruct
+          import_path: vllm_asyncllmengine:deployment
+          runtime_env:
+            working_dir: file:///fsx/rayserve/engines/vllm_asyncllmengine.zip
+            env_vars:
+              LD_LIBRARY_PATH: "/home/ray/anaconda3/lib/python3.11/site-packages/cusparselt/lib:/usr/local/cuda/lib64"
+            pip:
+              - "vllm==0.10.2"
+              - "pandas==2.3.0"
+              - "pyarrow==21.0.0"
+              - "transformers==4.56.2"
+          deployments:
+          - name: VLLMDeployment
+            max_ongoing_requests: 64
+            autoscaling_config:
+              min_replicas: 1
+              max_replicas: 2
+              target_ongoing_requests: 32
+            ray_actor_options:
+              num_gpus: 8
+  service_unhealthy_threshold_secs: 900
+  deployment_unhealthy_threshold_secs: 300
+image:
+image_pull_policy: IfNotPresent
+resources:
+  min_replicas: 1
+  max_replicas: 2
+  requests:
+    "nvidia.com/gpu": 8
+  limits:
+    "nvidia.com/gpu": 8
+  node_type: 'g6.48xlarge' 
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
