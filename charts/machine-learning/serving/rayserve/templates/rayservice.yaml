@@ -83,7 +83,7 @@ spec:
     - replicas: {{ .Values.resources.min_replicas }}
       minReplicas: {{ .Values.resources.min_replicas }}
       maxReplicas: {{ .Values.resources.max_replicas }}
-      numOfHosts: 1
+      numOfHosts: {{ .Values.resources.num_of_hosts | default 1 }}
       groupName: serving
       rayStartParams: {}
       template:
