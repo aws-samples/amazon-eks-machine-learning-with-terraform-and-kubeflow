@@ -42,7 +42,7 @@ data:
     hf_token = os.environ.get("HF_TOKEN", None)
 
     with TemporaryDirectory(suffix="model", prefix="hf", dir="/tmp") as cache_dir:
-        ignore_patterns = ["*.msgpack", "*.h5"] if hf_tensors else [ "*.msgpack", "*.h5", "*.bin", "*.safetensors"]
+        ignore_patterns = ["*.msgpack", "*.h5"] if hf_tensors else ["*.msgpack", "*.h5", "*.bin", "*.safetensors"]
         print(f"Downloading HuggingFace snapshot: {hf_model_id} to local dir: {cache_dir}")
         snapshot_download(repo_id=hf_model_id, 
             cache_dir=cache_dir,
@@ -59,13 +59,21 @@ data:
 
         print(f"Copying snapshot to {snapshot_path}", flush=True)
         for root, dirs, files in os.walk(local_snapshot_path):
-          for file in files:
-              full_path = os.path.join(root, file)
-              print(f"Copying {full_path}", flush=True)
-              if os.path.isdir(full_path):
-                shutil.copytree(full_path, os.path.join(snapshot_path, os.path.basename(full_path)))
-              else:
-                shutil.copy2(full_path, snapshot_path)
+            for file in files:
+                full_path = os.path.join(root, file)
+                
+                # Calculate the relative path from the source root
+                rel_path = os.path.relpath(full_path, local_snapshot_path)
+                
+                # Create the destination path preserving folder structure
+                dest_path = os.path.join(snapshot_path, rel_path)
+                
+                # Create destination directory if it doesn't exist
+                dest_dir = os.path.dirname(dest_path)
+                os.makedirs(dest_dir, exist_ok=True)
+                
+                print(f"Copying {full_path} to {dest_path}", flush=True)
+                shutil.copy2(full_path, dest_path)
 
         print(f"Completed copying snapshot to {snapshot_path}", flush=True)
 
