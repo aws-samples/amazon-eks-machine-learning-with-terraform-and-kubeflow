@@ -88,10 +88,13 @@ RUN cp -r /server/build/opt/* /opt/
 RUN rm -rf /server
 
 ENV VLLM_TARGET_DEVICE=neuron
-RUN git clone https://github.com/vllm-project/vllm.git /opt/vllm
-RUN cd /opt/vllm && git fetch origin 5fbbfe9a4c13094ad72ed3d6b4ef208a7ddc0fd7
-RUN cd /opt/vllm && git reset --hard 5fbbfe9a4c13094ad72ed3d6b4ef208a7ddc0fd7
-RUN cd /opt/vllm && pip3 install -e .
+ARG USE_NEURON_VLLM=false
+RUN if [ "$USE_NEURON_VLLM" = "true" ]; then \
+      pip install git+https://github.com/aws-neuron/upstreaming-to-vllm.git@2.26.0; \
+    else \
+      pip install git+https://github.com/vllm-project/vllm.git@v0.9.0.1; \
+    fi
+
 
 RUN git clone https://github.com/triton-inference-server/vllm_backend.git /opt/vllm_backend
 RUN cd /opt/vllm_backend && git fetch origin 98947a7c641057a1e3cf8fc9805dc4e3b93e7b66
