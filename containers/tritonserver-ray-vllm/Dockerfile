@@ -32,3 +32,4 @@ WORKDIR /workspace
 
 COPY --chmod=555 resources/kubessh /usr/local/bin/kubessh
 COPY resources/server.py .
+ENV PYTHONPATH=/opt/tritonserver/backends/vllm
