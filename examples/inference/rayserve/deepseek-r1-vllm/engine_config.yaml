@@ -6,8 +6,13 @@ inline_script:
     "model": "/fsx/pretrained-models/deepseek-ai/DeepSeek-R1",
     "tokenizer": "/fsx/pretrained-models/deepseek-ai/DeepSeek-R1",
     "enable_log_requests": false,
+    "gpu_memory_utilization": 0.95,
+    "dtype": "auto",
+    "enforce_eager": true,
     "tensor_parallel_size": 8,
-    "pipeline_parallel_size": 4
+    "pipeline_parallel_size": 4,
+    "max_num_seqs": 2,
+    "max_model_len": 81920
   }
 
   EOF
