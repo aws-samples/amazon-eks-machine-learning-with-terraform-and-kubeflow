@@ -2,9 +2,9 @@ image:
   name:
   pull_policy: Always
 lws:
-  size: 4
+  size: 2
 resources:
-  node_type: g6e.48xlarge
+  node_type: p4de.24xlarge
   requests:
     "nvidia.com/gpu": 8
     "vpc.amazonaws.com/efa": 4
@@ -42,7 +42,7 @@ inline_script:
     "dtype": "auto",
     "enforce_eager": true,
     "tensor_parallel_size": 8,
-    "pipeline_parallel_size": 4,
+    "pipeline_parallel_size": 2,
     "max_num_seqs": 2,
     "max_model_len": 81920
   }
@@ -52,7 +52,7 @@ inline_script:
 pre_script: 
   - mkdir -p $LOG_ROOT
   - TP_SIZE=8
-  - PP_SIZE=4
+  - PP_SIZE=2
   - OUTPUT_LOG="$LOG_ROOT/triton_server.log"
   - rm -rf $MODEL_REPO
   - mkdir -p $MODEL_REPO
