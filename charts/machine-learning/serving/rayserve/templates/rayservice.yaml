@@ -39,6 +39,12 @@ spec:
                 value: "{{ tpl $v.value $ }}"
               {{- end }} 
             volumeMounts:
+              - mountPath: /dev/shm
+                name: shm
+              - mountPath: /etc/vllm/config
+                name: vllm-config
+              - mountPath: /etc/vllm/code
+                name: vllm-code
               {{- $pv_index := 1 }}
               {{- range $pv := .Values.pvc }}
               - mountPath: {{ $pv.mount_path }}
@@ -59,6 +65,18 @@ spec:
               hostPath:
                 path: /dev/shm
                 type: Directory
+            - name: vllm-config
+              configMap:
+                items:
+                - key: engine-config.json
+                  path: engine-config.json
+                name: vllm-config-{{ .Release.Name }}
+            - name: vllm-code
+              configMap:
+                items:
+                - key: vllm_asyncllmengine.py
+                  path: vllm_asyncllmengine.py
+                name: vllm-code-{{ .Release.Name }}
             {{- $pv_index := 1 }}
             {{- range $pv := .Values.pvc }}
             - name: pv-{{ $pv_index }}
@@ -116,6 +134,10 @@ spec:
             volumeMounts:
               - mountPath: /dev/shm
                 name: shm
+              - mountPath: /etc/vllm/config
+                name: vllm-config
+              - mountPath: /etc/vllm/code
+                name: vllm-code
               {{- $pv_index := 1 }}
               {{- range $pv := .Values.pvc }}
               - mountPath: {{ $pv.mount_path }}
@@ -136,6 +158,18 @@ spec:
               hostPath:
                 path: /dev/shm
                 type: Directory
+            - name: vllm-config
+              configMap:
+                items:
+                - key: engine-config.json
+                  path: engine-config.json
+                name: vllm-config-{{ .Release.Name }}
+            - name: vllm-code
+              configMap:
+                items:
+                - key: vllm_asyncllmengine.py
+                  path: vllm_asyncllmengine.py
+                name: vllm-code-{{ .Release.Name }}
             {{- $pv_index := 1 }}
             {{- range $pv := .Values.pvc }}
             - name: pv-{{ $pv_index }}

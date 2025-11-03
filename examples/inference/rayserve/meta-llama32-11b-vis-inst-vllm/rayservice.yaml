@@ -16,20 +16,16 @@ ray:
       cpu: 300m 
     limits:
       cpu: 2
-  env:
-    - name: ENGINE_CONFIG
-      value: /efs/home/{{ .Release.Name }}/config/engine.json
-    - name: PYTORCH_CUDA_ALLOC_CONF
-      value: "expandable_segments:True"
   serve_config_v2: 
     serveConfigV2: |
       applications:
         - name: meta-llama32-11b-vis-inst
           import_path: vllm_asyncllmengine:deployment
           runtime_env:
-            working_dir: file:///fsx/rayserve/engines/vllm_asyncllmengine.zip
             env_vars:
               LD_LIBRARY_PATH: "/home/ray/anaconda3/lib/python3.11/site-packages/cusparselt/lib:/usr/local/cuda/lib64"
+              ENGINE_CONFIG: "/etc/vllm/config/engine-config.json"
+              PYTHONPATH: "/etc/vllm/code"
             pip:
               - "vllm==0.10.2"
               - "pandas==2.3.0"
@@ -44,6 +40,20 @@ ray:
               target_ongoing_requests: 32
   service_unhealthy_threshold_secs: 900
   deployment_unhealthy_threshold_secs: 300
+vllm:
+  config:
+    served_model_name: "meta-llama32-11b-vision-instruct"
+    model: "/fsx/pretrained-models/meta-llama/Llama-3.2-11B-Vision-Instruct"
+    tokenizer: "/fsx/pretrained-models/meta-llama/Llama-3.2-11B-Vision-Instruct"
+    enable_log_requests: false
+    tensor_parallel_size: 8
+    disable_log_stats: true
+    max_model_len: 4096
+    dtype: "auto"
+    gpu_memory_utilization: 0.9
+    max_num_seqs: 8
+    enforce_eager: true
+    swap_space: 16
 image:
 image_pull_policy: IfNotPresent
 resources:
@@ -53,7 +63,7 @@ resources:
     "nvidia.com/gpu": 8
   limits:
     "nvidia.com/gpu": 8
-  node_type: 'g6.48xlarge' 
+  node_type: 'g6e.48xlarge' 
 tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"

@@ -27,34 +27,6 @@ Uninstall the Helm chart at completion:
 
     helm uninstall rayserve-deepseek-r1 -n kubeflow-user-example-com
 
-## Build Ray Serve Engine Config
-
-To build Ray Serve engine config:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm install --debug rayserve-deepseek-r1    \
-            charts/machine-learning/data-prep/data-process   \
-            -f examples/inference/rayserve/deepseek-r1-vllm/engine_config.yaml \
-            -n kubeflow-user-example-com
-
-Uninstall the Helm chart at completion:
-
-    helm uninstall rayserve-deepseek-r1 -n kubeflow-user-example-com
-
-## Build Ray Serve Engine
-
-To build Ray Serve engine:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm install --debug rayserve-deepseek-r1    \
-            charts/machine-learning/model-prep/rayserve-vllm-asyncllmengine    \
-            --set='engine_path=/fsx/rayserve/engines/vllm_asyncllmengine.zip' \
-            -n kubeflow-user-example-com
-
-Uninstall the Helm chart at completion:
-
-    helm uninstall rayserve-deepseek-r1 -n kubeflow-user-example-com
-
 ## Launch Ray Service
 
 To launch Ray Service,  execute:

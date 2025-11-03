@@ -17,8 +17,6 @@ ray:
     limits:
       cpu: 2
   env:
-    - name: ENGINE_CONFIG
-      value: /efs/home/{{ .Release.Name }}/config/engine.json
     - name: NCCL_SOCKET_IFNAME 
       value: "^lo,docker0"
     - name: NCCL_DEBUG
@@ -37,14 +35,15 @@ ray:
         - name: meta-llama33-70b-instruct
           import_path: vllm_asyncllmengine:deployment
           runtime_env:
-            working_dir: file:///fsx/rayserve/engines/vllm_asyncllmengine.zip
             env_vars:
               LD_LIBRARY_PATH: "/home/ray/anaconda3/lib/python3.11/site-packages/cusparselt/lib:/usr/local/cuda/lib64"
+              ENGINE_CONFIG: "/etc/vllm/config/engine-config.json"
+              PYTHONPATH: "/etc/vllm/code"
             pip:
-              - "vllm==0.10.2"
+              - "vllm==0.11.0"
               - "pandas==2.3.0"
               - "pyarrow==21.0.0"
-              - "transformers==4.56.2"
+              - "transformers==4.57.1"
           deployments:
           - name: VLLMDeployment
             max_ongoing_requests: 64
@@ -54,6 +53,15 @@ ray:
               target_ongoing_requests: 32
   service_unhealthy_threshold_secs: 900
   deployment_unhealthy_threshold_secs: 300
+vllm:
+  config:
+    served_model_name: "meta-llama33-70b-instruct"
+    model: "/fsx/pretrained-models/meta-llama/Llama-3.3-70B-Instruct"
+    tokenizer: "/fsx/pretrained-models/meta-llama/Llama-3.3-70B-Instruct"
+    enable_log_requests: false
+    tensor_parallel_size: 8
+    pipeline_parallel_size: 2
+    disable_log_stats: true
 image:
 image_pull_policy: IfNotPresent
 resources:

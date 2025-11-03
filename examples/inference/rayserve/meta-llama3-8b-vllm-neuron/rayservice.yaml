@@ -25,8 +25,6 @@ ray:
     operator: "Exists"
     effect: "NoSchedule"
   env:
-    - name: ENGINE_CONFIG
-      value: /efs/home/{{ .Release.Name }}/config/engine.json
     - name: NEURON_CC_FLAGS
       value: "--model-type transformer --enable-fast-loading-neuron-binaries"
     - name: NEURON_COMPILE_CACHE_URL
@@ -41,7 +39,9 @@ ray:
         - name: meta-llama3-8b-instruct
           import_path: vllm_asyncllmengine:deployment
           runtime_env:
-            working_dir: file:///fsx/rayserve/engines/vllm_asyncllmengine.zip
+            env_vars:
+              ENGINE_CONFIG: "/etc/vllm/config/engine-config.json"
+              PYTHONPATH: "/etc/vllm/code"
           deployments:
           - name: VLLMDeployment
             max_ongoing_requests: 48
@@ -54,6 +54,22 @@ ray:
                 "neuron_cores": 8
   service_unhealthy_threshold_secs: 900
   deployment_unhealthy_threshold_secs: 900
+vllm:
+  config:
+    served_model_name: "meta-llama3-8b-instruct"
+    model: "/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct"
+    tokenizer: "/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct"
+    tensor_parallel_size: 8
+    disable_log_stats: true
+    disable_log_requests: true
+    max_num_seqs: 4
+    dtype: "auto"
+    max_model_len: 8192
+    gpu_memory_utilization: 0.9
+    enforce_eager: false
+    enable_prefix_caching: true
+    preemption_mode: "swap"
+    override_neuron_config: {"continuous_batching": {"max_num_seqs": 4,"optimized_paged_attention": true}}
 image:
 image_pull_policy: IfNotPresent
 scheduler_name: neuron-scheduler

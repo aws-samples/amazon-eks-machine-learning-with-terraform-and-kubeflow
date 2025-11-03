@@ -16,23 +16,21 @@ ray:
       cpu: 300m 
     limits:
       cpu: 2
-  env:
-    - name: ENGINE_CONFIG
-      value: /efs/home/{{ .Release.Name }}/config/engine.json
   serve_config_v2: 
     serveConfigV2: |
       applications:
         - name: qwen25-vl-32b-instruct
           import_path: vllm_asyncllmengine:deployment
           runtime_env:
-            working_dir: file:///fsx/rayserve/engines/vllm_asyncllmengine.zip
             env_vars:
               LD_LIBRARY_PATH: "/home/ray/anaconda3/lib/python3.11/site-packages/cusparselt/lib:/usr/local/cuda/lib64"
+              ENGINE_CONFIG: "/etc/vllm/config/engine-config.json"
+              PYTHONPATH: "/etc/vllm/code"
             pip:
-              - "vllm==0.10.2"
+              - "vllm==0.11.0"
               - "pandas==2.3.0"
               - "pyarrow==21.0.0"
-              - "transformers==4.56.2"
+              - "transformers==4.57.1"
           deployments:
           - name: VLLMDeployment
             max_ongoing_requests: 64
@@ -44,6 +42,14 @@ ray:
               num_gpus: 8
   service_unhealthy_threshold_secs: 900
   deployment_unhealthy_threshold_secs: 300
+vllm:
+  config:
+    served_model_name: "qwen25-vl-32b-instruct"
+    model: "/fsx/pretrained-models/Qwen/Qwen2.5-VL-32B-Instruct"
+    tokenizer: "/fsx/pretrained-models/Qwen/Qwen2.5-VL-32B-Instruct"
+    enable_log_requests: false
+    tensor_parallel_size: 8
+    disable_log_stats: true
 image:
 image_pull_policy: IfNotPresent
 resources:
@@ -53,7 +59,7 @@ resources:
     "nvidia.com/gpu": 8
   limits:
     "nvidia.com/gpu": 8
-  node_type: 'g6.48xlarge' 
+  node_type: 'g6e.48xlarge' 
 tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"

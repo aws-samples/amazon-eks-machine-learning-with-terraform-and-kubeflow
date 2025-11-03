@@ -11,7 +11,6 @@ This example uses a custom Docker container for Ray Serve. Build and push this c
      cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
      ./containers/ray-pytorch/build_tools/build_and_push.sh aws-region
 
-
 ## Hugging Face Qwen3 32B Pre-trained Model Weights
 
 To download Hugging Face Qwen3 32B pre-trained model weights, replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
@@ -20,34 +19,6 @@ To download Hugging Face Qwen3 32B pre-trained model weights, replace `YourHuggi
     helm install --debug rayserve-qwen3-32b     \
             charts/machine-learning/model-prep/hf-snapshot    \
             --set-json='env=[{"name":"HF_MODEL_ID","value":"Qwen/Qwen3-32B"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
-            -n kubeflow-user-example-com
-
-Uninstall the Helm chart at completion:
-
-    helm uninstall rayserve-qwen3-32b -n kubeflow-user-example-com
-
-## Build Ray Serve Engine Config
-
-To build Ray Serve engine:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm install --debug rayserve-qwen3-32b     \
-            charts/machine-learning/data-prep/data-process   \
-            -f examples/inference/rayserve/qwen3-32B-vllm/engine_config.yaml \
-            -n kubeflow-user-example-com
-
-Uninstall the Helm chart at completion:
-
-    helm uninstall rayserve-qwen3-32b -n kubeflow-user-example-com
-
-## Build Ray Serve Engine
-
-To build Ray Serve engine:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm install --debug rayserve-qwen3-32b     \
-            charts/machine-learning/model-prep/rayserve-vllm-asyncllmengine    \
-            --set='engine_path=/fsx/rayserve/engines/vllm_asyncllmengine.zip' \
             -n kubeflow-user-example-com
 
 Uninstall the Helm chart at completion:
