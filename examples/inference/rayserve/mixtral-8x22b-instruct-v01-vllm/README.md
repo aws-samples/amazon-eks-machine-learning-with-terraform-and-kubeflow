@@ -1,4 +1,4 @@
-# Ray Server Mistral 8x22B Instruct v0.1 Model
+# Ray Server Mixtral 8x22B Instruct v0.1 Model
 
 This example shows how to serve [mistralai/Mixtral-8x22B-Instruct-v0.1](https://huggingface.co/mistralai/Mixtral-8x22B-Instruct-v0.1) model using multi-GPU, multi-node deployment. 
 
