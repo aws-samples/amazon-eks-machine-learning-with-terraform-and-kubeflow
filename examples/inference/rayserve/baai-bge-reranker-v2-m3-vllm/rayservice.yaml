@@ -1,0 +1,70 @@
+ray:
+  version: '2.49.0'
+  dashboard:
+    host: '0.0.0.0'
+  ports:
+    - name: gcs
+      port: 6379
+    - name: client
+      port: 10001
+    - name: dashboard
+      port: 8265
+    - name: serve
+      port: 8000
+  resources:
+    requests:
+      cpu: 300m 
+    limits:
+      cpu: 2
+  serve_config_v2: 
+    serveConfigV2: |
+      applications:
+        - name: bge-reranker-v2-m3
+          import_path: vllm_asyncllmengine:deployment
+          runtime_env:
+            env_vars:
+              LD_LIBRARY_PATH: "/home/ray/anaconda3/lib/python3.11/site-packages/cusparselt/lib:/usr/local/cuda/lib64"
+              ENGINE_CONFIG: "/etc/vllm/config/engine-config.json"
+              PYTHONPATH: "/etc/vllm/code"
+            pip:
+              - "vllm==0.11.0"
+              - "pandas==2.3.0"
+              - "pyarrow==21.0.0"
+              - "transformers==4.57.1"
+          deployments:
+          - name: VLLMDeployment
+            max_ongoing_requests: 32
+            autoscaling_config:
+              min_replicas: 1
+              max_replicas: 1
+              target_ongoing_requests: 16
+            ray_actor_options:
+              num_gpus: 1
+  service_unhealthy_threshold_secs: 900
+  deployment_unhealthy_threshold_secs: 300
+vllm:
+  config:
+    served_model_name: "bge-reranker-v2-m3"
+    model: "/fsx/pretrained-models/BAAI/bge-reranker-v2-m3"
+    tokenizer: "/fsx/pretrained-models/BAAI/bge-reranker-v2-m3"
+    supported_tasks: ["embed", "score"]
+    gpu_memory_utilization: 0.75
+image:
+image_pull_policy: IfNotPresent
+resources:
+  min_replicas: 1
+  max_replicas: 1
+  requests:
+    "nvidia.com/gpu": 1
+  limits:
+    "nvidia.com/gpu": 1
+  node_type: 'g5.xlarge' 
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
