@@ -23,6 +23,8 @@ data:
     from vllm.entrypoints.openai.serving_completion import OpenAIServingCompletion
     from vllm.entrypoints.openai.serving_embedding import OpenAIServingEmbedding
     from vllm.entrypoints.openai.serving_tokenization import OpenAIServingTokenization
+    from vllm.entrypoints.openai.serving_classification import ServingClassification
+    from vllm.entrypoints.openai.serving_score import ServingScores
     from vllm.entrypoints.openai.serving_models import (BaseModelPath,
                                                         LoRAModulePath,
                                                         OpenAIServingModels)
@@ -36,6 +38,12 @@ data:
         EmbeddingResponse,
         ChatCompletionResponse,
         CompletionResponse,
+        ScoreRequest,
+        ScoreResponse,
+        ClassificationRequest,
+        ClassificationResponse,
+        RerankRequest,
+        RerankResponse
     )
     from vllm.entrypoints.logger import RequestLogger
     from vllm.entrypoints.chat_utils import load_chat_template
@@ -67,11 +75,19 @@ data:
                 raise ValueError("served_model_name is required in engine config")
 
             # Initialize engine
-            print("Load engine config")
-            self._engine_args = AsyncEngineArgs(**self._engine_config)
-            print(f"engine args: {self._engine_args}")
-            print("Initialize engine")
-            self._engine_client = AsyncLLMEngine.from_engine_args(self._engine_args)
+            self._supported_tasks = self._engine_config.pop("supported_tasks", ["generate"]) 
+            print(f"Engine config: {self._engine_config}", flush=True)
+
+            try:
+                self._engine_args = AsyncEngineArgs(**self._engine_config)
+                print(f"Engine args: {self._engine_args}", flush=True)
+                print("Initializing engine", flush=True)
+                self._engine_client = AsyncLLMEngine.from_engine_args(self._engine_args)
+                print("Engine initialized", flush=True)
+            except Exception as e:
+                print(f"Failed to initialize engine: {e}", flush=True)
+                traceback.print_exc()
+                sys.exit(1)
 
             self._app_inited = False
             self._init_lock = asyncio.Lock()
@@ -89,7 +105,7 @@ data:
                 try:
                     supported_tasks = await self._engine_client.get_supported_tasks()
                 except AttributeError:
-                    supported_tasks = self._engine_config.get("supported_tasks", ["generate"])
+                    supported_tasks = self._supported_tasks
                     print(f"Using supported_tasks from config: {supported_tasks}")
                     
                 vllm_config = await self._engine_client.get_vllm_config()
@@ -212,6 +228,22 @@ data:
                     **({"log_error_stack": log_error_stack} if vllm_version >= (0, 10, 2) else {}),
                 ) if "embed" in supported_tasks else None
             
+                self._serving_classification = ServingClassification(
+                    engine_client=self._engine_client,
+                    model_config=model_config,
+                    models=self._serving_models,
+                    request_logger=request_logger,
+                    **({"log_error_stack": log_error_stack} if vllm_version >= (0, 10, 2) else {}),
+                ) if "classify" in supported_tasks else None
+
+                self._serving_scores = ServingScores(
+                    engine_client=self._engine_client,
+                    model_config=model_config,
+                    models=self._serving_models,
+                    request_logger=request_logger,
+                    **({"log_error_stack": log_error_stack} if vllm_version >= (0, 10, 2) else {}),
+                ) if ("embed" in supported_tasks or "score" in supported_tasks) else None
+                
                 self._app_inited = True
                 print("OpenAI handlers initialized successfully")
 
@@ -258,6 +290,8 @@ data:
                     "chat_completions": self._serving_chat is not None,
                     "completions": self._serving_completion is not None,
                     "embeddings": self._serving_embedding is not None,
+                    "classification": self._serving_classification is not None,
+                    "scores": self._serving_scores is not None,
                     "tokenization": True
                 }
             })
@@ -315,6 +349,70 @@ data:
                     content={"error": {"message": str(e), "type": "server_error"}}
                 )
 
+        @app.post("/v1/score")
+        async def create_score(self, score_request: ScoreRequest, raw_request: Request) -> Response:
+            await self._create_openai_handlers()
+            try: 
+                response = await self._serving_scores.create_score(score_request, raw_request)
+                if isinstance(response, ErrorResponse):
+                    return JSONResponse(content=response.model_dump(),
+                                        status_code=response.error.code)
+                elif isinstance(response, ScoreResponse):
+                    return JSONResponse(content=response.model_dump())
+                else:
+                    raise RuntimeError(f"Unexpected response type {type(response)}")
+                
+            except Exception as e:
+                print(f"Score error: {e}")
+                print(traceback.format_exc())
+                return JSONResponse(
+                    status_code=400 if isinstance(e, ValueError) else 500,
+                    content={"error": {"message": str(e), "type": "server_error"}}
+                )
+        @app.post("/v1/classify")
+        async def create_classify(self, classify_request: ClassificationRequest,
+                            raw_request: Request) -> Response:
+            await self._create_openai_handlers()
+            try: 
+                response = await self._serving_classification.create_classify(classify_request, raw_request)
+                if isinstance(response, ErrorResponse):
+                    return JSONResponse(content=response.model_dump(),
+                                        status_code=response.error.code)
+                elif isinstance(response, ClassificationResponse):
+                    return JSONResponse(content=response.model_dump())
+                else:
+                    raise RuntimeError(f"Unexpected response type {type(response)}")
+                
+            except Exception as e:
+                print(f"Classify error: {e}")
+                print(traceback.format_exc())
+                return JSONResponse(
+                    status_code=400 if isinstance(e, ValueError) else 500,
+                    content={"error": {"message": str(e), "type": "server_error"}}
+                )
+            
+        @app.post("/v1/rerank")
+        async def create_rerank(self, rerank_request: RerankRequest,
+                            raw_request: Request) -> Response:
+            await self._create_openai_handlers()
+            try: 
+                response = await self._serving_scores.do_rerank(rerank_request, raw_request)
+                if isinstance(response, ErrorResponse):
+                    return JSONResponse(content=response.model_dump(),
+                                        status_code=response.error.code)
+                elif isinstance(response, RerankResponse):
+                    return JSONResponse(content=response.model_dump())
+                else:
+                    raise RuntimeError(f"Unexpected response type {type(response)}")
+                
+            except Exception as e:
+                print(f"Rerank error: {e}")
+                print(traceback.format_exc())
+                return JSONResponse(
+                    status_code=400 if isinstance(e, ValueError) else 500,
+                    content={"error": {"message": str(e), "type": "server_error"}}
+                )
+            
         @app.post("/v1/chat/completions")
         async def chat_completions(self, chat_request: ChatCompletionRequest, raw_request: Request) -> Response:
             await self._create_openai_handlers()
