@@ -2,7 +2,7 @@ image:
   name:
   pull_policy: Always
 resources:
-  node_type: g6e.48xlarge
+  node_type: p4d.24xlarge
   requests:
     "nvidia.com/gpu": 8
     "vpc.amazonaws.com/efa": 4
