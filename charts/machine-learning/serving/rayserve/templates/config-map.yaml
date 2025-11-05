@@ -7,6 +7,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 data:
+{{- if not .Values.vllm.code }}
   vllm_asyncllmengine.py: |
     import os
     import sys
@@ -473,6 +474,9 @@ data:
 
     deployment = VLLMDeployment.bind()
 
+{{- else }}
+{{ .Values.vllm.code | indent 2 }}
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
