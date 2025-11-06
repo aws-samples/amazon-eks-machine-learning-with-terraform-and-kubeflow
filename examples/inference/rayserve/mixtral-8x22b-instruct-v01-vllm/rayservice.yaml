@@ -32,7 +32,7 @@ ray:
   serve_config_v2: 
     serveConfigV2: |
       applications:
-        - name: mistral-8x22b-instruct-v01
+        - name: mixtral-8x22b-instruct-v01
           import_path: vllm_asyncllmengine:deployment
           runtime_env:
             env_vars:

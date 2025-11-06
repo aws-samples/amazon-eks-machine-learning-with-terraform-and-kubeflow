@@ -14,7 +14,7 @@ This example uses a custom Docker container for Ray Serve. Build and push this c
 
 ### Hugging Face Mixtral 8x22B Instruct v0.1 pre-trained model weights
 
-To download Hugging Face Mistral 8x22B Instruct v0.1 pre-trained model weights, replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
+To download Hugging Face Mixtral 8x22B Instruct v0.1 pre-trained model weights, replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug rayserve-mixtral-8x22b-instruct-v01    \

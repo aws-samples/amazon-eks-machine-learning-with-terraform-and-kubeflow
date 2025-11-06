@@ -11,7 +11,7 @@
 | [Llama 3.2 11B Vision Instruct](./rayserve/meta-llama32-11b-vis-inst-vllm/README.md)    | [vLLM](https://github.com/vllm-project/vllm)    | Nvidia GPU | Devices=8, TP=8, PP=1, Multi-modal |
 | [Llama 3.3 70B Instruct](./rayserve/meta-llama33-70b-instruct-vllm/README.md)    | [vLLM](https://github.com/vllm-project/vllm)    | Nvidia GPU | Nodes=2, Devices=8,  TP=8, PP=2, Multi-Node Inference |
 | [Llama 3.3 70B Instruct](./rayserve/meta-llama33-70b-instruct-neuron/README.md)    | [Transfomers Neuronx](https://github.com/aws-neuron/transformers-neuronx)     | AWS Trainium1 |  Nodes=2, TP=8, PP=2, Multi-node Inference (Deprecated) |
-| [Mistral 8x22B Instruct v0.1](./rayserve/mistral-8x22b-instruct-v01-vllm/README.md)    | [vLLM](https://github.com/vllm-project/vllm)    | Nvidia GPU | Nodes=2, Devices=8, TP=8, PP=2, Multi-node inference |
+| [Mixtral 8x22B Instruct v0.1](./rayserve/mixtral-8x22b-instruct-v01-vllm/README.md)    | [vLLM](https://github.com/vllm-project/vllm)    | Nvidia GPU | Nodes=2, Devices=8, TP=8, PP=2, Multi-node inference |
 
 
 ### [Triton Inference Server](https://github.com/triton-inference-server/server)
@@ -37,7 +37,7 @@
 | [Llama 3 8B Instruct](./triton-inference-server/vllm_backend/llama3-8b-instruct-neuron/README.md)    |[vLLM](https://github.com/vllm-project/vllm)   | AWS Inferentia2 |  Cores=8, TP=8, PP=1 |
 | [Mistral 7B Instruct v0.2](./triton-inference-server/vllm_backend/mistral-7b-instruct-v02/README.md)    |[vLLM](https://github.com/vllm-project/vllm)   | Nvidia GPU |  Devices=8, TP=8, PP=1 |
 | [Mistral 7B Instruct v0.2](./triton-inference-server/vllm_backend/mistral-7b-instruct-v02-neuron/README.md)    |[vLLM](https://github.com/vllm-project/vllm)   | AWS Inferentia2 |  Cores=8, TP=8, PP=1 |
-| [Mistral 8x22B Instruct v0.1](./triton-inference-server/ray_vllm_backend/mistral-8x22b-instruct-v01/README.md)    |[vLLM](https://github.com/vllm-project/vllm)   | Nvidia GPU |  Node=2, Cores=8, TP=8, PP=2, Multi-Node inference using [lws](https://github.com/kubernetes-sigs/lws) with [Ray Cluster](https://docs.ray.io/en/latest/cluster/getting-started.html) |
+| [Mixtral 8x22B Instruct v0.1](./triton-inference-server/ray_vllm_backend/mixtral-8x22b-instruct-v01/README.md)    |[vLLM](https://github.com/vllm-project/vllm)   | Nvidia GPU |  Node=2, Cores=8, TP=8, PP=2, Multi-Node inference using [lws](https://github.com/kubernetes-sigs/lws) with [Ray Cluster](https://docs.ray.io/en/latest/cluster/getting-started.html) |
 
 
 #### [TensorRT-LLM Backend](https://github.com/triton-inference-server/tensorrtllm_backend)
@@ -47,7 +47,7 @@
 | [Llama2 7B](./triton-inference-server/tensorrtllm_backend/llama2-7b/README.md)    |[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)   | Nvidia GPU |  Devices=8, TP=8, PP=1 |
 | [Llama 3 8B Instruct](./triton-inference-server/tensorrtllm_backend/llama3-8b-instruct/README.md)    |[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)   | Nvidia GPU |  Devices=8, TP=8, PP=1 |
 | [Mistral 7B Instruct v0.1](./triton-inference-server/tensorrtllm_backend/mistral-7b-instruct-v01/README.md)    |[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)   | Nvidia GPU |  Devices=8, TP=8, PP=1 |
-| [Mistral 8x22B Instruct v0.1](./triton-inference-server/tensorrtllm_backend/mistral-8x22b-instruct-v01/README.md)    |[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)   | Nvidia GPU |  Nodes=2, Devices=8, TP=8, PP=2, Multi-node inference using [lws](https://github.com/kubernetes-sigs/lws) |
+| [Mixtral 8x22B Instruct v0.1](./triton-inference-server/tensorrtllm_backend/mixtral-8x22b-instruct-v01/README.md)    |[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)   | Nvidia GPU |  Nodes=2, Devices=8, TP=8, PP=2, Multi-node inference using [lws](https://github.com/kubernetes-sigs/lws) |
 | [Mistral 7B Instruct v0.1, Llama 3 8B Instruct](./triton-inference-server/tensorrtllm_backend/mistral-7b-instruct-v01_llama3-8b/README.md)    |[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)   | Nvidia GPU |  Devices=8, TP=8, PP=1, [Multi-model concurrent model execution](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_execution.html) |
 
 
