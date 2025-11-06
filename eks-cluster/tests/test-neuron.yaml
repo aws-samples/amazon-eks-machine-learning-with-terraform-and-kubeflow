@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
   - name: test-neuron 
-    image: 'public.ecr.aws/neuron/pytorch-inference-neuronx:2.8.0-neuronx-py311-sdk2.26.0-ubuntu22.04'
+    image: 'public.ecr.aws/neuron/pytorch-inference-neuronx:2.8.0-neuronx-py311-sdk2.26.1-ubuntu22.04'
     command: ["/bin/bash"]
     securityContext:
       privileged: true

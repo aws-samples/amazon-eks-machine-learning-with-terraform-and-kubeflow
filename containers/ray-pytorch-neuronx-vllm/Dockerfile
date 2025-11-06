@@ -51,10 +51,10 @@ RUN sudo apt-get -y install aws-neuronx-tools=2.*
 RUN pip3 config set global.extra-index-url https://pip.repos.neuron.amazonaws.com
 RUN pip3 install awscli
 RUN pip3 install libneuronxla==2.2.12677.0+470fa032 \
-      neuronx-cc==2.21.18209.0+043b1bf7 \
+      neuronx-cc==2.21.33363.0+82129205 \
       neuronx-distributed==0.15.22404+1f27bddf \
       neuronx-distributed-inference==0.6.10598+a59fdc00 \
-      torch-neuronx==2.8.0.2.10.13553+1e4dd6ca \
+      torch-neuronx==2.8.0.2.10.16998+e9bf8a50 \
       transformers-neuronx==0.13.322
       
 ENV LD_LIBRARY_PATH=/opt/aws/neuron/lib:/home/ray/anaconda3/lib:$LD_LIBRARY_PATH
@@ -66,7 +66,7 @@ ENV PJRT_DEVICE=NEURON
 ENV VLLM_TARGET_DEVICE=neuron
 ARG USE_NEURON_VLLM=false
 RUN if [ "$USE_NEURON_VLLM" = "true" ]; then \
-      pip install git+https://github.com/aws-neuron/upstreaming-to-vllm.git@2.26.0; \
+      pip install git+https://github.com/aws-neuron/upstreaming-to-vllm.git@2.26.1; \
     else \
       pip install git+https://github.com/vllm-project/vllm.git@v0.9.0.1; \
     fi
