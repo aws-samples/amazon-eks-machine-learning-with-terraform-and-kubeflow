@@ -1,5 +1,5 @@
 image: 
-  name: nvcr.io/nvidia/tritonserver:25.07-vllm-python-py3
+  name: nvcr.io/nvidia/tritonserver:25.10-vllm-python-py3
 resources:
   node_type: g6.xlarge
   requests:
@@ -32,7 +32,7 @@ inline_script:
     "model": "$MODEL_PATH",
     "tokenizer": "$MODEL_PATH",
     "tokenizer_mode": "auto",
-    "disable_log_requests": "true",
+    "enable_log_requests": "false",
     "gpu_memory_utilization": 0.8,
     "dtype": "auto",
     "tensor_parallel_size": 1,

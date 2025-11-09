@@ -35,13 +35,10 @@ inline_script:
     "model": "$MODEL_PATH",
     "tokenizer": "$MODEL_PATH",
     "tokenizer_mode": "auto",
-    "disable_log_requests": "true",
-    "gpu_memory_utilization": 0.8,
-    "dtype": "auto",
-    "enforce_eager": true,
     "tensor_parallel_size": 8,
     "pipeline_parallel_size": 2,
-    "max_num_seqs": 8
+    "enable_log_requests": false,
+    "disable_log_stats": true
   }
 
   EOF
@@ -58,6 +55,7 @@ pre_script:
   - mkdir -p $MODEL_REPO/$MODEL_NAME/$VERSION
   - cp /tmp/model.json $MODEL_REPO/$MODEL_NAME/$VERSION/model.json
   - cp /tmp/config.pbtxt $MODEL_REPO/$MODEL_NAME/config.pbtxt
+  - export VLLM_WORKER_MULTIPROC_METHOD=spawn
 server:
   ports:
     - name: 'http'

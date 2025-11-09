@@ -111,11 +111,6 @@ spec:
           - "g6e.16xlarge"
           - "g6e.24xlarge"
           - "g6e.48xlarge"
-          - "p4d.24xlarge"
-          - "p4de.24xlarge"
-          - "p5.48xlarge"
-          - "p5e.48xlarge"
-          - "p5en.48xlarge"
       taints:
       - key: nvidia.com/gpu
         value: "true"
@@ -159,7 +154,7 @@ spec:
         values: [ {{ .Values.capacity_type }} ]
       - key: karpenter.k8s.aws/instance-network-bandwidth
         operator: Gt
-        values: [ "100000" ]
+        values: [ "99999" ]
       - key: node.kubernetes.io/instance-type
         operator: In
         values: 
@@ -168,7 +163,6 @@ spec:
           - "p5.48xlarge"
           - "p5e.48xlarge"
           - "p5en.48xlarge"
-          - "g6e.48xlarge"
       taints:
       - key: nvidia.com/gpu
         value: "true"

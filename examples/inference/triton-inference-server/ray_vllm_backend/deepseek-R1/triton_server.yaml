@@ -2,7 +2,7 @@ image:
   name:
   pull_policy: Always
 lws:
-  size: 2
+  size: 6
 resources:
   node_type: p4de.24xlarge
   requests:
@@ -37,14 +37,10 @@ inline_script:
     "model": "$MODEL_PATH",
     "tokenizer": "$MODEL_PATH",
     "tokenizer_mode": "auto",
-    "disable_log_requests": "true",
-    "gpu_memory_utilization": 0.95,
-    "dtype": "auto",
-    "enforce_eager": true,
     "tensor_parallel_size": 8,
-    "pipeline_parallel_size": 2,
-    "max_num_seqs": 2,
-    "max_model_len": 81920
+    "pipeline_parallel_size": 6,
+    "enable_log_requests": false,
+    "disable_log_stats": true
   }
 
   EOF
@@ -52,7 +48,7 @@ inline_script:
 pre_script: 
   - mkdir -p $LOG_ROOT
   - TP_SIZE=8
-  - PP_SIZE=2
+  - PP_SIZE=6
   - OUTPUT_LOG="$LOG_ROOT/triton_server.log"
   - rm -rf $MODEL_REPO
   - mkdir -p $MODEL_REPO
@@ -61,6 +57,7 @@ pre_script:
   - mkdir -p $MODEL_REPO/$MODEL_NAME/$VERSION
   - cp /tmp/model.json $MODEL_REPO/$MODEL_NAME/$VERSION/model.json
   - cp /tmp/config.pbtxt $MODEL_REPO/$MODEL_NAME/config.pbtxt
+  - export VLLM_WORKER_MULTIPROC_METHOD=spawn
 server:
   ports:
     - name: 'http'

@@ -3,8 +3,10 @@ resources:
   node_type: p4d.24xlarge
   requests:
     "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
   limits:
     "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
 ebs:
   storage: 800Gi
   mount_path: /tmp

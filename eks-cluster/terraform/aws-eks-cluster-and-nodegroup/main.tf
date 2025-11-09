@@ -1081,7 +1081,7 @@ resource "helm_release" "karpenter_components" {
 
   chart     = "${var.local_helm_repo}/karpenter-components"
   name      = "karpenter-components"
-  version   = "1.0.5"
+  version   = "1.0.7"
   namespace = var.karpenter_namespace
 
   values = [
@@ -1376,8 +1376,8 @@ resource "null_resource" "git_clone" {
       rm -rf /tmp/lws || true
       git clone https://github.com/kubernetes-sigs/lws.git /tmp/lws
       cd /tmp/lws
-      git fetch origin aceee3387f2424067777c32db14378909c3633a5
-      git reset --hard aceee3387f2424067777c32db14378909c3633a5
+      git fetch origin cd3a73a3f5e00cfa9cd2c1c92f00f6189d88073e
+      git reset --hard cd3a73a3f5e00cfa9cd2c1c92f00f6189d88073e
     EOT
   }
 }
@@ -1388,6 +1388,10 @@ resource "helm_release" "lws" {
   version   = "0.1.0"
   namespace = kubernetes_namespace.lws-system.metadata[0].name
 
+  set {
+    name  = "image.manager.tag"
+    value = "v0.7.0"
+  }
   depends_on = [null_resource.git_clone]
 }
 

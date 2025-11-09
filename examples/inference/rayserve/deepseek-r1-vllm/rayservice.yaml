@@ -58,20 +58,15 @@ vllm:
     served_model_name: "deepseek-r1"
     model: "/fsx/pretrained-models/deepseek-ai/DeepSeek-R1"
     tokenizer: "/fsx/pretrained-models/deepseek-ai/DeepSeek-R1"
-    enable_log_requests: false
     tensor_parallel_size: 8
-    pipeline_parallel_size: 2
+    pipeline_parallel_size: 6
+    enable_log_requests: false
     disable_log_stats: true
-    gpu_memory_utilization: 0.95
-    dtype: "auto"
-    enforce_eager: true
-    max_num_seqs: 2
-    max_model_len: 81920
 image:
 image_pull_policy: IfNotPresent
 resources:
-  min_replicas: 2
-  max_replicas: 2
+  min_replicas: 6
+  max_replicas: 6
   requests:
     "nvidia.com/gpu": 8
     "vpc.amazonaws.com/efa": 4
