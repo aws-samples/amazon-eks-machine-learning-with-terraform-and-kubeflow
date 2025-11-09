@@ -2,8 +2,10 @@ image:
 resources:
   requests:
     "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
   limits:
     "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
   nnodes: 1 
   nproc_per_node: 8 
   node_type: 'p4d.24xlarge' 

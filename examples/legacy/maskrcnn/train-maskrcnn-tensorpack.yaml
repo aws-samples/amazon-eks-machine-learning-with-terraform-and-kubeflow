@@ -9,8 +9,10 @@ resources:
   gpu_instance_type: "p4d.24xlarge"
   requests:
     "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
   limits:
     "nvidia.com/gpu": 8 
+    "vpc.amazonaws.com/efa": 4
 tensorflow:
   sys_memory_mb: "2560"
 train:
