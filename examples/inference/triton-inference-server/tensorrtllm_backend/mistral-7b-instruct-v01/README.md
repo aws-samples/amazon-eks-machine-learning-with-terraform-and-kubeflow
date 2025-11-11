@@ -29,57 +29,6 @@ Uninstall the Helm chart at completion:
 
     helm uninstall triton-server-mistral-7b-instruct-v01-trtllm -n kubeflow-user-example-com
 
-## Convert HuggingFace Checkpoint to TensorRT-LLM Checkpoint
-
-To convert checkpoint:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm install --debug triton-server-mistral-7b-instruct-v01-trtllm \
-        charts/machine-learning/data-prep/data-process \
-        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-instruct-v01/hf_to_trtllm.yaml -n kubeflow-user-example-com
-
-To monitor the logs, execute:
-
-    kubectl logs -f data-process-triton-server-mistral-7b-instruct-v01-trtllm -n kubeflow-user-example-com
-
-Uninstall the Helm chart at completion:
-
-    helm uninstall triton-server-mistral-7b-instruct-v01-trtllm -n kubeflow-user-example-com
-
-## Build TensorRT-LLM Engine
-
-To build TensorRT-LLM engine:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm install --debug triton-server-mistral-7b-instruct-v01-trtllm \
-        charts/machine-learning/data-prep/data-process \
-        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-instruct-v01/trtllm_engine.yaml -n kubeflow-user-example-com
-
-To monitor the logs, execute:
-
-    kubectl logs -f data-process-triton-server-mistral-7b-instruct-v01-trtllm -n kubeflow-user-example-com
-
-Uninstall the Helm chart at completion:
-
-    helm uninstall triton-server-mistral-7b-instruct-v01-trtllm -n kubeflow-user-example-com
-
-## Build Triton Model
-
-To build Triton model:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm install --debug triton-server-mistral-7b-instruct-v01-trtllm \
-        charts/machine-learning/data-prep/data-process \
-        -f examples/inference/triton-inference-server/tensorrtllm_backend/mistral-7b-instruct-v01/triton_model.yaml -n kubeflow-user-example-com
-
-To monitor the logs, execute:
-
-    kubectl logs -f data-process-triton-server-mistral-7b-instruct-v01-trtllm -n kubeflow-user-example-com
-
-Uninstall the Helm chart at completion:
-
-    helm uninstall triton-server-mistral-7b-instruct-v01-trtllm -n kubeflow-user-example-com
-
 
 ## Launch Triton Server
 

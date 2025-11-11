@@ -1,11 +1,16 @@
 image: 
   name: 
+  pull_policy: Always
+lws:
+  size: 2
 resources:
-  node_type: g6.48xlarge
+  node_type: p4d.24xlarge
   requests:
     "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
   limits:
     "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
 tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"
@@ -20,25 +25,23 @@ inline_script:
     set -xe
     mkdir -p $LOG_ROOT
     TP_SIZE=8
-    PP_SIZE=1
+    PP_SIZE=2
     OUTPUT_LOG=$LOG_ROOT/hf_to_trtllm.log
     OUTPUT_PATH=/tmp/ckpt
     SCRIPT_DIR=TensorRT-LLM/examples/models/core/llama
     cd $SCRIPT_DIR
     pip3 install datasets==3.1.0 evaluate~=0.4.3 rouge_score~=0.1.2 sentencepiece~=0.2.0
-    python3 convert_checkpoint.py --model_dir=$MODEL_PATH --output_dir=$OUTPUT_PATH --dtype=auto --tp_size=$TP_SIZE 2>&1 | tee $OUTPUT_LOG
+    python3 convert_checkpoint.py --model_dir=$MODEL_PATH --output_dir=$OUTPUT_PATH --dtype=auto --tp_size=$TP_SIZE --pp_size=$PP_SIZE 2>&1 | tee $OUTPUT_LOG
     EOF
   - |+
     cat > /tmp/trtllm_engine.sh <<'EOF'
     #!/bin/bash
     set -xe
     mkdir -p $LOG_ROOT
-    TP_SIZE=8
-    PP_SIZE=1
     OUTPUT_LOG=$LOG_ROOT/build_trtllm.log
     CKPT_PATH=/tmp/ckpt
     ENGINE_DIR=/tmp/engine
-    trtllm-build --checkpoint_dir ${CKPT_PATH} --max_num_tokens 8192 --gpus_per_node 8 --remove_input_padding enable --paged_kv_cache enable --context_fmha enable --output_dir ${ENGINE_DIR} --max_batch_size 4 2>&1 | tee $OUTPUT_LOG
+    trtllm-build --checkpoint_dir ${CKPT_PATH} --max_num_tokens 16384 --gpus_per_node 8 --remove_input_padding enable --paged_kv_cache enable --context_fmha enable --output_dir ${ENGINE_DIR} --max_batch_size 8 2>&1 | tee $OUTPUT_LOG
     EOF
   - |+
     cat > /tmp/triton_model.sh <<'EOF'
@@ -47,15 +50,13 @@ inline_script:
     SCRIPT_DIR=TensorRT-LLM/triton_backend
     cd $SCRIPT_DIR
     mkdir -p $LOG_ROOT
-    TP_SIZE=8
-    PP_SIZE=1
     OUTPUT_LOG=$LOG_ROOT/triton_model.log
     TOKENIZER_DIR=$MODEL_PATH
     DECOUPLED_MODE=false
-    MODEL_REPO=/tmp/inflight_batcher_llm
+    MODEL_REPO=/tmp/model_repo
     MAX_BATCH_SIZE=8
     INSTANCE_COUNT=1
-    MAX_QUEUE_DELAY_MS=100
+    MAX_QUEUE_DELAY_MS=1000000
     FILL_TEMPLATE_SCRIPT=tools/fill_template.py
     ENGINE_DIR=/tmp/engine
     mkdir -p $MODEL_REPO
@@ -76,13 +77,11 @@ pre_script:
   - bash /tmp/hf_to_trtllm.sh
   - bash /tmp/trtllm_engine.sh
   - bash /tmp/triton_model.sh
-  - SCRIPT_DIR=TensorRT-LLM/triton_backend
-  - cd $SCRIPT_DIR
   - mkdir -p $LOG_ROOT
   - TP_SIZE=8
-  - PP_SIZE=1
+  - PP_SIZE=2
   - OUTPUT_LOG="$LOG_ROOT/triton_server.log"
-  - MODEL_REPO=/tmp/inflight_batcher_llm
+  - MODEL_REPO=/tmp/model_repo
 server:
   ports:
     - name: 'http'
@@ -92,11 +91,11 @@ server:
     - name: 'metric'
       value: '8002'
   readiness_probe:
-    period_secs: 5
+    period_secs: 10
     failure_threshold: 3
   startup_probe:
     period_secs: 10
-    failure_threshold: 90
+    failure_threshold: 360
   liveness_probe:
     period_secs: 10
     failure_threshold: 3
@@ -106,20 +105,36 @@ server:
     - name: LOG_ROOT
       value: /efs/home/{{ .Release.Name }}/logs
     - name: MODEL_PATH
-      value: "/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct"
+      value: /fsx/pretrained-models/mistralai/Mixtral-8x22B-Instruct-v0.1
+    - name: NCCL_SOCKET_IFNAME 
+      value: "^lo,docker0"
+    - name: NCCL_DEBUG
+      value: "WARN"
+    - name: FI_EFA_USE_DEVICE_RDMA
+      value: "1"
+    - name: FI_PROVIDER
+      value: "efa"
+    - name: FI_EFA_FORK_SAFE
+      value: "1"
+    - name: "RDMAV_FORK_SAFE"
+      value: "1"
   command:
     - python3
   args:
-    - scripts/launch_triton_server.py
-    - --world_size=$((TP_SIZE * PP_SIZE))
-    - --model_repo=${MODEL_REPO}
+    - server.py
+    - --tp=${TP_SIZE}
+    - --pp=${PP_SIZE}
+    - --model-repo=${MODEL_REPO}
+    - --model=tensorrt_llm
     - --grpc_port=8001
     - --http_port=8000
     - --metrics_port=8002
     - --log-file=$OUTPUT_LOG
+    - --namespace=${NAMESPACE}
+    - --group-key=${GROUP_KEY}
   autoscaling:
     minReplicas: 1
-    maxReplicas: 4
+    maxReplicas: 1
     metrics:
       - type: Pods
         pods:

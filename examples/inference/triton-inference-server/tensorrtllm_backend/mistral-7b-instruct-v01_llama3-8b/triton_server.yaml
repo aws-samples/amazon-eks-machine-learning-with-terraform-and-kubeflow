@@ -1,13 +1,11 @@
 image: 
   name: 
 resources:
-  node_type: p4d.24xlarge
+  node_type: g6e.48xlarge
   requests:
     "nvidia.com/gpu": 8
-    "vpc.amazonaws.com/efa": 4
   limits:
     "nvidia.com/gpu": 8
-    "vpc.amazonaws.com/efa": 4
 tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"
@@ -15,14 +13,168 @@ tolerations:
 ebs:
   storage: 400Gi
   mount_path: /tmp
+inline_script:
+  - |+
+    cat > /tmp/mistral_7b_hf_to_trtllm.sh <<'EOF'
+    #!/bin/bash
+    set -xe
+    mkdir -p $LOG_ROOT
+    TP_SIZE=8
+    PP_SIZE=1
+    MODEL_NAME=mistral_7b_instruct
+    OUTPUT_LOG=$LOG_ROOT/${MODEL_NAME}_hf_to_trtllm.log
+    OUTPUT_PATH=/tmp/${MODEL_NAME}_ckpt
+    SCRIPT_DIR=TensorRT-LLM/examples/models/core/llama
+    cd $SCRIPT_DIR
+    pip3 install datasets==3.1.0 evaluate~=0.4.3 rouge_score~=0.1.2 sentencepiece~=0.2.0
+    MODEL_PATH=/fsx/pretrained-models/mistralai/Mistral-7B-Instruct-v0.1
+    python3 convert_checkpoint.py --model_dir=$MODEL_PATH --output_dir=$OUTPUT_PATH --dtype=auto --tp_size=$TP_SIZE 2>&1 | tee $OUTPUT_LOG
+    EOF
+  - |+
+    cat > /tmp/llama3_8b_hf_to_trtllm.sh <<'EOF'
+    #!/bin/bash
+    set -xe
+    mkdir -p $LOG_ROOT
+    TP_SIZE=8
+    PP_SIZE=1
+    MODEL_NAME=llama3_8b_instruct
+    OUTPUT_LOG=$LOG_ROOT/${MODEL_NAME}_hf_to_trtllm.log
+    OUTPUT_PATH=/tmp/${MODEL_NAME}_ckpt
+    SCRIPT_DIR=TensorRT-LLM/examples/models/core/llama
+    cd $SCRIPT_DIR
+    pip3 install datasets==3.1.0 evaluate~=0.4.3 rouge_score~=0.1.2 sentencepiece~=0.2.0
+    MODEL_PATH=/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct
+    python3 convert_checkpoint.py --model_dir=$MODEL_PATH --output_dir=$OUTPUT_PATH --dtype=auto --tp_size=$TP_SIZE 2>&1 | tee $OUTPUT_LOG
+    EOF
+  - |+
+    cat > /tmp/mistral_7b_trtllm_engine.sh <<'EOF'
+    #!/bin/bash
+    set -xe
+    mkdir -p $LOG_ROOT
+    TP_SIZE=8
+    PP_SIZE=1
+    MODEL_NAME=mistral_7b_instruct
+    OUTPUT_LOG=$LOG_ROOT/${MODEL_NAME}_build_trtllm.log
+    CKPT_PATH=/tmp/${MODEL_NAME}_ckpt
+    ENGINE_DIR=/tmp/${MODEL_NAME}_engine
+    trtllm-build --checkpoint_dir ${CKPT_PATH} --max_num_tokens 32768 --gpus_per_node 8 --remove_input_padding enable --paged_kv_cache enable --context_fmha enable --output_dir ${ENGINE_DIR} --max_batch_size 8 2>&1 | tee $OUTPUT_LOG
+    EOF
+  - |+
+    cat > /tmp/llama3_8b_trtllm_engine.sh <<'EOF'
+    #!/bin/bash
+    set -xe
+    mkdir -p $LOG_ROOT
+    TP_SIZE=8
+    PP_SIZE=1
+    MODEL_NAME=llama3_8b_instruct
+    OUTPUT_LOG=$LOG_ROOT/${MODEL_NAME}_build_trtllm.log
+    CKPT_PATH=/tmp/${MODEL_NAME}_ckpt
+    ENGINE_DIR=/tmp/${MODEL_NAME}_engine
+    trtllm-build --checkpoint_dir ${CKPT_PATH} --max_num_tokens 32768 --gpus_per_node 8 --remove_input_padding enable --paged_kv_cache enable --context_fmha enable --output_dir ${ENGINE_DIR} --max_batch_size 8 2>&1 | tee $OUTPUT_LOG
+    EOF
+  - |+
+    cat > /tmp/mistral_7b_triton_model.sh <<'EOF'
+    #!/bin/bash
+    set -xe
+    SCRIPT_DIR=TensorRT-LLM/triton_backend
+    cd $SCRIPT_DIR
+    mkdir -p $LOG_ROOT
+    TP_SIZE=8
+    PP_SIZE=1
+    MODEL_NAME=mistral_7b_instruct
+    OUTPUT_LOG=$LOG_ROOT/${MODEL_NAME}_triton_model.log
+    TOKENIZER_DIR=/fsx/pretrained-models/mistralai/Mistral-7B-Instruct-v0.1
+    DECOUPLED_MODE=false
+    MODEL_REPO=/tmp/model_repo
+    MAX_BATCH_SIZE=8
+    INSTANCE_COUNT=1
+    MAX_QUEUE_DELAY_MS=100
+    FILL_TEMPLATE_SCRIPT=tools/fill_template.py
+    ENGINE_DIR=/tmp/${MODEL_NAME}_engine
+    ENCODER_INPUT_DATA_TYPE=TYPE_BF16
+    mkdir -p $MODEL_REPO
+    rm -rf $MODEL_REPO/${MODEL_NAME}_*
+    cp -r all_models/inflight_batcher_llm/preprocessing $MODEL_REPO/${MODEL_NAME}_preprocessing
+    cp -r all_models/inflight_batcher_llm/postprocessing $MODEL_REPO/${MODEL_NAME}_postprocessing
+    cp -r all_models/inflight_batcher_llm/tensorrt_llm_bls $MODEL_REPO/${MODEL_NAME}_tensorrt_llm_bls
+    cp -r all_models/inflight_batcher_llm/ensemble $MODEL_REPO/${MODEL_NAME}_ensemble
+    cp -r all_models/inflight_batcher_llm/tensorrt_llm $MODEL_REPO/${MODEL_NAME}_tensorrt_llm
+    python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/${MODEL_NAME}_preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${MAX_BATCH_SIZE},preprocessing_instance_count:${INSTANCE_COUNT} 2>&1 | tee $OUTPUT_LOG
+    python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/${MODEL_NAME}_postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${MAX_BATCH_SIZE},postprocessing_instance_count:${INSTANCE_COUNT} 2>&1 | tee -a $OUTPUT_LOG
+    python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},bls_instance_count:${INSTANCE_COUNT},tensorrt_llm_model_name:${MODEL_NAME}_tensorrt_llm 2>&1 | tee -a $OUTPUT_LOG
+    python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/${MODEL_NAME}_ensemble/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE} 2>&1 | tee -a $OUTPUT_LOG
+    python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},engine_dir:${ENGINE_DIR},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MS},batching_strategy:inflight_fused_batching,encoder_input_features_data_type:${ENCODER_INPUT_DATA_TYPE},triton_backend:tensorrtllm 2>&1 | tee -a $OUTPUT_LOG
+    sed -i 's/name: \"preprocessing\"/name: \"mistral_7b_instruct_preprocessing\"/1' ${MODEL_REPO}/${MODEL_NAME}_preprocessing/config.pbtxt
+    sed -i 's/name: \"postprocessing\"/name: \"mistral_7b_instruct_postprocessing\"/1' ${MODEL_REPO}/${MODEL_NAME}_postprocessing/config.pbtxt
+    sed -i 's/name: \"tensorrt_llm_bls\"/name: \"mistral_7b_instruct_tensorrt_llm_bls\"/1' ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm_bls/config.pbtxt
+    sed -i 's/name: \"ensemble\"/name: \"mistral_7b_instruct_ensemble\"/1' ${MODEL_REPO}/${MODEL_NAME}_ensemble/config.pbtxt
+    sed -i 's/name: \"tensorrt_llm\"/name: \"mistral_7b_instruct_tensorrt_llm\"/1' ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm/config.pbtxt
+    sed -i 's/model_name: \"preprocessing\"/model_name: \"mistral_7b_instruct_preprocessing\"/1' ${MODEL_REPO}/${MODEL_NAME}_ensemble/config.pbtxt
+    sed -i 's/model_name: \"postprocessing\"/model_name: \"mistral_7b_instruct_postprocessing\"/1' ${MODEL_REPO}/${MODEL_NAME}_ensemble/config.pbtxt
+    sed -i 's/model_name: \"tensorrt_llm\"/model_name: \"mistral_7b_instruct_tensorrt_llm\"/1' ${MODEL_REPO}/${MODEL_NAME}_ensemble/config.pbtxt
+    sed -i 's/${logits_datatype}/TYPE_FP32/g' ${MODEL_REPO}/${MODEL_NAME}_ensemble/config.pbtxt
+    sed -i 's/${logits_datatype}/TYPE_FP32/g' ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm/config.pbtxt
+    sed -i 's/${logits_datatype}/TYPE_FP32/g' ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm_bls/config.pbtxt
+    EOF
+  - |+
+    cat > /tmp/llama3_8b_triton_model.sh <<'EOF'
+    #!/bin/bash
+    set -xe
+    SCRIPT_DIR=TensorRT-LLM/triton_backend
+    cd $SCRIPT_DIR
+    mkdir -p $LOG_ROOT
+    TP_SIZE=8
+    PP_SIZE=1
+    MODEL_NAME=llama3_8b_instruct
+    OUTPUT_LOG=$LOG_ROOT/${MODEL_NAME}_triton_model.log
+    TOKENIZER_DIR=/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct
+    DECOUPLED_MODE=false
+    MODEL_REPO=/tmp/model_repo
+    MAX_BATCH_SIZE=8
+    INSTANCE_COUNT=1
+    MAX_QUEUE_DELAY_MS=100
+    FILL_TEMPLATE_SCRIPT=tools/fill_template.py
+    ENGINE_DIR=/tmp/${MODEL_NAME}_engine
+    ENCODER_INPUT_DATA_TYPE=TYPE_BF16
+    mkdir -p $MODEL_REPO
+    rm -rf $MODEL_REPO/${MODEL_NAME}_*
+    cp -r all_models/inflight_batcher_llm/preprocessing $MODEL_REPO/${MODEL_NAME}_preprocessing
+    cp -r all_models/inflight_batcher_llm/postprocessing $MODEL_REPO/${MODEL_NAME}_postprocessing
+    cp -r all_models/inflight_batcher_llm/tensorrt_llm_bls $MODEL_REPO/${MODEL_NAME}_tensorrt_llm_bls
+    cp -r all_models/inflight_batcher_llm/ensemble $MODEL_REPO/${MODEL_NAME}_ensemble
+    cp -r all_models/inflight_batcher_llm/tensorrt_llm $MODEL_REPO/${MODEL_NAME}_tensorrt_llm
+    python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/${MODEL_NAME}_preprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${MAX_BATCH_SIZE},preprocessing_instance_count:${INSTANCE_COUNT} 2>&1 | tee $OUTPUT_LOG
+    python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/${MODEL_NAME}_postprocessing/config.pbtxt tokenizer_dir:${TOKENIZER_DIR},triton_max_batch_size:${MAX_BATCH_SIZE},postprocessing_instance_count:${INSTANCE_COUNT} 2>&1 | tee -a $OUTPUT_LOG
+    python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm_bls/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},bls_instance_count:${INSTANCE_COUNT},tensorrt_llm_model_name:${MODEL_NAME}_tensorrt_llm 2>&1 | tee -a $OUTPUT_LOG
+    python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/${MODEL_NAME}_ensemble/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE} 2>&1 | tee -a $OUTPUT_LOG
+    python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},engine_dir:${ENGINE_DIR},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MS},batching_strategy:inflight_fused_batching,encoder_input_features_data_type:${ENCODER_INPUT_DATA_TYPE},triton_backend:tensorrtllm 2>&1 | tee -a $OUTPUT_LOG
+    sed -i 's/name: \"preprocessing\"/name: \"llama3_8b_instruct_preprocessing\"/1' ${MODEL_REPO}/${MODEL_NAME}_preprocessing/config.pbtxt
+    sed -i 's/name: \"postprocessing\"/name: \"llama3_8b_instruct_postprocessing\"/1' ${MODEL_REPO}/${MODEL_NAME}_postprocessing/config.pbtxt
+    sed -i 's/name: \"tensorrt_llm_bls\"/name: \"llama3_8b_instruct_tensorrt_llm_bls\"/1' ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm_bls/config.pbtxt
+    sed -i 's/name: \"ensemble\"/name: \"llama3_8b_instruct_ensemble\"/1' ${MODEL_REPO}/${MODEL_NAME}_ensemble/config.pbtxt
+    sed -i 's/name: \"tensorrt_llm\"/name: \"llama3_8b_instruct_tensorrt_llm\"/1' ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm/config.pbtxt
+    sed -i 's/model_name: \"preprocessing\"/model_name: \"llama3_8b_instruct_preprocessing\"/1' ${MODEL_REPO}/${MODEL_NAME}_ensemble/config.pbtxt
+    sed -i 's/model_name: \"postprocessing\"/model_name: \"llama3_8b_instruct_postprocessing\"/1' ${MODEL_REPO}/${MODEL_NAME}_ensemble/config.pbtxt
+    sed -i 's/model_name: \"tensorrt_llm\"/model_name: \"llama3_8b_instruct_tensorrt_llm\"/1' ${MODEL_REPO}/${MODEL_NAME}_ensemble/config.pbtxt
+    sed -i 's/${logits_datatype}/TYPE_FP32/g' ${MODEL_REPO}/${MODEL_NAME}_ensemble/config.pbtxt
+    sed -i 's/${logits_datatype}/TYPE_FP32/g' ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm/config.pbtxt
+    sed -i 's/${logits_datatype}/TYPE_FP32/g' ${MODEL_REPO}/${MODEL_NAME}_tensorrt_llm_bls/config.pbtxt
+    EOF
 pre_script: 
+  - set -xe
+  - bash /tmp/mistral_7b_hf_to_trtllm.sh
+  - bash /tmp/llama3_8b_hf_to_trtllm.sh
+  - bash /tmp/mistral_7b_trtllm_engine.sh
+  - bash /tmp/llama3_8b_trtllm_engine.sh
+  - bash /tmp/mistral_7b_triton_model.sh
+  - bash /tmp/llama3_8b_triton_model.sh
   - SCRIPT_DIR=TensorRT-LLM/triton_backend
   - cd $SCRIPT_DIR
   - mkdir -p $LOG_ROOT
   - TP_SIZE=8
   - PP_SIZE=1
-  - OUTPUT_LOG="$LOG_ROOT/triton_server_tp_${TP_SIZE}_pp_${PP_SIZE}.log"
-  - MODEL_REPO=$OUTPUT_ROOT/model_repo
+  - OUTPUT_LOG="$LOG_ROOT/triton_server.log"
+  - MODEL_REPO=/tmp/model_repo
 server:
   ports:
     - name: 'http'
@@ -36,7 +188,7 @@ server:
     failure_threshold: 3
   startup_probe:
     period_secs: 10
-    failure_threshold: 30
+    failure_threshold: 180
   liveness_probe:
     period_secs: 10
     failure_threshold: 3
@@ -45,8 +197,6 @@ server:
       value: /tmp
     - name: LOG_ROOT
       value: /efs/home/{{ .Release.Name }}/logs
-    - name: OUTPUT_ROOT
-      value: /efs/home/{{ .Release.Name }}/trtllm
   command:
     - python3
   args:
