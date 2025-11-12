@@ -1,283 +1,475 @@
-# MLOPs on Amazon EKS
+# MLOps on Amazon EKS - Comprehensive Guide
 
-This project defines a *prototypical* solution for  MLOps on [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/whitepapers/latest/overview-deployment-options/amazon-elastic-kubernetes-service.html). Key use cases for this solution are:
+## Overview
 
-* Building a comprehensive sandbox environment for MLOps experimentation on EKS. 
-* Defining a canonical *prototype* for building custom MLOPs platforms on EKS.
+This project provides a **prototypical MLOps solution** on [Amazon EKS](https://docs.aws.amazon.com/whitepapers/latest/overview-deployment-options/amazon-elastic-kubernetes-service.html) using a modular, Helm-based approach. It supports comprehensive ML workflows including distributed training, and inference serving. Comprehensive support for agentic applications is under development.
 
-This solution uses a [modular](#enabling-modular-components) approach to MLOps, whereby, you can enable, or disable, various MLOPs modules, as needed. Supported ML Ops modules include: [Airflow](https://airflow.apache.org/), [Kubeflow](https://www.kubeflow.org/), [KServe](https://kserve.github.io/website/latest/), [Kueue](https://kueue.sigs.k8s.io/), [MLFlow](https://mlflow.org/), and 
-[Slinky Slurm](https://github.com/slinkyproject).
+The solution deploys a complete MLOps platform using Terraform on Amazon EKS with VPC networking, shared file systems (EFS and FSx for Lustre), auto-scaling infrastructure (Karpenter and Cluster Autoscaler), service mesh (Istio), authentication (Dex/OAuth2), and optional ML platform components (Kubeflow, MLFlow, Airflow, KServe, etc.).
 
-For distributed training, the solution works with popular AI machine learning libraries, for example, [Nemo](https://github.com/NVIDIA/NeMo), [Hugging Face Accelerate](https://github.com/huggingface/accelerate), [PyTorch Lightning](https://github.com/Lightning-AI/pytorch-lightning), [DeepSpeed](https://github.com/microsoft/DeepSpeed]), [Megatron-DeepSpeed](https://github.com/microsoft/Megatron-DeepSpeed), [Ray Train](https://docs.ray.io/en/latest/train/train.html), [Neuronx Distributed](https://awsdocs-neuron.readthedocs-hosted.com/en/latest/libraries/neuronx-distributed/index.html), among others. For distributed inference, the solution supports [Ray Serve](https://docs.ray.io/en/latest/serve/index.html) with [vLLM](https://docs.vllm.ai/en/latest/), and [Triton Inference Server](https://github.com/triton-inference-server)  with Python, [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) and [vLLM](https://docs.vllm.ai/en/latest/) backends.
+### Key Features
 
-**Legacy Note**: This project started as a companion to the [Mask R-CNN distributed training blog](https://aws.amazon.com/blogs/opensource/distributed-tensorflow-training-using-kubeflow-on-amazon-eks/), and that part of the project is documented in [this README](./tutorials/maskrcnn-blog/README.md). 
-
-## Conceptual Overview
-
-The key novel concept to understand is that this solution uses [Helm charts](https://helm.sh/docs/intro/using_helm/) to execute MLOps pipeline steps. See [tutorials](#tutorials) for a quick start.
-
-Helm charts are commonly used to [deploy applications](https://docs.aws.amazon.com/eks/latest/userguide/helm.html) within an Amazon EKS cluster. While typical applications deployed using Helm charts are services that run until stopped, this solutions uses Helm Charts to execute discrete steps within arbitrary MLOps pipelines. The Helm chart based pipeline steps can be executed directly via [Helm CLI](https://helm.sh/docs/helm/), or can be used to compose MLOps pipelines using [Kubeflow Pipelines](https://www.kubeflow.org/docs/components/pipelines/), or [Apache Airflow](https://airflow.apache.org/).
-
-Any MLOps pipeline in this solution can be conceptualized as a series of Helm chart installations, managed within a single Helm *Release*. Each step in the pipeline is executed via a Helm chart installation using a specific [YAML recipe](#yaml-recipes), whereby, the YAML recipe acts as a [Helm Values File](https://helm.sh/docs/chart_template_guide/values_files/). Once the Helm chart step completes, the Helm chart is uninstalled, and the next Helm chart in the pipeline is deployed within the same Helm *Release*. Using a single Helm *Release* for a given ML pipeline ensures that the discrete steps in the pipeline are executed atomically, and the dependency among the steps is maintained.
-
-The included [tutorials](#tutorials) provide examples of MLOps pipelines that use pre-defined Helm charts, along with YAML recipe files that model each pipeline step. Typically, in order to define a new pipeline in this solution, you do not need to write new Helm Charts. The solution comes with a library of pre-defined [machine learning Helm charts](./charts/machine-learning/). However, you are required to write a YAML recipe file for each step in your MLOps pipeline. 
-
-The [tutorials](#tutorials) walk you through each pipeline, step by step, where you manually execute each pipeline step by installing, and uninstalling, a pre-defined Helm chart with its associated [YAML recipe](#yaml-recipes). 
-
-For complete end-to-end automation, we also provide an [example](./examples/training/accelerate/bert-glue-mrpc/pipeline.ipynb) where you can execute all the pipeline steps automatically using [Kubeflow Pipelines](https://www.kubeflow.org/docs/components/pipelines/concepts/). This option requires you to enable [Kubeflow platform module](#enabling-modular-components).
-
-If you are a platform engineer, you may be interested in the [system architecture](#system-architecture) overview of this solution.
-
-## Tutorials
-
-After completing [prerequisites](#prerequisites), use the directory below to navigate the tutorials.
-
-| Category      | Frameworks/Libraries |
-| ----------- | ----------- |
-| [Inference](./examples/inference/README.md) | [Ray Serve](https://docs.ray.io/en/latest/serve/index.html), [Triton Inference Server](https://github.com/triton-inference-server/server)      |
-| [Training](./examples/training/README.md)      | [Hugging Face Accelerate](https://github.com/huggingface/accelerate), [Lightning](https://lightning.ai/docs/pytorch/stable/), [Megatron-DeepSpeed](https://github.com/deepspeedai/Megatron-DeepSpeed), [Nemo](https://github.com/NVIDIA/NeMo), [Neuronx Distributed](https://github.com/aws-neuron/neuronx-distributed), [Neuronx Distributed Training](https://github.com/aws-neuron/neuronx-distributed-training), [RayTrain](https://docs.ray.io/en/latest/train/train.html) |
-| [Legacy](./examples/legacy/README.md)      | [Mask R-CNN (TensorFlow)](https://github.com/aws-samples/mask-rcnn-tensorflow), [Neuronx Nemo Megatron](https://github.com/aws-neuron/neuronx-nemo-megatron)   |
+- **Modular Architecture**: Enable/disable MLOps components as needed (Airflow, Kubeflow, KServe, Kueue, MLFlow, Slinky Slurm)
+- **Helm-Based Pipelines**: Execute ML pipeline steps using Helm charts with YAML recipes
+- **Multi-Accelerator Support**: Nvidia GPUs, AWS Trainium, AWS Inferentia with EFA
+- **Distributed Training & Inference**: Multi-node training and inference with popular frameworks
+- **Shared Storage**: EFS and FSx for Lustre with automatic S3 backup
+- **Auto-Scaling**: Karpenter for GPU/AI chips, Cluster Autoscaler for CPU
+- **Service Mesh & Security**: Istio ingress gateway, cert-manager, OAuth2 authentication
 
 ## Prerequisites
 
-* [Create and activate an AWS Account](https://aws.amazon.com/premiumsupport/knowledge-center/create-and-activate-aws-account/)
-* Select your AWS Region. For the tutorial below, we assume the region to be ```us-west-2```
-* [Manage your Amazon EC2 service limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) in your selected AWS Region. Increase service limits to at least 8 each for [p4d.24xlarge](https://aws.amazon.com/ec2/instance-types/p4/), [g6.xlarge, g6.2xlarge, g6.48xlarge](https://aws.amazon.com/ec2/instance-types/g5/), [inf2.xlarge, inf2.48xlarge](https://aws.amazon.com/machine-learning/inferentia/) and [trn1.32xlarge](https://aws.amazon.com/machine-learning/trainium/). If you use other Amazon EC2 GPU or AWS Trainium/Inferentia instance types in the tutorials, ensure your EC2 service limits are increased appropriately.
-* If you do not already have an Amazon EC2 key pair, [create a new Amazon EC2 key pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html#prepare-key-pair). You will need the key pair name to specify the ```KeyName``` parameter when [launching the build machine desktop](#launch-build-machine-desktop).
-* You will need an [Amazon S3](https://aws.amazon.com/s3/) bucket. If you don't have one, [create a new Amazon S3 bucket](https://docs.aws.amazon.com/AmazonS3/latest/userguide/create-bucket-overview.html) in the AWS region you selected. The S3 bucket can be empty at this point.
-* Use [AWS check ip](http://checkip.amazonaws.com/) to get your public IP address of your laptop. This will be the IP address you will need to specify the ```DesktopAccessCIDR``` parameter when creating the build machine desktop. 
-* Clone this Git repository on your laptop using [```git clone ```](https://git-scm.com/book/en/v2/Git-Basics-Getting-a-Git-Repository).
+- AWS Account with [Administrator access](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html)
+- AWS Region selection (examples use `us-west-2`)
+- [EC2 Service Limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) increased for:
+  - p4d.24xlarge, g6.xlarge, g6.2xlarge, g6.48xlarge (8+ each)
+  - inf2.xlarge, inf2.48xlarge, trn1.32xlarge (8+ each)
+- [EC2 Key Pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html)
+- [S3 Bucket](https://docs.aws.amazon.com/AmazonS3/latest/userguide/create-bucket-overview.html) in selected region
+- Your public IP address (from [AWS check ip](http://checkip.amazonaws.com/))
 
-## Launch Build Machine Desktop
+## Quick Start
 
-To launch the *build machine*, you will need [Administrator job function](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html) access to [AWS Management Console](https://aws.amazon.com/console/). Use the AWS CloudFormation template [ml-ops-desktop.yaml](./ml-ops-desktop.yaml) from your cloned  repository to create a new CloudFormation stack using the [ AWS Management console](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-create-stack.html), or using the [AWS CLI](https://docs.aws.amazon.com/cli/latest/reference/cloudformation/create-stack.html). 
+### 1. Launch Build Machine
 
-The template [ml-ops-desktop.yaml](./ml-ops-desktop.yaml) creates [AWS Identity and Access Management (IAM)](https://aws.amazon.com/iam/) resources. If you are creating CloudFormation Stack using the console, in the review step, you must check 
-**I acknowledge that AWS CloudFormation might create IAM resources.** If you use the ```aws cloudformation create-stack``` CLI, you must use ```--capabilities CAPABILITY_NAMED_IAM```. 
+Use CloudFormation template [ml-ops-desktop.yaml](./ml-ops-desktop.yaml) to create build machine:
 
-### Connect to Build Machine Desktop using SSH
+```bash
+# Via AWS Console or CLI with --capabilities CAPABILITY_NAMED_IAM
+```
 
-* Once the stack status in CloudFormation console is ```CREATE_COMPLETE```, find the ML Ops desktop instance launched in your stack in the Amazon EC2 console, and [connect to the instance using SSH](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AccessingInstancesLinux.html) as user ```ubuntu```, using your SSH key pair.
-* When you connect using SSH, and you see the message ```"Cloud init in progress! Logs: /var/log/cloud-init-output.log"```, disconnect and try later after about 15 minutes. The desktop installs the Amazon DCV server on first-time startup, and reboots after the install is complete.
-* If you see the message ```Amazon DCV server is enabled!```, run the command ```sudo passwd ubuntu``` to set a new password for user ```ubuntu```. Now you are ready to connect to the desktop using the [Amazon DCV client](https://docs.aws.amazon.com/dcv/latest/userguide/client.html)
-* The build machine desktop uses EC2 [user-data](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html) to initialize the desktop. Most *transient* failures in the desktop initialization can be fixed by rebooting the desktop.
+Connect via SSH as `ubuntu` user. Set password: `sudo passwd ubuntu`
 
-#### Clone Git Repository
+### 2. Clone Repository
 
-Clone this git repository on the build machine using the following commands:
+```bash
+cd ~
+git clone https://github.com/aws-samples/amazon-eks-machine-learning-with-terraform-and-kubeflow.git
+cd amazon-eks-machine-learning-with-terraform-and-kubeflow
+```
 
-    cd ~
-    git clone https://github.com/aws-samples/amazon-eks-machine-learning-with-terraform-and-kubeflow.git
+### 3. Install kubectl
 
-#### Install Kubectl
+```bash
+./eks-cluster/utils/install-kubectl-linux.sh
+```
 
-Install ```kubectl``` on the build machine using following commands:
+### 4. Configure Terraform Backend
 
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    ./eks-cluster/utils/install-kubectl-linux.sh
+```bash
+./eks-cluster/utils/s3-backend.sh S3_BUCKET S3_PREFIX
+```
 
-### Use Terraform to Create ML Ops PLatform
+### 5. Initialize and Apply Terraform
 
- We use Terraform to create the ML Ops platform.
+```bash
+cd eks-cluster/terraform/aws-eks-cluster-and-nodegroup
+terraform init
+docker logout public.ecr.aws
 
-#### Enable S3 Backend for Terraform
+# Default deployment with GPU+EFA and Trainium+Inferentia2 support
+terraform apply -var="profile=default" -var="region=us-west-2" \
+  -var="cluster_name=my-eks-cluster" \
+  -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' \
+  -var="import_path=s3://S3_BUCKET/ml-platform/" \
+  -var="cuda_efa_az=us-west-2c" \
+  -var="neuron_az=us-west-2d"
+```
 
-Replace `S3_BUCKET`and `S3_PREFIX` with your S3 bucket name, and s3 prefix (no leading or trailing `/`), and execute the commands below
+### 6. Create Home Folders on Shared Storage
 
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    ./eks-cluster/utils/s3-backend.sh S3_BUCKET S3_PREFIX
+```bash
+kubectl apply -f eks-cluster/utils/attach-pvc.yaml -n kubeflow
+kubectl exec -it -n kubeflow attach-pvc -- /bin/bash
 
-#### Initialize Terraform
-   
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster-and-nodegroup
-    terraform init
+# Inside pod
+cd /efs && mkdir home && chown 1000:100 home
+cd /fsx && mkdir home && chown 1000:100 home
+exit
+```
 
-#### Apply Terraform
+## System Architecture
 
-Logout from AWS Public ECR as otherwise `terraform apply` commands below may fail:
+The solution uses Terraform to deploy a comprehensive MLOps platform on Amazon EKS with the following architecture:
 
-    docker logout public.ecr.aws
+### Architecture Schematic
 
-Specify at least three AWS Availability Zones from your AWS Region in `azs` below, ensuring that you  have access to your desired EC2 instance types. Replace `S3_BUCKET` with your S3 bucket name and execute:
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              AWS Cloud (Region)                             │
+│                                                                             │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                          VPC (192.168.0.0/16)                          │ │
+│  │                                                                        │ │
+│  │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐      │ │
+│  │  │  Public Subnet   │  │  Public Subnet   │  │  Public Subnet   │      │ │
+│  │  │   (AZ-1)         │  │   (AZ-2)         │  │   (AZ-3)         │      │ │
+│  │  └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘      │ │
+│  │           │                     │                     │                │ │
+│  │  ┌────────▼──────────────────────▼──────────────────▼─────────┐        │ │
+│  │  │            Internet Gateway + NAT Gateway                   │       │ │
+│  │  └─────────────────────────────────────────────────────────────┘       │ │
+│  │                                                                        │ │
+│  │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐      │ │
+│  │  │ Private Subnet   │  │ Private Subnet   │  │ Private Subnet   │      │ │
+│  │  │   (AZ-1)         │  │   (AZ-2)         │  │   (AZ-3)         │      │ │
+│  │  │                  │  │                  │  │                  │      │ │
+│  │  │ ┌──────────────┐ │  │ ┌──────────────┐ │  │ ┌──────────────┐ │      │ │
+│  │  │ │ EKS Cluster  │ │  │ │ EKS Cluster  │ │  │ │ EKS Cluster  │ │      │ │
+│  │  │ │              │ │  │ │              │ │  │ │              │ │      │ │
+│  │  │ │ System Nodes │ │  │ │ GPU Nodes    │ │  │ │ Neuron Nodes │ │      │ │
+│  │  │ │ (Cluster AS) │ │  │ │ (Karpenter)  │ │  │ │ (Karpenter)  │ │      │ │
+│  │  │ └──────────────┘ │  │ └──────────────┘ │  │ └──────────────┘ │      │ │
+│  │  └──────────────────┘  └──────────────────┘  └──────────────────┘      │ │
+│  │                                                                        │ │
+│  └──────────────────────────────────────────────────────────────────────--┘ │
+│                                                                             │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                        Shared Storage Layer                            │ │
+│  │                                                                        │ │
+│  │  ┌─────────────────────────┐      ┌──────────────────────────┐         │ │
+│  │  │  Amazon EFS             │      │  FSx for Lustre          │         │ │
+│  │  │  (Code, Logs, Configs)  │      │  (Data, Models)          │         │ │
+│  │  │  /efs mount             │      │  /fsx mount              │         │ │
+│  │  └─────────────────────────┘      └──────────┬───────────────┘         │ │
+│  │                                               │                        │ │
+│  │                                               │ Auto Import/Export     │ │
+│  │                                               ▼                        │ │
+│  │                                    ┌──────────────────────┐            │ │
+│  │                                    │   Amazon S3 Bucket   │            │ │
+│  │                                    │   (ml-platform/)     │            │ │
+│  │                                    └──────────────────────┘            │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-    terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET/ml-platform/"
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        EKS Cluster Components                               │
+│                                                                             │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                      Core Infrastructure                               │ │
+│  │  • Istio Service Mesh (ingress gateway, mTLS)                          │ │
+│  │  • Cert Manager (TLS certificates)                                     │ │
+│  │  • AWS Load Balancer Controller                                        │ │
+│  │  • EBS/EFS/FSx CSI Drivers                                             │ │
+│  │  • Cluster Autoscaler (CPU nodes)                                      │ │
+│  │  • Karpenter (GPU/Neuron nodes)                                        │ │
+│  │  • AWS EFA Device Plugin                                               │ │
+│  │  • Nvidia Device Plugin / Neuron Device Plugin                         │ │
+│  │  • Neuron Scheduler                                                    │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                    Authentication & Security                           │ │
+│  │  • Dex (OIDC provider)                                                 │ │
+│  │  • OAuth2 Proxy (authentication proxy)                                 │ │
+│  │  • IRSA (IAM Roles for Service Accounts)                               │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                    ML Platform Components                              │ │
+│  │  • MPI Operator (distributed training)                                 │ │
+│  │  • Kubeflow Training Operator (PyTorchJob, TFJob, etc.)                │ │
+│  │  • KubeRay Operator (Ray clusters)                                     │ │
+│  │  • LeaderWorkerSet (LWS) for multi-node inference                      │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │              Optional Modular Components (Helm)                        │ │
+│  │  • Kubeflow Platform (Notebooks, Pipelines, Katib, Dashboard)          │ │
+│  │  • MLFlow (experiment tracking)                                        │ │
+│  │  • Airflow (workflow orchestration)                                    │ │
+│  │  • KServe (model serving)                                              │ │
+│  │  • Kueue (job queueing)                                                │ │
+│  │  • Slurm (HPC workload manager)                                        │ │
+│  │  • Prometheus Stack (monitoring)                                       │ │
+│  │  • DCGM Exporter (GPU metrics)                                         │ │
+│  │  • ACK SageMaker Controller                                            │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-If you need to use [AWS GPU accelerated instances](https://aws.amazon.com/ec2/instance-types/) with [AWS Elastic Fabric Adapter (EFA)](https://aws.amazon.com/hpc/efa/), you must specify an **AWS Availability Zone** for running these instances using `cuda_efa_az` variable, as shown in the example below:
+### Key Architecture Components
 
-    terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2d","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET/ml-platform/" -var="cuda_efa_az=us-west-2c"
+#### Networking Layer
+- **VPC**: Custom VPC with public and private subnets across 3 availability zones
+- **Internet Gateway**: Outbound internet access for public subnets
+- **NAT Gateway**: Outbound internet access for private subnets
+- **Security Groups**: EFS, FSx for Lustre, and EKS cluster security groups
 
-If you need to use [AWS Trainium instances](https://aws.amazon.com/machine-learning/trainium/), you must specify an **AWS Availability Zone** for running Trainium instances using `neuron_az` variable, as shown in the example below:
+#### Compute Layer
+- **EKS Control Plane**: Managed Kubernetes control plane (v1.33)
+- **System Node Group**: CPU-only nodes for system workloads (Cluster Autoscaler managed)
+- **GPU Node Groups**: Nvidia GPU nodes with EFA support (Karpenter managed)
+- **Neuron Node Groups**: AWS Trainium/Inferentia nodes with EFA (Karpenter managed)
+- **Launch Templates**: Custom AMIs with EFA network interfaces and EBS volumes
 
-    terraform apply -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2d","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET/ml-platform/" -var="neuron_az=us-west-2d"
+#### Storage Layer
+- **Amazon EFS**: Shared file system for code, configurations, logs, and checkpoints
+- **FSx for Lustre**: High-performance file system for datasets and models
+- **S3 Integration**: FSx auto-imports/exports to S3 bucket (eventual consistency)
+- **EBS Volumes**: Optional per-pod EBS volumes via CSI driver
 
-**Note:** Ensure that the AWS Availability Zone you specify for `neuron_az` or `cuda_efa_az` variable above supports requested instance types, and this zone is included in the `azs` variable.
+#### Auto-Scaling
+- **Cluster Autoscaler**: Scales CPU-only managed node groups (0 to max)
+- **Karpenter**: Scales GPU and Neuron nodes dynamically based on pod requirements
+- **Node Provisioners**: Separate provisioners for CUDA, CUDA+EFA, and Neuron workloads
 
+#### Service Mesh & Ingress
+- **Istio**: Service mesh with mTLS, traffic management, and observability
+- **Ingress Gateway**: ClusterIP service with HTTP/HTTPS/TCP ports
+- **Virtual Services**: Route traffic to ML platform components
 
-if you want logs with your terraform runs you can use: 
+#### Authentication & Authorization
+- **Dex**: OpenID Connect (OIDC) identity provider
+- **OAuth2 Proxy**: Authentication proxy for web applications
+- **IRSA**: IAM roles for Kubernetes service accounts (S3, ECR, SageMaker access)
+- **Kubeflow Profiles**: Multi-tenant user namespaces with RBAC
 
-    eks-cluster/terraform/aws-eks-cluster-and-nodegroup/create_eks.sh
+#### ML Operators
+- **MPI Operator**: Distributed training with MPI (Horovod, etc.)
+- **Training Operator**: PyTorchJob, TFJob, MPIJob, etc.
+- **KubeRay Operator**: Ray cluster management for distributed compute
+- **LeaderWorkerSet**: Multi-node inference with leader election
 
-if you use this script make sure to copy eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform.tfvars.example to terraform.tfvars and change/add the variables to suit your needs. 
+#### Device Plugins
+- **Nvidia Device Plugin**: GPU resource management and scheduling
+- **Neuron Device Plugin**: Neuron core/device resource management
+- **EFA Device Plugin**: EFA network interface management
+- **Neuron Scheduler**: Custom scheduler for Neuron workloads
 
+### Infrastructure as Code
 
-#### Enabling Modular Components
+All infrastructure is defined in Terraform with modular components:
+- **Main Module**: VPC, EKS cluster, node groups, storage, IAM roles
+- **Istio Module**: Service mesh configuration
+- **Kubeflow Module**: ML platform components (optional)
+- **MLFlow Module**: Experiment tracking (optional)
+- **Slurm Module**: HPC workload manager (optional)
 
-This solution offers a suite of modular components for MLOps. All are disabled by default, and are not needed to work through included examples. You may toggle the modular components using following terraform variables:
+### Deployment Flow
 
-| Component  | Terraform Variable | Default Value |
-| ----------- | ----------- | ----------- |
+1. **Terraform Init**: Initialize S3 backend for state management
+2. **Terraform Apply**: Deploy VPC, EKS, storage, and core components
+3. **Helm Releases**: Deploy ML operators, device plugins, and optional modules
+4. **User Namespaces**: Create user profiles with IRSA and PVCs
+5. **ML Workloads**: Deploy training/inference jobs via Helm charts
+
+## Modular Components
+
+Enable optional components via Terraform variables:
+
+| Component | Variable | Default |
+|-----------|----------|---------|
 | [Airflow](https://airflow.apache.org/) | airflow_enabled | false |
 | [Kubeflow](https://www.kubeflow.org/) | kubeflow_platform_enabled | false |
 | [KServe](https://kserve.github.io/website/latest/) | kserve_enabled | false |
 | [Kueue](https://kueue.sigs.k8s.io/) | kueue_enabled | false |
 | [MLFlow](https://mlflow.org/) | mlflow_enabled | false |
 | [Nvidia DCGM Exporter](https://github.com/NVIDIA/dcgm-exporter) | dcgm_exporter_enabled | false |
-| [SageMaker controller](https://github.com/aws-controllers-k8s/sagemaker-controller) | ack_sagemaker_enabled | false |
+| [SageMaker Controller](https://github.com/aws-controllers-k8s/sagemaker-controller) | ack_sagemaker_enabled | false |
 | [Slinky Slurm](https://github.com/slinkyproject) | slurm_enabled | false |
 
+## Inference Examples
 
-#### Retrieve Static User Password
+For comprehensive inference examples across multiple serving platforms and accelerators, see [Inference Examples README](./examples/inference/README.md).
 
- The static user's password is marked `sensitive` in the Terraform output. To show your static password, execute:
+Supported serving platforms:
+- Ray Serve with vLLM
+- Triton Inference Server (vLLM, TensorRT-LLM, Python, Ray vLLM backends)
+- DJL Serving
 
-    terraform output static_password 
+## Training Examples
 
-This password is used for Admin user for all web applications deployed within this solution.
+For comprehensive training examples across multiple frameworks and accelerators, see [Training Examples README](./examples/training/README.md).
 
-### Create Home Folder on EFS and FSx for Lustre
+Supported frameworks:
+- Hugging Face Accelerate
+- Nemo Megatron
+- Neuronx Distributed
+- Neuronx Distributed Training
+- Megatron-DeepSpeed
+- RayTrain
 
-Attach to the shared file-systems by executing following steps:
+### MCP Gateway Registry
 
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    kubectl apply -f eks-cluster/utils/attach-pvc.yaml  -n kubeflow
-    kubectl exec -it -n kubeflow attach-pvc -- /bin/bash
+Deploy [Model Context Protocol (MCP) Gateway Registry](https://github.com/agentic-community/mcp-gateway-registry) for agentic AI applications:
 
-Inside the `attach-pvc` pod, for EFS file-system, execute:
+- **[Single Service Deployment](./examples/agentic/mcp-gateway-registry/)**: Monolithic deployment with self-signed SSL
+- **[Microservices Deployment](./examples/agentic/mcp-gateway-microservices/)**: 6-service architecture with authentication, registry, and multiple MCP servers
 
-    cd /efs
-    mkdir home
-    chown 1000:100 home
-    exit
+Features:
+- OAuth authentication (GitHub, AWS Cognito)
+- MCP server registry and gateway
+- Financial information, time, and custom tool servers
+- Shared EFS storage for persistent state
 
-For Fsx for Lustre file-system, execute:
+## Legacy Examples
 
-    cd /fsx
-    mkdir home
-    chown 1000:100 home
-    exit
+### TensorFlow
 
-#### FSx for Lustre File-system Eventual Consistency with S3
+| Model | Accelerator | Description |
+|-------|-------------|-------------|
+| [Mask R-CNN](./examples/legacy/maskrcnn/) | Nvidia GPU | Training on COCO 2017 dataset |
 
-FSx for Lustre file-system is configured to automatically import and export content from and to the configured S3 bucket. By default, `/fsx` is mapped to `ml-platform` top-level S3 folder in the S3 bucket. This automatic importing and exporting of content maintains *eventual consistency* between the FSx for Lustre file-system and the configured S3 bucket.
+### Neuronx Nemo Megatron (Deprecated)
 
-### Access Kubeflow Central Dashboard (Optional)
+| Model | Accelerator | Description |
+|-------|-------------|-------------|
+| [Llama 2 7B/13B/70B](./examples/legacy/neuronx-nemo-megatron/) | AWS Trainium1 | Pre-training on Wikicorpus |
 
-This section only applies if you [enable Kubeflow platform module](#enabling-modular-components).
+## Architecture Concepts
 
-If your web browser client machine is not the same as your build machine, before you can access Kubeflow Central Dashboard in a web browser, you must execute following steps on the your client machine:
+### Helm-Based Pipeline Execution
 
-1. [install `kubectl` client](https://docs.aws.amazon.com/eks/latest/userguide/install-kubectl.html)
-2. [Enable IAM access](https://docs.aws.amazon.com/eks/latest/userguide/grant-k8s-access.html) to your EKS cluster. Before you execute this step, it is **highly recommended** that you backup your current configuration by executing following command on your **build machine**:
+The solution uses Helm charts to execute discrete MLOps pipeline steps:
 
-    `kubectl get configmap aws-auth -n kube-system -o yaml > ~/aws-auth.yaml`
+1. Each pipeline step is a Helm chart installation with a YAML recipe (Helm values file)
+2. Steps execute within a single Helm Release for atomicity
+3. Charts are installed, executed, then uninstalled before the next step
+4. Can be orchestrated manually (Helm CLI), via Kubeflow Pipelines, or Apache Airflow
 
-After you have enabled IAM access to your EKS cluster, open a terminal on your client machine and start `kubectl` port-forwarding by using the local and remote ports as described below. Because we need to forward HTTPs port 
-(443), we need root access to execute steps below:
+### YAML Recipe Structure
 
-For Mac:
+Common fields in Helm values files:
 
-    sudo kubectl port-forward svc/istio-ingressgateway -n ingress 443:443
+- `image`: Docker container image
+- `resources`: Infrastructure requirements (CPU, memory, GPUs)
+- `git`: Code repository to clone (available in `$GIT_CLONE_DIR`)
+- `inline_script`: Arbitrary script definitions
+- `pre_script`: Executed after git clone, before job launch
+- `train`/`process`: Launch commands and arguments
+- `post_script`: Optional post-execution script
+- `pvc`: Persistent volume mounts (EFS at `/efs`, FSx at `/fsx`)
+- `ebs`: Optional EBS volume configuration
 
-For Linux:
+### Storage Architecture
 
-Ensure `kubectl` is configured for `root` user by executing following commands (one time only):
+- **EFS**: Code, configs, logs, training checkpoints
+- **FSx for Lustre**: Data, pre-trained models (auto-syncs with S3)
+- **S3**: Automatic backup of FSx content under `ml-platform/` prefix
+- **Eventual Consistency**: FSx maintains eventual consistency with S3
 
-    sudo su -
-    aws eks update-kubeconfig --region us-west-2 --name my-eks-cluster
+### Infrastructure Management
 
-Connect using `kubectl port-forward`:
+- **Karpenter**: Auto-scales GPU and AI chip nodes (Nvidia, Trainium, Inferentia)
+- **Cluster Autoscaler**: Auto-scales CPU-only nodes
+- **EKS Managed Node Groups**: Automatic scaling from zero to required capacity
 
-    kubectl port-forward svc/istio-ingressgateway -n ingress 443:443
+## Kubeflow Platform (Optional)
 
-**Note**: Leave the `kubectl port-forward` terminal open for next step below.
+When enabled, includes:
+- Kubeflow Notebooks
+- Kubeflow Tensorboard
+- Kubeflow Pipelines
+- Kubeflow Katib
+- Kubeflow Central Dashboard (v1.9.2)
 
-Next, modify your `/etc/hosts` file to add following entry:
+Access dashboard via port-forwarding:
+```bash
+sudo kubectl port-forward svc/istio-ingressgateway -n ingress 443:443
+```
 
-    127.0.0.1 	istio-ingressgateway.ingress.svc.cluster.local
+Add to `/etc/hosts`:
+```
+127.0.0.1 istio-ingressgateway.ingress.svc.cluster.local
+```
 
-Open your web browser to the [KubeFlow Central Dashboard](https://istio-ingressgateway.ingress.svc.cluster.local/) URL to access the dashboard. For login, use the static username `user@example.com`, and [retrieve the static password from terraform](#retrieve-static-user-password).
+Login: `user@example.com` with static password from Terraform output
 
-**Note:** When you are not using the KubeFlow Central Dashboard, you can close the `kubectl port-forward` terminal.
+## Cleanup
 
-### Use Terraform to Destroy ML Ops Platform
+### Before Destroying Infrastructure
 
-If you want to preserve any content from your EFS file-system, you must upload it to your [Amazon S3](https://aws.amazon.com/s3/) bucket, manually. The content stored on the  FSx for Lustre file-system is automatically exported to your [Amazon S3](https://aws.amazon.com/s3/) bucket under the `ml-platform` top-level folder.
+1. Verify S3 backup of important data
+2. Uninstall all Helm releases:
+```bash
+for x in $(helm list -q -n kubeflow-user-example-com); do 
+  helm uninstall $x -n kubeflow-user-example-com
+done
+```
 
-Please verify your content in [Amazon S3](https://aws.amazon.com/s3/) bucket before destroying the ML Ops platform. You can recreate your ML Ops platform using the same S3 bucket. 
+3. Wait 5 minutes, then delete remaining pods:
+```bash
+kubectl delete --all pods -n kubeflow-user-example-com
+```
 
-Use following command to check and uninstall all Helm releases:
+4. Delete attach-pvc pod:
+```bash
+kubectl delete -f eks-cluster/utils/attach-pvc.yaml -n kubeflow
+```
 
-    for x in $(helm list -q -n kubeflow-user-example-com); do echo $x; helm uninstall $x -n kubeflow-user-example-com; done
+5. Wait 15 minutes for auto-scaling to zero
 
-Wait at least 5 minutes for Helm uninstall to shut down all pods. Use following commands to check and delete all remaining pods in `kubeflow-user-example-com` namespace:
+### Destroy Infrastructure
 
-    kubectl get pods -n kubeflow-user-example-com
-    kubectl delete --all pods -n kubeflow-user-example-com
+```bash
+cd eks-cluster/terraform/aws-eks-cluster-and-nodegroup
+terraform destroy -var="profile=default" -var="region=us-west-2" \
+  -var="cluster_name=my-eks-cluster" \
+  -var='azs=["us-west-2d","us-west-2b","us-west-2c"]' \
+  -var="import_path=s3://S3_BUCKET/ml-platform/"
+```
 
-Run following commands to delete `attach-pvc` pod:
+## Supported Technologies
 
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    kubectl delete -f eks-cluster/utils/attach-pvc.yaml  -n kubeflow
-    
-Wait 15 minutes to allow infrastructure to automatically scale down to zero.
+### ML Frameworks
+- Hugging Face Accelerate
+- PyTorch Lightning
+- Nemo Megatron-LM
+- Megatron-DeepSpeed
+- Neuronx Distributed
+- Ray Train
+- TensorFlow
 
-Finally, to destroy all the infrastructure created in this tutorial, execute following commands:
+### Inference Engines
+- vLLM (GPU & Neuron)
+- Ray Serve
+- Triton Inference Server
+- TensorRT-LLM
+- DJL Serving
 
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster-and-nodegroup
+### Accelerators
+- Nvidia GPUs (P4d, G6, etc.)
+- AWS Trainium (Trn1)
+- AWS Inferentia (Inf2)
+- AWS EFA for distributed training
 
-    terraform destroy -var="profile=default" -var="region=us-west-2" -var="cluster_name=my-eks-cluster" -var='azs=["us-west-2d","us-west-2b","us-west-2c"]' -var="import_path=s3://S3_BUCKET/ml-platform/"
+## Utilities
 
-You can also use the following utility script to destroy your cluster. This script will retry 10 times in case terraform destroy errors out. Make sure you set your variables in eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform.tfvars by making a copy of eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform.tfvars.example
+### Helper Scripts
 
-    eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform_destroy_retry.sh 
+```bash
+# Install kubectl
+./eks-cluster/utils/install-kubectl-linux.sh
 
+# Configure S3 backend
+./eks-cluster/utils/s3-backend.sh S3_BUCKET S3_PREFIX
 
-You can also use the script to clear out your terraform state in case you manually delete the cluster and its resources. Make sure to set the s3 bucket name and prefix where you store state
+# Prepare S3 bucket with COCO dataset
+./eks-cluster/utils/prepare-s3-bucket.sh S3_BUCKET
 
-    eks-cluster/terraform/aws-eks-cluster-and-nodegroup/rm_tf_state.sh
+# Create EKS cluster with logging
+./eks-cluster/terraform/aws-eks-cluster-and-nodegroup/create_eks.sh
 
-## Reference
+# Destroy with retries
+./eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform_destroy_retry.sh
+```
 
-### YAML Recipes
+## Resources
 
-The YAML recipe file is a [Helm values](https://helm.sh/docs/chart_template_guide/values_files/) file that defines the runtime environment for a MLOps step. The key fields in the Helm values file that are common to all charts are described below:
-
-* The `image` field specifies the required docker container image.
-* The `resources` field specifies the required infrastructure resources.
-* The `git` field describes the code repository we plan to use for running the job. The `git` repository is cloned into an implicitly defined location under `HOME` directory, and, the location is made available in the environment variable `GIT_CLONE_DIR`.
-* The `inline_script` field is used to define an arbitrary script file.
-* The `pre_script` field defines the shell script executed after cloning the `git` repository, but before launching the job.
-* There is an optional `post-script` section for executing post training script.
-* The training launch command and arguments are defined in the `train` field, and the data processing launch command and arguments are defined in the `process` field.
-* The `pvc` field specifies the persistent volumes and their mount paths. EFS and Fsx for Lustre persistent volumes are available by default at `/efs` and `/fsx` mount paths, respectively, but these mount paths can be changed.
-* The `ebs` field specifies optional [Amazon EBS](https://aws.amazon.com/ebs/) volume storage capacity and mount path. By default, no EBS volume is attached.
-
-## System Architecture
-
-The solution uses [Terraform](https://www.terraform.io/) to deploy [modular ML platform components](#enabling-modular-components) on top of [Amazon EKS](https://aws.amazon.com/eks/).  The hardware infrastructure is managed by [Karpenter](https://karpenter.sh/) and [Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler). Nvidia GPUs or AWS AI Chips ([AWS Trainium](https://aws.amazon.com/ai/machine-learning/trainium/) and [AWS Inferentia](https://aws.amazon.com/ai/machine-learning/inferentia/)) based machines are automatically managed by [Karpenter](https://karpenter.sh/), while CPU-only machines are automatically managed by [Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler).
-
-The Kubeflow platform version that may be optionally deployed in this project is 1.9.2, and includes [Kubeflow Notebooks](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/notebooks/), [Kubeflow Tensorboard](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/tensorboard/). [Kubeflow Pipelines](https://awslabs.github.io/kubeflow-manifests/main/docs/component-guides/pipelines/). [Kubeflow Katib](https://www.kubeflow.org/docs/components/katib/overview/), and [Kubeflow Central Dashboard](https://www.kubeflow.org/docs/components/central-dash/).
-
-The solution makes extensive use of [Amazon EFS](https://aws.amazon.com/efs/) and [Amazon FSx for Lustre](https://aws.amazon.com/fsx/lustre/) shared file-systems to store the machine learning artifacts. Code, configuration, log files, and training checkpoints are stored on the EFS file-system. Data, and pre-trained model checkpoints are stored on the FSx for Lustre file system. FSx for Lustre file-system is configured to automatically import and export content from, and to, the configured S3 bucket. Any data stored on FSx for Lustre is automatically backed up to your S3 bucket.
+- **Source Repository**: https://github.com/aws-samples/amazon-eks-machine-learning-with-terraform-and-kubeflow
+- **Mask R-CNN Blog**: https://aws.amazon.com/blogs/opensource/distributed-tensorflow-training-using-kubeflow-on-amazon-eks/
+- **AWS EKS Documentation**: https://docs.aws.amazon.com/eks/
+- **Kubeflow Documentation**: https://www.kubeflow.org/docs/
+- **Helm Documentation**: https://helm.sh/docs/
 
 ## Contributing
 
-See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Security
 
-See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
+See [CONTRIBUTING.md](CONTRIBUTING.md#security-issue-notifications) for security issue notifications.
 
 ## License
 
-See the [LICENSE](./LICENSE) file.
+See [LICENSE](./LICENSE) file.
