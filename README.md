@@ -130,7 +130,7 @@ The solution uses Terraform to deploy a comprehensive MLOps platform on Amazon E
 │  │  │  Amazon EFS             │      │  FSx for Lustre          │         │ │
 │  │  │  (Code, Logs, Configs)  │      │  (Data, Models)          │         │ │
 │  │  │  /efs mount             │      │  /fsx mount              │         │ │
-│  │  └─────────────────────────┘      └──────────┬───────────────┘         │ │
+│  │  └─────────────────────────┘      └──────────-┬──────────────┘         │ │
 │  │                                               │                        │ │
 │  │                                               │ Auto Import/Export     │ │
 │  │                                               ▼                        │ │
