@@ -23,6 +23,7 @@ The solution deploys a complete MLOps platform using Terraform on Amazon EKS wit
 - [EC2 Service Limits](https://aws.amazon.com/premiumsupport/knowledge-center/manage-service-limits/) increased for:
   - p4d.24xlarge, g6.xlarge, g6.2xlarge, g6.48xlarge (8+ each)
   - inf2.xlarge, inf2.48xlarge, trn1.32xlarge (8+ each)
+  - Increase EC2 Service Limits for additional EC2 instance types you plan to use
 - [EC2 Key Pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html)
 - [S3 Bucket](https://docs.aws.amazon.com/AmazonS3/latest/userguide/create-bucket-overview.html) in selected region
 - Your public IP address (from [AWS check ip](http://checkip.amazonaws.com/))
@@ -65,18 +66,34 @@ cd amazon-eks-machine-learning-with-terraform-and-kubeflow
 
 ### 5. Initialize and Apply Terraform
 
+* Logout from AWS Public ECR as otherwise `terraform apply` command may fail. 
+* Specify at least three AWS Availability Zones from your AWS Region in `azs` terraform variable. 
+* Replace `S3_BUCKET` with your S3 bucket name. 
+* To use Amazon EC2 [P4](https://aws.amazon.com/ec2/instance-types/p4/), and [P5](https://aws.amazon.com/ec2/instance-types/p5/) instances, set `cuda_efa_az` terrraform variable to a zone in `azs` that supports P-family instances. 
+* To use Amazon EC2 [Inf2](https://aws.amazon.com/ec2/instance-types/inf2/), [Trn1](https://aws.amazon.com/ec2/instance-types/trn1/), and  [Trn2](https://aws.amazon.com/ec2/instance-types/trn2/) instances, set `neuron_az` terraform variable to a zone in your `azs` that supports these instance types. 
+
 ```bash
+docker logout public.ecr.aws
 cd eks-cluster/terraform/aws-eks-cluster-and-nodegroup
 terraform init
-docker logout public.ecr.aws
 
-# Default deployment with GPU+EFA and Trainium+Inferentia2 support
 terraform apply -var="profile=default" -var="region=us-west-2" \
   -var="cluster_name=my-eks-cluster" \
   -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' \
   -var="import_path=s3://S3_BUCKET/ml-platform/" \
   -var="cuda_efa_az=us-west-2c" \
   -var="neuron_az=us-west-2d"
+```
+
+Alternatively: 
+
+```bash
+docker logout public.ecr.aws
+cd eks-cluster/terraform/aws-eks-cluster-and-nodegroup
+terraform init
+
+cp terraform.tfvars.example terraform.tfvars # Add/modify variables as needed
+./create_eks.sh
 ```
 
 ### 6. Create Home Folders on Shared Storage
