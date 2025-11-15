@@ -1,4 +1,4 @@
-image: 'nvcr.io/nvidia/pytorch:24.10-py3' 
+image: 'nvcr.io/nvidia/pytorch:25.10-py3' 
 backoff_limit: 2000
 resources:
   requests:
@@ -20,10 +20,10 @@ elastic_policy:
 git:
   repo_url: 'https://github.com/huggingface/accelerate.git'
   branch: main
-  commit: 74e08e5205501826c0d4bae5abb7c25cb3da5e15
+  commit: 9a81156b4b46943fa64d098701c48c98c5f20243
 pre_script: 
   - pip3 install --upgrade pip
-  - pip3 install transformers==4.48.1 datasets==3.4.1 evaluate==0.4.3
+  - pip3 install transformers==4.57.1 datasets==4.4.1 evaluate==0.4.6 torchao==0.14.1
   - pip3 install -e ./
   - export LOGS_DIR=$HOME/logs/$HOSTNAME
   - mkdir -p $LOGS_DIR
