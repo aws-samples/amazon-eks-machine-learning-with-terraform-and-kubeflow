@@ -1,0 +1,280 @@
+image:
+resources:
+  requests:
+    "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
+  limits:
+    "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
+  nnodes: 1 
+  nproc_per_node: 8 
+  node_type: 'p4d.24xlarge' 
+ebs:
+  storage: 400Gi
+  mount_path: /tmp
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+inline_script:
+- |+
+  cat > /tmp/hf_to_nemo.sh <<EOF
+  SCRIPT_DIR=/NeMo/scripts/checkpoint_converters
+  cd \$SCRIPT_DIR
+  mkdir -p \$LOG_ROOT
+  OUTPUT_LOG=\$LOG_ROOT/hf_to_nemo.log
+  python3 convert_mistral_7b_hf_to_nemo.py --input_name_or_path=\$MODEL_PATH/ --output_path=/tmp/ckpt.nemo 2>&1 | tee \$OUTPUT_LOG
+  cp -r /tmp/ckpt.nemo \$MODEL_PATH/
+  EOF
+- |+
+  cat > /tmp/preprocess.sh <<EOF
+  if [ -d \$DATA_ROOT ]; then rm -rf \$DATA_ROOT; fi
+  mkdir -p \$DATA_ROOT
+  cd \$GIT_CLONE_DIR/preprocess
+  python3 split_dataset.py pqal
+  cd \$GIT_CLONE_DIR
+  python3 ./preprocess_to_jsonl.py
+  echo "Copying pubmedqa_*.jsonl files to \$DATA_ROOT"
+  cp pubmedqa_*.jsonl \$DATA_ROOT/
+  echo "Copy to \$DATA_ROOT done."
+  EOF
+- |+
+  cat > /tmp/peft_eval.sh <<EOF
+  export DISTRIBUTED_ARGS="--nproc_per_node \$PET_NPROC_PER_NODE --nnodes \$PET_NNODES --node_rank \$PET_NODE_RANK --master_addr \$PET_MASTER_ADDR --master_port \$PET_MASTER_PORT"
+  echo "DISTRIBUTED_ARGS=\$DISTRIBUTED_ARGS"
+  export LOGS_DIR=\$LOG_ROOT/\$PET_NODE_RANK
+  mkdir -p \$LOGS_DIR
+  export OUTPUT_LOG=\$LOGS_DIR/peft_eval.log
+  MODEL="\$MODEL_PATH/ckpt.nemo"
+  TEST_DS="[\$DATA_ROOT/pubmedqa_test.jsonl]"
+  TEST_NAMES="[pubmedqa]"
+  SCHEME="lora"
+  CONCAT_SAMPLING_PROBS="[1.0]"
+  TP_SIZE=8
+  PP_SIZE=1
+  TOKENS_TO_GENERATE=20
+  OUTPUT_PREFIX=\$LOG_ROOT/nemo_experiments/\$EXP_NAME/eval_results
+  PATH_TO_TRAINED_MODEL=\$LOG_ROOT/nemo_experiments/\$EXP_NAME/checkpoints/\${EXP_NAME}.nemo
+  export HYDRA_FULL_ERROR=1
+  export PEFT_ARGS="
+    model.restore_from_path=\${MODEL} 
+    model.micro_batch_size=96
+    model.global_batch_size=96
+    model.peft.restore_from_path=\${PATH_TO_TRAINED_MODEL} 
+    trainer.devices=\${PET_NPROC_PER_NODE} 
+    model.data.test_ds.file_names=\${TEST_DS} 
+    model.data.test_ds.names=\${TEST_NAMES} 
+    model.data.test_ds.global_batch_size=96 
+    model.data.test_ds.micro_batch_size=96
+    model.data.test_ds.tokens_to_generate=\${TOKENS_TO_GENERATE} 
+    model.tensor_model_parallel_size=\${TP_SIZE} 
+    model.megatron_amp_O2=True 
+    model.pipeline_model_parallel_size=\${PP_SIZE} 
+    inference.greedy=True 
+    model.data.test_ds.output_file_path_prefix=\${OUTPUT_PREFIX} 
+    model.answer_only_loss=True 
+    model.data.test_ds.write_predictions_to_file=True"
+  SCRIPT_DIR=/NeMo/examples/nlp/language_modeling/tuning
+  cd \$HOME
+  torchrun \$DISTRIBUTED_ARGS \$SCRIPT_DIR/megatron_gpt_generate.py \$PEFT_ARGS 2>&1 | tee \$OUTPUT_LOG
+  EOF
+- |+
+  cat > /tmp/peft_accuracy.sh <<EOF
+  export OUTPUT_PREFIX=\$LOG_ROOT/nemo_experiments/\$EXP_NAME/eval_results
+  OUTPUT_LOG=\$LOG_ROOT/peft_accuracy.log
+  python /tmp/run_accuracy_metric_calculation.py 2>&1 | tee \$OUTPUT_LOG
+  EOF
+- |+
+  cat > /tmp/merge_peft.sh <<EOF
+  SCRIPT_DIR=/NeMo/scripts/nlp_language_modeling/merge_lora_weights
+  cd \$SCRIPT_DIR
+  mkdir -p \$LOG_ROOT
+  OUTPUT_LOG=\$LOG_ROOT/merge_peft.log
+  PATH_TO_BASE_MODEL=\$MODEL_PATH/ckpt.nemo
+  echo "PATH_TO_BASE_MODEL=\$PATH_TO_BASE_MODEL"
+  PATH_TO_PEFT_MODEL=\$LOG_ROOT/nemo_experiments/\$EXP_NAME/checkpoints/\$EXP_NAME.nemo
+  echo "PATH_TO_PEFT_MODEL=\$PATH_TO_PEFT_MODEL"
+  PATH_TO_MERGED_MODEL=\$LOG_ROOT/nemo_experiments/\$EXP_NAME/checkpoints/merged_model.nemo
+  echo "PATH_TO_MERGED_MODEL=\$PATH_TO_MERGED_MODEL"
+  python merge.py trainer.accelerator=cpu gpt_model_file=\$PATH_TO_BASE_MODEL lora_model_path=\$PATH_TO_PEFT_MODEL merged_model_path=\$PATH_TO_MERGED_MODEL 2>&1 | tee \$OUTPUT_LOG
+  EOF
+- |+
+  cat > /tmp/nemo_to_hf.sh <<EOF
+  SCRIPT_DIR=/NeMo/scripts/checkpoint_converters
+  cd \$SCRIPT_DIR
+  mkdir -p \$LOG_ROOT
+  OUTPUT_LOG=\$LOG_ROOT/nemo_to_hf.log
+  TMP_OUTPUT_PATH=/tmp/hf_peft_model
+  PATH_TO_MERGED_MODEL=\$LOG_ROOT/nemo_experiments/\$EXP_NAME/checkpoints/merged_model.nemo
+  echo "PATH_TO_MERGED_MODEL=\$PATH_TO_MERGED_MODEL"
+  python3 convert_mistral_7b_nemo_to_hf.py --input_name_or_path=\$PATH_TO_MERGED_MODEL --output_path=\$TMP_OUTPUT_PATH --hf_model_name=\$MODEL_PATH 2>&1 | tee \$OUTPUT_LOG
+  cp -r \$TMP_OUTPUT_PATH \$MODEL_PATH/
+  EOF
+- |+
+  cat > /tmp/run_accuracy_metric_calculation.py <<EOF
+  
+  import json
+  import os
+  from sklearn.metrics import accuracy_score, f1_score
+
+  results = []
+  output_prefix = os.environ['OUTPUT_PREFIX']
+  results_path = f"{output_prefix}_test_pubmedqa_inputs_preds_labels.jsonl"
+  with open(results_path,'rt') as f:
+    while st := f.readline():
+      results.append(json.loads(st))
+
+  truth = []
+  preds = []
+  
+  for result in results:
+    truth.append(result['label'])
+    preds.append(result['pred'])
+
+  acc = accuracy_score(truth, preds)
+  maf = f1_score(truth, preds, average='macro')
+
+  print('Accuracy %f' % acc)
+  print('Macro-F1 %f' % maf)
+
+  EOF
+- |+
+  cat > ./preprocess_to_jsonl.py <<EOF
+  import json
+
+  def read_jsonl (fname):
+    obj = []
+    with open(fname, 'rt') as f:
+        st = f.readline()
+        while st:
+            obj.append(json.loads(st))
+            st = f.readline()
+    return obj
+
+  def write_jsonl(fname, json_objs):
+    with open(fname, 'wt') as f:
+        for o in json_objs:
+            f.write(json.dumps(o)+"\n")
+
+  def form_question(obj):
+    st = ""
+    st += f"QUESTION:{obj['QUESTION']}\n"
+    st += "CONTEXT: "
+    for i, label in enumerate(obj['LABELS']):
+        st += f"{obj['CONTEXTS'][i]}\n"
+    st += f"TARGET: the answer to the question given the context is (yes|no|maybe): "
+    return st
+
+  def convert_to_jsonl(data_path, output_path):
+    data = json.load(open(data_path, 'rt'))
+    json_objs = []
+    for k in data.keys():
+        obj = data[k]
+        prompt = form_question(obj)
+        completion = obj['reasoning_required_pred']
+        json_objs.append({"input": prompt, "output": completion})
+    write_jsonl(output_path, json_objs)
+    return json_objs
+
+  def main():
+    test_json_objs = convert_to_jsonl("data/test_set.json", "pubmedqa_test.jsonl")
+    train_json_objs = convert_to_jsonl("data/pqal_fold0/train_set.json", "pubmedqa_train.jsonl")
+    dev_json_objs = convert_to_jsonl("data/pqal_fold0/dev_set.json", "pubmedqa_val.jsonl")
+    return test_json_objs, train_json_objs, dev_json_objs
+
+  if __name__ == "__main__":
+    main()
+      
+  EOF
+git:
+  repo_url: 'https://github.com/pubmedqa/pubmedqa.git'
+  branch: master
+  commit: 1cbae8e92f72f20c8d3747cbb3bf5bc53554d997
+pre_script:
+  - bash /tmp/hf_to_nemo.sh
+  - bash /tmp/preprocess.sh
+  - export DISTRIBUTED_ARGS="--nproc_per_node $PET_NPROC_PER_NODE --nnodes $PET_NNODES --node_rank $PET_NODE_RANK --master_addr $PET_MASTER_ADDR --master_port $PET_MASTER_PORT"
+  - echo "DISTRIBUTED_ARGS=$DISTRIBUTED_ARGS"
+  - export LOGS_DIR=$LOG_ROOT/$PET_NODE_RANK
+  - mkdir -p $LOGS_DIR
+  - export OUTPUT_LOG=$LOGS_DIR/peft.log
+  - MODEL="$MODEL_PATH/ckpt.nemo"
+  - DATASET="pubmedqa"
+  - TRAIN_DS="[$DATA_ROOT/${DATASET}_train.jsonl]"
+  - VALID_DS="[$DATA_ROOT/${DATASET}_val.jsonl]"
+  - TEST_DS="[$DATA_ROOT/${DATASET}_test.jsonl]"
+  - TEST_NAMES="[${DATASET}]"
+  - SCHEME="lora"
+  - CONCAT_SAMPLING_PROBS="[1.0]"
+  - TP_SIZE=8
+  - PP_SIZE=1
+  - MAX_STEPS=1000 
+  - export HYDRA_FULL_ERROR=1
+  - export PEFT_ARGS="
+    trainer.devices=$PET_NPROC_PER_NODE
+    trainer.num_nodes=$PET_NNODES 
+    trainer.precision=bf16
+    trainer.val_check_interval=20
+    trainer.max_steps=$MAX_STEPS
+    model.megatron_amp_O2=True
+    ++model.mcore_gpt=True
+    model.tensor_model_parallel_size=${TP_SIZE}
+    model.pipeline_model_parallel_size=${PP_SIZE}
+    model.micro_batch_size=24
+    model.global_batch_size=96
+    model.optim.lr=1e-5
+    model.restore_from_path=${MODEL}
+    model.data.train_ds.num_workers=0
+    model.data.validation_ds.num_workers=0
+    model.data.train_ds.file_names=${TRAIN_DS}
+    model.data.train_ds.concat_sampling_probabilities=[1.0]
+    model.data.validation_ds.file_names=${VALID_DS}
+    model.peft.peft_scheme=${SCHEME}
+    model.peft.lora_tuning.target_modules=[attention_qkv]
+    exp_manager.name=$EXP_NAME 
+    exp_manager.create_wandb_logger=False
+    exp_manager.checkpoint_callback_params.mode=min
+    exp_manager.explicit_log_dir=$LOG_ROOT/nemo_experiments/$EXP_NAME
+    exp_manager.resume_if_exists=True
+    exp_manager.resume_ignore_no_checkpoint=True
+    exp_manager.create_checkpoint_callback=True
+    exp_manager.checkpoint_callback_params.monitor=validation_loss
+    ++exp_manager.checkpoint_callback_params.save_best_model=True
+    exp_manager.checkpoint_callback_params.save_nemo_on_train_end=True
+    exp_manager.early_stopping_callback_params.monitor=val_loss
+    exp_manager.early_stopping_callback_params.patience=3
+    exp_manager.early_stopping_callback_params.min_delta=0.001
+    model.save_nemo_on_validation_end=False"
+  - SCRIPT_DIR=/NeMo/examples/nlp/language_modeling/tuning
+  - cd $HOME
+  - 'if [ "${PET_NODE_RANK}" -eq "0" ]; then rm $DATA_ROOT/${DATASET}*.idx.* ; fi'
+  - 'if [ -d $LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints ]; then rm -rf $LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints; fi'
+post_script:
+  - bash /tmp/peft_eval.sh
+  - bash /tmp/peft_accuracy.sh
+  - bash /tmp/merge_peft.sh
+  - bash /tmp/nemo_to_hf.sh
+train:
+  env:
+    - name: HOME
+      value: /tmp
+    - name: TMPDIR
+      value: /tmp
+    - name: TMP
+      value: /tmp
+    - name: MODEL_PATH
+      value: /fsx/pretrained-models/mistralai/Mistral-7B-v0.1
+    - name: LOG_ROOT
+      value: "/efs/home/{{ .Release.Name }}/logs"
+    - name: DATA_ROOT
+      value: "/fsx/home/{{ .Release.Name }}/data"
+    - name: CUDA_DEVICE_MAX_CONNECTIONS
+      value: "1"
+    - name: NCCL_SOCKET_IFNAME 
+      value: "^lo,docker0"
+    - name: NCCL_DEBUG 
+      value: "WARN"
+    - name: EXP_NAME
+      value: "peft_pubmedqa"
+  inline_script:
+    - torchrun $DISTRIBUTED_ARGS $SCRIPT_DIR/megatron_gpt_finetuning.py $PEFT_ARGS 2>&1 | tee $OUTPUT_LOG

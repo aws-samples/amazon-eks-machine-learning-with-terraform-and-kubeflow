@@ -1,9 +1,10 @@
-image:
+image: nvcr.io/nvidia/nemo:24.01.framework
 resources:
   requests:
     "nvidia.com/gpu": 8
   limits:
     "nvidia.com/gpu": 8
+  node_type: 'g6e.48xlarge' 
 ebs:
   storage: 500Gi
   mount_path: /tmp
@@ -11,8 +12,13 @@ tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"
     effect: "NoSchedule"
+git:
+  repo_url: 'https://github.com/NVIDIA/NeMo.git'
+  branch: main
+  commit: d2283e3620cd7f99dbe29fdf079757ab9f6cdf01
 pre_script: 
-  - SCRIPT_DIR=/NeMo/scripts/checkpoint_converters
+  - pip install transformers==4.40.2
+  - SCRIPT_DIR=scripts/nlp_language_modeling
   - cd $SCRIPT_DIR
   - mkdir -p $LOG_ROOT
   - OUTPUT_LOG=$LOG_ROOT/nemo_to_hf.log

@@ -19,13 +19,6 @@ Following variables are implicitly defined by the [pytorch-distributed](../../..
 4. `PET_MASTER_ADDR`: Maps to `master_addr` 
 5. `PET_MASTER_PORT`: Maps to `master_port`
 
-## Build and Push Docker Container
-
-This example uses a custom Docker container for [Nemo](https://github.com/NVIDIA/NeMo.git) [Megatron-LM](https://github.com/NVIDIA/Megatron-LM.git). Build and push this container using following command (replace `aws-region` with your AWS Region name):
-
-     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-     ./containers/nemo-megatron/build_tools/build_and_push.sh aws-region
-
 ## Hugging Face Llama-3.1-8B pre-trained model weights
 
 To download Hugging Face Llama-3.1-8B pre-trained model weights, replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:

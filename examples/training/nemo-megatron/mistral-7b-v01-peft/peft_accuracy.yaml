@@ -1,4 +1,4 @@
-image: 
+image: nvcr.io/nvidia/nemo:24.01.framework
 resources:
   requests:
     cpu: "300m"
@@ -9,6 +9,10 @@ resources:
 ebs:
   storage: 200Gi
   mount_path: /tmp
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
 inline_script:
 - |+
   cat > /tmp/run_accuracy_metric_calculation.py <<EOF

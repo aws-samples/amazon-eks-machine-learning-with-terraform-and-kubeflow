@@ -1,14 +1,12 @@
-image:
+image: nvcr.io/nvidia/nemo:24.01.framework
 resources:
   requests:
     "nvidia.com/gpu": 8
-    "vpc.amazonaws.com/efa": 4
   limits:
     "nvidia.com/gpu": 8
-    "vpc.amazonaws.com/efa": 4
   nnodes: 1 
   nproc_per_node: 8 
-  node_type: 'p4d.24xlarge' 
+  node_type: 'g6e.48xlarge' 
 ebs:
   storage: 400Gi
   mount_path: /tmp
@@ -16,7 +14,12 @@ tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"
     effect: "NoSchedule"
+git:
+  repo_url: 'https://github.com/NVIDIA/NeMo.git'
+  branch: main
+  commit: d2283e3620cd7f99dbe29fdf079757ab9f6cdf01
 pre_script: 
+  - pip install transformers==4.40.2
   - export DISTRIBUTED_ARGS="--nproc_per_node $PET_NPROC_PER_NODE --nnodes $PET_NNODES --node_rank $PET_NODE_RANK --master_addr $PET_MASTER_ADDR --master_port $PET_MASTER_PORT"
   - echo "DISTRIBUTED_ARGS=$DISTRIBUTED_ARGS"
   - export LOGS_DIR=$LOG_ROOT/$PET_NODE_RANK
@@ -44,7 +47,7 @@ pre_script:
     ++model.mcore_gpt=True
     model.tensor_model_parallel_size=${TP_SIZE}
     model.pipeline_model_parallel_size=${PP_SIZE}
-    model.micro_batch_size=24
+    model.micro_batch_size=8
     model.global_batch_size=96
     model.optim.lr=1e-5
     model.restore_from_path=${MODEL}
@@ -54,7 +57,6 @@ pre_script:
     model.data.train_ds.concat_sampling_probabilities=[1.0]
     model.data.validation_ds.file_names=${VALID_DS}
     model.peft.peft_scheme=${SCHEME}
-    model.peft.lora_tuning.target_modules=[attention_qkv]
     exp_manager.name=$EXP_NAME 
     exp_manager.create_wandb_logger=False
     exp_manager.checkpoint_callback_params.mode=min
@@ -69,8 +71,7 @@ pre_script:
     exp_manager.early_stopping_callback_params.patience=3
     exp_manager.early_stopping_callback_params.min_delta=0.001
     model.save_nemo_on_validation_end=False"
-  - SCRIPT_DIR=/NeMo/examples/nlp/language_modeling/tuning
-  - cd $HOME
+  - SCRIPT_DIR=examples/nlp/language_modeling/tuning
   - 'if [ "${PET_NODE_RANK}" -eq "0" ]; then rm $DATA_ROOT/${DATASET}*.idx.* ; fi'
   - 'if [ -d $LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints ]; then rm -rf $LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints; fi'
 train:
