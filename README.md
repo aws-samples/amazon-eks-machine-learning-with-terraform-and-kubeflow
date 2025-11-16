@@ -28,7 +28,7 @@ The solution deploys a complete MLOps platform using Terraform on Amazon EKS wit
 - [S3 Bucket](https://docs.aws.amazon.com/AmazonS3/latest/userguide/create-bucket-overview.html) in selected region
 - Your public IP address (from [AWS check ip](http://checkip.amazonaws.com/))
 
-## Quick Start
+## Getting Started
 
 ### 1. Launch Build Machine
 
@@ -348,7 +348,7 @@ The solution uses Helm charts to execute discrete MLOps pipeline steps:
 3. Charts are installed, executed, then uninstalled before the next step
 4. Can be orchestrated manually (Helm CLI), via Kubeflow Pipelines, or Apache Airflow
 
-### YAML Recipe Structure
+### YAML Recipes
 
 Common fields in Helm values files:
 
