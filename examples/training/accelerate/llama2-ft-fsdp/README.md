@@ -1,12 +1,20 @@
 # Fine-tuning Llama 2 using PyTorch FSDP with Accelerate library
 
-This example illustrates how to use [pytorch-elastic](../../../../../charts/machine-learning/training/pytorchjob-elastic/) Helm chart for [fine-tuning Llama 2 using PyTorch FSDP](https://huggingface.co/blog/ram-efficient-pytorch-fsdp) with [Hugging Face Accelerate](https://github.com/huggingface/accelerate) library. We do the fine-tuning on [smangrul/code-chat-assistant-v1](https://huggingface.co/datasets/smangrul/code-chat-assistant-v1) dataset.
+This example illustrates [fine-tuning Llama 2 using PyTorch FSDP](https://huggingface.co/blog/ram-efficient-pytorch-fsdp) with [Hugging Face Accelerate](https://github.com/huggingface/accelerate) library. We do the fine-tuning on [smangrul/code-chat-assistant-v1](https://huggingface.co/datasets/smangrul/code-chat-assistant-v1) dataset.
 
 ## Prerequisites
 
-Before proceeding, complete the [Prerequisites](../../../../../../README.md#prerequisites) and [Getting started](../../../../../../README.md#getting-started). In particular, if you plan to fine-tune the 70B model, you must [Apply Terraform](../../../../README.md#apply-terraform) by specifying the variable `cuda_efa_az` so you can automatically launch [`p4d.24xlarge`](https://aws.amazon.com/ec2/instance-types/p4/) instances with [AWS Elastic Fabric Adapter (EFA)](https://aws.amazon.com/hpc/efa/) elastic network interface enabled.
+Before proceeding, complete the [Prerequisites](../../../../README.md#prerequisites) and [Getting started](../../../../README.md#getting-started). See [What is in the YAML file](../../../../README.md#yaml-recipes) to understand the common fields in the Helm values files. 
 
-See [What is in the YAML file](../../../../../../README.md#yaml-recipes) to understand the common fields in the Helm values files. 
+## Implicitly defined environment variables
+
+Following variables are implicitly defined by the [pytorch-distributed](../../../charts/machine-learning/training/pytorchjob-distributed/Chart.yaml) Helm chart for use with [Torch distributed run](https://github.com/pytorch/pytorch/blob/main/torch/distributed/run.py):
+
+1. `PET_NNODES` : Maps to `nnodes`
+2. `PET_NPROC_PER_NODE` : Maps to `nproc_per_node` 
+3. `PET_NODE_RANK` : Maps to `node_rank` 
+4. `PET_MASTER_ADDR`: Maps to `master_addr` 
+5. `PET_MASTER_PORT`: Maps to `master_port`
 
 ## Hugging Face Llama 2 pre-trained model weights
 
@@ -54,15 +62,6 @@ Uninstall the Helm chart at completion:
 
     helm uninstall accel-llama2-70b  -n kubeflow-user-example-com
 
-## Implicitly defined environment variables
-
-Following variables are implicitly defined by the [pytorch-elastic](../../../../../charts/machine-learning/training/pytorchjob-elastic/) Helm chart for use with [Torchrun elastic launch](https://pytorch.org/docs/stable/elastic/run.html):
-
-1. `PET_NNODES` : Maps to `nnodes`
-2. `PET_NPROC_PER_NODE` : Maps to `nproc_per_node` 
-3. `PET_RDZV_ID` : Maps to `rdzv_id` 
-4. `PET_RDZV_ENDPOINT`: Maps to `rdzv_endpoint` 
-
 ## Fine-tuning Llama 2 7B
 
 The Helm values are defined in [7b.yaml](./7b.yaml). 
@@ -71,7 +70,7 @@ To launch fine-tuning job,  execute:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug accel-llama2-7b \
-        ./charts/machine-learning/training/pytorchjob-elastic/ \
+        charts/machine-learning/training/pytorchjob-distributed \
         -f examples/training/accelerate/llama2-ft-fsdp/7b.yaml -n kubeflow-user-example-com
 
 You can tail the logs using following command:
@@ -91,7 +90,7 @@ To launch fine-tuning job,  execute:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug accel-llama2-13b \
-        ./charts/machine-learning/training/pytorchjob-elastic/ \
+        charts/machine-learning/training/pytorchjob-distributed \
         -f examples/training/accelerate/llama2-ft-fsdp/13b.yaml -n kubeflow-user-example-com
 
 You can tail the logs using following command:
@@ -111,7 +110,7 @@ To launch fine-tuning job,  execute:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug accel-llama2-70b \
-        ./charts/machine-learning/training/pytorchjob-elastic/ \
+        charts/machine-learning/training/pytorchjob-distributed \
         -f examples/training/accelerate/llama2-ft-fsdp/70b.yaml -n kubeflow-user-example-com
 
 You can tail the logs using following command:
