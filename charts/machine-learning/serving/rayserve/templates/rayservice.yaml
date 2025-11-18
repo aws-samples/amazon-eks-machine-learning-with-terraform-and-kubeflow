@@ -33,11 +33,13 @@ spec:
               - name: {{ $v.name }}
                 containerPort: {{ $v.port }}
             {{- end }}
+            {{- if .Values.ray.env }}
             env:
               {{- range $v := .Values.ray.env }}
               - name: {{ $v.name }}
                 value: "{{ tpl $v.value $ }}"
-              {{- end }} 
+              {{- end }}
+            {{- end }}
             volumeMounts:
               - mountPath: /dev/shm
                 name: shm
@@ -84,6 +86,7 @@ spec:
                 claimName: {{ $pv.name }}
             {{- $pv_index = add $pv_index 1 }}
             {{- end }}
+          {{- if .Values.ray.tolerations }}
           tolerations:
           {{- range $v := .Values.ray.tolerations }}
             - key: {{ $v.key }}
@@ -94,8 +97,11 @@ spec:
               effect: "{{ $v.effect }}"
               {{- end }}
           {{- end }}
+          {{- end }}
+          {{- if .Values.ray.resources.node_type }}
           nodeSelector:
             node.kubernetes.io/instance-type: {{ .Values.ray.resources.node_type }}
+          {{- end }}
     
     workerGroupSpecs:
     - replicas: {{ .Values.resources.min_replicas }}
@@ -126,11 +132,13 @@ spec:
               preStop:
                 exec:
                   command: [ "/bin/sh","-c","ray stop" ]
+            {{- if .Values.ray.env }}
             env:
               {{- range $v := .Values.ray.env }}
               - name: {{ $v.name }}
                 value: "{{ tpl $v.value $ }}"
-              {{- end }} 
+              {{- end }}
+            {{- end }}
             volumeMounts:
               - mountPath: /dev/shm
                 name: shm
@@ -177,6 +185,7 @@ spec:
                 claimName: {{ $pv.name }}
             {{- $pv_index = add $pv_index 1 }}
             {{- end }}
+          {{- if .Values.tolerations }}
           tolerations:
           {{- range $v := .Values.tolerations }}
             - key: {{ $v.key }}
@@ -187,5 +196,8 @@ spec:
               effect: "{{ $v.effect }}"
               {{- end }}
           {{- end }}
+          {{- end }}
+          {{- if .Values.resources.node_type }}
           nodeSelector:
             node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
+          {{- end }}
