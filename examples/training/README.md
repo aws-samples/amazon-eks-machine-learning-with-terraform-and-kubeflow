@@ -10,13 +10,6 @@
 | [Llama 2 13B Fine-tuning](./accelerate/llama2-ft-fsdp/README.md)    | Nvidia GPU  | Llama 2 13B Fine-tuning with FSDP on smangrul/code-chat-assistant-v1|
 | [Llama 2 70B Fine-tuning](./accelerate/llama2-ft-fsdp/README.md)   | Nvidia GPU   | Llama 2 70B Fine-tuning with FSDP on smangrul/code-chat-assistant-v1|
 
-### [Megatron DeepSpeed](https://github.com/deepspeedai/Megatron-DeepSpeed)
-
-
-| Model      | Accelerator | Notes |
-| ----------- | ----------- | -------- |
-| [GPT2 345M Pre-train](./megatron-deepspeed/gpt2_345m/README.md)  | Nvidia GPU    | Pre-train GPT2 345M on Wikicorpus dataset  |
-
 ### [Nemo](https://github.com/NVIDIA/NeMo)
 
 | Model      | Accelerator | Notes |
