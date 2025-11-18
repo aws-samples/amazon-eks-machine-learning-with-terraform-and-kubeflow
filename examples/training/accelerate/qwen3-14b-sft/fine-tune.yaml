@@ -1,0 +1,408 @@
+image: 'nvcr.io/nvidia/pytorch:25.10-py3'
+ebs:
+  storage: 200Gi
+  mount_path: /tmp
+resources:
+  requests:
+    "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
+  limits:
+    "nvidia.com/gpu": 8 
+    "vpc.amazonaws.com/efa": 4
+  nnodes: 2
+  nproc_per_node: 8
+  node_type: 'p4d.24xlarge'  
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+inline_script:
+  - |+
+    cat > /tmp/accel_config.yaml <<EOF
+    compute_environment: LOCAL_MACHINE
+    debug: true
+    distributed_type: FSDP
+    mixed_precision: bf16
+    main_training_function: main
+    num_machines: $PET_NNODES
+    num_processes: $((PET_NPROC_PER_NODE * PET_NNODES ))
+    machine_rank: $PET_NODE_RANK
+    main_process_ip: $PET_MASTER_ADDR
+    main_process_port: $PET_MASTER_PORT
+    fsdp_config:
+        fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
+        fsdp_backward_prefetch: BACKWARD_PRE
+        fsdp_cpu_ram_efficient_loading: true
+        fsdp_forward_prefetch: false
+        fsdp_offload_params: false  # Turn off for LoRA
+        fsdp_sharding_strategy: FULL_SHARD
+        fsdp_state_dict_type: SHARDED_STATE_DICT
+        fsdp_sync_module_states: true
+        fsdp_use_orig_params: true
+        fsdp_activation_checkpointing: false
+    EOF
+  - |+
+    cat > /tmp/train.py <<EOF
+    import os
+    os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
+
+    import json
+    import logging
+    from dataclasses import dataclass, field
+    from typing import Optional, Dict, Any, List
+    import torch
+    from datasets import load_dataset
+    from transformers import (
+        AutoModelForCausalLM,
+        AutoTokenizer,
+        TrainingArguments,
+        Trainer,
+        DataCollatorForLanguageModeling,
+        set_seed,
+        BitsAndBytesConfig,  # ADD THIS
+    )
+    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training  # ADD THIS
+    from accelerate import Accelerator
+
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        level=logging.INFO,
+    )
+    logger = logging.getLogger(__name__)
+
+    @dataclass
+    class SFTConfig:
+        """Configuration for SFT training."""
+        
+        # Model settings
+        model_name_or_path: str = os.getenv("MODEL_PATH", "Qwen/Qwen3-14B")
+        trust_remote_code: bool = True
+        use_flash_attention_2: bool = True
+        
+        # LoRA settings
+        use_lora: bool = True
+        lora_r: int = 64
+        lora_alpha: int = 16
+        lora_dropout: float = 0.05
+        lora_target_modules: List[str] = field(default_factory=lambda: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"])
+        
+        # Dataset settings
+        dataset_name: str = "timdettmers/openassistant-guanaco"
+        dataset_config_name: Optional[str] = None
+        dataset_split: str = "train"
+        validation_split: Optional[str] = None
+        validation_split_percentage: int = 5
+        
+        # Prompt template settings
+        prompt_template: str = "### Human: {text}\n### Assistant: {output}"
+        input_field: str = "text"
+        output_field: Optional[str] = "output"
+        
+        # Training hyperparameters
+        num_train_epochs: int = 1
+        per_device_train_batch_size: int = 1
+        per_device_eval_batch_size: int = 1
+        gradient_accumulation_steps: int = 16  # Can reduce back to 16 with LoRA
+        learning_rate: float = 2e-4  # Slightly higher for LoRA
+        weight_decay: float = 0.01
+        warmup_ratio: float = 0.03
+        lr_scheduler_type: str = "cosine"
+        max_grad_norm: float = 1.0
+        
+        # Sequence length
+        max_seq_length: int = 2048  # Can use full length with LoRA
+        
+        # Logging and saving
+        logging_steps: int = 10
+        save_steps: int = 500
+        eval_steps: int = 500
+        save_total_limit: int = 3
+        output_dir: str = os.getenv("OUTPUT_ROOT", "output")
+        logging_dir: str = os.getenv("LOG_ROOT", "logs")
+        
+        # Other settings
+        seed: int = 16257
+        dataloader_num_workers: int = 4
+        remove_unused_columns: bool = False
+        
+        @classmethod
+        def from_json(cls, json_path: str) -> "SFTConfig":
+            """Load configuration from JSON file."""
+            with open(json_path, 'r') as f:
+                config_dict = json.load(f)
+            return cls(**config_dict)
+
+
+    class PromptFormatter:
+        """Handles formatting of prompts based on template."""
+        
+        def __init__(self, template: str, input_field: str, output_field: Optional[str] = None):
+            self.template = template
+            self.input_field = input_field
+            self.output_field = output_field
+        
+        def format_prompt(self, example: Dict[str, Any]) -> str:
+            """Format a single example using the template."""
+            formatted = self.template
+            for key, value in example.items():
+                placeholder = "{" + key + "}"
+                if placeholder in formatted:
+                    formatted = formatted.replace(placeholder, str(value))
+            return formatted
+        
+        def format_example(self, example: Dict[str, Any]) -> str:
+            """Format full example including output if present."""
+            prompt = self.format_prompt(example)
+            if self.output_field and self.output_field in example:
+                return prompt + example[self.output_field]
+            return prompt
+
+
+    def preprocess_function(examples: Dict[str, List], formatter: PromptFormatter, tokenizer, max_length: int):
+        """Preprocess examples by formatting and tokenizing."""
+        texts = []
+        for i in range(len(examples[next(iter(examples.keys()))])):
+            example = {key: examples[key][i] for key in examples.keys()}
+            texts.append(formatter.format_example(example))
+        
+        model_inputs = tokenizer(
+            texts,
+            max_length=max_length,
+            truncation=True,
+            padding=False, 
+            return_attention_mask=False, 
+        )
+        
+        return model_inputs
+
+
+    def main():
+        config = SFTConfig()
+        
+        set_seed(config.seed)
+        
+        accelerator = Accelerator()
+        logger.info(f"Accelerator state: {accelerator.state}")
+        
+        if accelerator.is_main_process:
+            logger.info(f"Training configuration: {config}")
+        
+        # Load tokenizer
+        logger.info(f"Loading tokenizer from {config.model_name_or_path}")
+        tokenizer = AutoTokenizer.from_pretrained(
+            config.model_name_or_path,
+            trust_remote_code=config.trust_remote_code,
+            use_fast=True,
+        )
+        
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+            tokenizer.pad_token_id = tokenizer.eos_token_id
+        
+        if tokenizer.model_max_length > 100000:
+            tokenizer.model_max_length = config.max_seq_length
+        
+        # Load dataset
+        logger.info(f"Loading dataset: {config.dataset_name}")
+        if config.dataset_config_name:
+            dataset = load_dataset(
+                config.dataset_name,
+                config.dataset_config_name,
+                split=config.dataset_split,
+            )
+        else:
+            dataset = load_dataset(config.dataset_name, split=config.dataset_split)
+        
+        if config.validation_split:
+            eval_dataset = load_dataset(
+                config.dataset_name,
+                config.dataset_config_name,
+                split=config.validation_split,
+            )
+        elif config.validation_split_percentage > 0:
+            split_dataset = dataset.train_test_split(
+                test_size=config.validation_split_percentage / 100,
+                seed=config.seed,
+            )
+            dataset = split_dataset["train"]
+            eval_dataset = split_dataset["test"]
+        else:
+            eval_dataset = None
+        
+        logger.info(f"Training samples: {len(dataset)}")
+        if eval_dataset:
+            logger.info(f"Validation samples: {len(eval_dataset)}")
+        
+        formatter = PromptFormatter(
+            template=config.prompt_template,
+            input_field=config.input_field,
+            output_field=config.output_field,
+        )
+        
+        # Preprocess datasets
+        logger.info("Preprocessing datasets...")
+        with accelerator.main_process_first():
+            tokenized_dataset = dataset.map(
+                lambda examples: preprocess_function(
+                    examples, 
+                    formatter, 
+                    tokenizer,
+                    config.max_seq_length
+                ),
+                batched=True,
+                num_proc=config.dataloader_num_workers,
+                remove_columns=dataset.column_names,
+                desc="Tokenizing training data",
+            )
+            
+            if eval_dataset:
+                tokenized_eval_dataset = eval_dataset.map(
+                    lambda examples: preprocess_function(
+                        examples, 
+                        formatter, 
+                        tokenizer,
+                        config.max_seq_length
+                    ),
+                    batched=True,
+                    num_proc=config.dataloader_num_workers,
+                    remove_columns=eval_dataset.column_names,
+                    desc="Tokenizing validation data",
+                )
+            else:
+                tokenized_eval_dataset = None
+        
+        # Load model with LoRA
+        logger.info(f"Loading model from {config.model_name_or_path}")
+        model = AutoModelForCausalLM.from_pretrained(
+            config.model_name_or_path,
+            trust_remote_code=config.trust_remote_code,
+            dtype=torch.bfloat16,
+            attn_implementation="flash_attention_2" if config.use_flash_attention_2 else None,
+            use_cache=False,
+            low_cpu_mem_usage=True,
+        )
+
+        # Enable gradient checkpointing
+        model.gradient_checkpointing_enable()
+        model = prepare_model_for_kbit_training(model)
+        
+        # Configure LoRA
+        if config.use_lora:
+            logger.info("Applying LoRA configuration...")
+            peft_config = LoraConfig(
+                r=config.lora_r,
+                lora_alpha=config.lora_alpha,
+                lora_dropout=config.lora_dropout,
+                target_modules=config.lora_target_modules,
+                bias="none",
+                task_type="CAUSAL_LM",
+            )
+            model = get_peft_model(model, peft_config)
+            model.print_trainable_parameters()
+        
+        # Data collator
+        data_collator = DataCollatorForLanguageModeling(
+            tokenizer=tokenizer,
+            mlm=False,
+        )
+        
+        # Training arguments
+        training_args = TrainingArguments(
+            output_dir=config.output_dir,
+            num_train_epochs=config.num_train_epochs,
+            per_device_train_batch_size=config.per_device_train_batch_size,
+            per_device_eval_batch_size=config.per_device_eval_batch_size,
+            gradient_accumulation_steps=config.gradient_accumulation_steps,
+            learning_rate=config.learning_rate,
+            weight_decay=config.weight_decay,
+            warmup_ratio=config.warmup_ratio,
+            lr_scheduler_type=config.lr_scheduler_type,
+            max_grad_norm=config.max_grad_norm,
+            logging_steps=config.logging_steps,
+            save_steps=config.save_steps,
+            eval_steps=config.eval_steps if eval_dataset else None,
+            save_total_limit=config.save_total_limit,
+            bf16=True,
+            dataloader_num_workers=config.dataloader_num_workers,
+            remove_unused_columns=config.remove_unused_columns,
+            report_to=["tensorboard"],
+            logging_dir=config.logging_dir,
+            save_strategy="steps",
+            eval_strategy="steps" if eval_dataset else "no",
+            load_best_model_at_end=True if eval_dataset else False,
+            metric_for_best_model="loss" if eval_dataset else None,
+            greater_is_better=False,
+            seed=config.seed,
+            gradient_checkpointing=True,
+            gradient_checkpointing_kwargs={"use_reentrant": False},
+            optim="adamw_torch_fused",
+        )
+        
+        # Initialize Trainer
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=tokenized_dataset,
+            eval_dataset=tokenized_eval_dataset,
+            data_collator=data_collator,
+            processing_class=tokenizer,
+        )
+        
+        # Train
+        logger.info("Starting training...")
+        train_result = trainer.train()
+        
+        # Save final model
+        if accelerator.is_main_process:
+            logger.info("Training completed. Saving final model...")
+            trainer.save_model()
+            trainer.save_state()
+            
+            metrics = train_result.metrics
+            trainer.log_metrics("train", metrics)
+            trainer.save_metrics("train", metrics)
+        
+        logger.info("Training finished successfully!")
+
+
+    if __name__ == "__main__":
+        main() 
+    EOF
+pre_script: 
+  - pip3 install --upgrade pip
+  - pip3 install transformers==4.57.1 datasets==4.4.1 evaluate==0.4.6 torchao==0.14.1 accelerate==1.11.0
+  - pip3 install trl==0.25.1 peft==0.18.0 bitsandbytes==0.48.2
+  - mkdir -p $LOG_ROOT/$HOSTNAME
+  - PROCESS_LOG=$LOG_ROOT/$HOSTNAME/fine-tune.log
+  - cat /tmp/accel_config.yaml
+train:
+  env:
+    - name: HOME
+      value: /tmp
+    - name: LOG_ROOT
+      value: "/efs/home/{{ .Release.Name }}/logs"
+    - name: MODEL_PATH
+      value: "/fsx/pretrained-models/Qwen/Qwen3-14B"
+    - name: OUTPUT_ROOT
+      value: "/efs/home/{{ .Release.Name }}/output"
+    - name: NCCL_SOCKET_IFNAME 
+      value: "^lo,docker0"
+    - name: NCCL_DEBUG
+      value: "WARN"
+    - name: FI_EFA_USE_DEVICE_RDMA
+      value: "1"
+    - name: FI_PROVIDER
+      value: "efa"
+    - name: FI_EFA_FORK_SAFE
+      value: "1"
+    - name: "RDMAV_FORK_SAFE"
+      value: "1"
+  command:
+    - accelerate
+  args:
+    - launch
+    - --config_file
+    - /tmp/accel_config.yaml
+    - /tmp/train.py 
+    - '2>&1 | tee $PROCESS_LOG' 
