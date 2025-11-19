@@ -1,0 +1,515 @@
+ray:
+  version: '2.49.0'
+  dashboard:
+    host: '0.0.0.0'
+  ports:
+    - name: gcs-server
+      port: 6379
+    - name: client
+      port: 10001
+    - name: dashboard
+      port: 8265
+  resources:
+    requests:
+      cpu: 300m 
+    limits:
+      cpu: 2
+  runtime_env_yaml:
+    runtimeEnvYAML: |
+      pip:
+        - transformers==4.57.1 
+        - datasets==4.4.1
+        - peft==0.18.0 
+        - bitsandbytes==0.48.2
+image:
+image_pull_policy: Always
+ebs:
+  storage: 200Gi
+  mount_path: /tmp
+resources:
+  requests:
+    "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
+  limits:
+    "nvidia.com/gpu": 8 
+    "vpc.amazonaws.com/efa": 4 
+  nnodes: 2 
+  node_type: 'p4d.24xlarge' 
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+inline_script:
+  - |+
+    cat > /tmp/train.py <<EOF
+    import os
+    import json
+    import logging
+    from dataclasses import dataclass, field, asdict
+    from typing import Optional, Dict, Any, List
+    import torch
+    from datasets import load_dataset
+    from transformers import (
+        AutoModelForCausalLM,
+        AutoTokenizer,
+        TrainingArguments,
+        Trainer,
+        DataCollatorForLanguageModeling,
+        TrainerCallback,
+        set_seed,
+    )
+    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+    import ray
+    from ray import train
+    from ray.train import ScalingConfig, RunConfig, CheckpointConfig, FailureConfig
+    from ray.train.torch import TorchTrainer
+
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        level=logging.INFO,
+    )
+    logger = logging.getLogger(__name__)
+
+    @dataclass
+    class SFTConfig:
+        """Configuration for SFT training."""
+        
+        # Model settings
+        model_name_or_path: str = os.getenv("MODEL_PATH", "Qwen/Qwen3-14B")
+        trust_remote_code: bool = True
+        use_flash_attention_2: bool = True
+        
+        # LoRA settings
+        use_lora: bool = True
+        lora_r: int = 64
+        lora_alpha: int = 16
+        lora_dropout: float = 0.05
+        lora_target_modules: List[str] = field(default_factory=lambda: [
+            "q_proj", "k_proj", "v_proj", "o_proj", 
+            "gate_proj", "up_proj", "down_proj"
+        ])
+        
+        # Dataset settings
+        dataset_name: str = "timdettmers/openassistant-guanaco"
+        dataset_config_name: Optional[str] = None
+        dataset_split: str = "train"
+        validation_split: Optional[str] = None
+        validation_split_percentage: int = 5
+        
+        # Prompt template settings
+        prompt_template: str = "### Human: {text}\n### Assistant: {output}"
+        input_field: str = "text"
+        output_field: Optional[str] = "output"
+        
+        # Training hyperparameters
+        num_train_epochs: int = 1
+        per_device_train_batch_size: int = 1
+        per_device_eval_batch_size: int = 1
+        gradient_accumulation_steps: int = 16
+        learning_rate: float = 2e-4
+        weight_decay: float = 0.01
+        warmup_ratio: float = 0.03
+        lr_scheduler_type: str = "cosine"
+        max_grad_norm: float = 1.0
+        
+        # Sequence length
+        max_seq_length: int = 2048
+        
+        # Logging and saving
+        logging_steps: int = 10
+        save_steps: int = 1000
+        eval_steps: int = 1000
+        save_total_limit: int = 2
+        output_dir: str = os.getenv("OUTPUT_ROOT", "output")
+        logging_dir: str = os.getenv("LOG_ROOT", "logs")
+        
+        # Other settings
+        seed: int = 16257
+        dataloader_num_workers: int = 4
+        remove_unused_columns: bool = False
+        
+        def to_dict(self):
+            """Convert to dictionary for Ray Train."""
+            return asdict(self)
+
+    class PromptFormatter:
+        """Handles formatting of prompts based on template."""
+        
+        def __init__(self, template: str, input_field: str, output_field: Optional[str] = None):
+            self.template = template
+            self.input_field = input_field
+            self.output_field = output_field
+        
+        def format_prompt(self, example: Dict[str, Any]) -> str:
+            """Format a single example using the template."""
+            formatted = self.template
+            for key, value in example.items():
+                placeholder = "{" + key + "}"
+                if placeholder in formatted:
+                    formatted = formatted.replace(placeholder, str(value))
+            return formatted
+        
+        def format_example(self, example: Dict[str, Any]) -> str:
+            """Format full example including output if present."""
+            prompt = self.format_prompt(example)
+            if self.output_field and self.output_field in example:
+                return prompt + example[self.output_field]
+            return prompt
+
+    def preprocess_function(examples: Dict[str, List], formatter: PromptFormatter, tokenizer, max_length: int):
+        """Preprocess examples by formatting and tokenizing."""
+        texts = []
+        for i in range(len(examples[next(iter(examples.keys()))])):
+            example = {key: examples[key][i] for key in examples.keys()}
+            texts.append(formatter.format_example(example))
+        
+        model_inputs = tokenizer(
+            texts,
+            max_length=max_length,
+            truncation=True,
+            padding=False, 
+            return_attention_mask=False, 
+        )
+        
+        return model_inputs
+
+    class RayTrainReportCallback(TrainerCallback):
+        """Custom callback to report metrics to Ray Train."""
+        
+        def on_log(self, args, state, control, logs=None, **kwargs):
+            """Report metrics to Ray Train on logging."""
+            if logs and state.is_world_process_zero:
+                metrics = {k: v for k, v in logs.items() if isinstance(v, (int, float))}
+                if metrics:
+                    train.report(metrics)
+        
+        def on_save(self, args, state, control, **kwargs):
+            """Ensure synchronization after checkpoint save."""
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+
+    def train_func(config_dict: Dict):
+        """Training function to be executed on each worker using native FSDP."""
+        
+        config = SFTConfig(**config_dict)
+        
+        # Get distributed info from Ray Train
+        world_size = train.get_context().get_world_size()
+        rank = train.get_context().get_world_rank()
+        local_rank = train.get_context().get_local_rank()
+        
+        # Set up device
+        device = torch.device(f"cuda:{local_rank}")
+        torch.cuda.set_device(device)
+        
+        logger.info(f"Rank {rank}/{world_size} (local_rank={local_rank}) starting training")
+        
+        # Set seed
+        set_seed(config.seed)
+        
+        # Log configuration on main process
+        if rank == 0:
+            logger.info(f"Training configuration: {config_dict}")
+            logger.info(f"World size: {world_size}")
+        
+        # Load tokenizer
+        logger.info(f"Loading tokenizer from {config.model_name_or_path}")
+        tokenizer = AutoTokenizer.from_pretrained(
+            config.model_name_or_path,
+            trust_remote_code=config.trust_remote_code,
+            use_fast=True,
+        )
+        
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+            tokenizer.pad_token_id = tokenizer.eos_token_id
+        
+        if tokenizer.model_max_length > 100000:
+            tokenizer.model_max_length = config.max_seq_length
+        
+        # Load dataset
+        logger.info(f"Loading dataset: {config.dataset_name}")
+        if config.dataset_config_name:
+            dataset = load_dataset(
+                config.dataset_name,
+                config.dataset_config_name,
+                split=config.dataset_split,
+            )
+        else:
+            dataset = load_dataset(config.dataset_name, split=config.dataset_split)
+        
+        # Create validation split
+        if config.validation_split:
+            eval_dataset = load_dataset(
+                config.dataset_name,
+                config.dataset_config_name,
+                split=config.validation_split,
+            )
+        elif config.validation_split_percentage > 0:
+            split_dataset = dataset.train_test_split(
+                test_size=config.validation_split_percentage / 100,
+                seed=config.seed,
+            )
+            dataset = split_dataset["train"]
+            eval_dataset = split_dataset["test"]
+        else:
+            eval_dataset = None
+        
+        if rank == 0:
+            logger.info(f"Training samples: {len(dataset)}")
+            if eval_dataset:
+                logger.info(f"Validation samples: {len(eval_dataset)}")
+        
+        # Initialize prompt formatter
+        formatter = PromptFormatter(
+            template=config.prompt_template,
+            input_field=config.input_field,
+            output_field=config.output_field,
+        )
+        
+        # Preprocess datasets
+        logger.info("Preprocessing datasets...")
+        tokenized_dataset = dataset.map(
+            lambda examples: preprocess_function(
+                examples, 
+                formatter, 
+                tokenizer,
+                config.max_seq_length
+            ),
+            batched=True,
+            num_proc=config.dataloader_num_workers if rank == 0 else 1,
+            remove_columns=dataset.column_names,
+            desc="Tokenizing training data",
+        )
+        
+        if eval_dataset:
+            tokenized_eval_dataset = eval_dataset.map(
+                lambda examples: preprocess_function(
+                    examples, 
+                    formatter, 
+                    tokenizer,
+                    config.max_seq_length
+                ),
+                batched=True,
+                num_proc=config.dataloader_num_workers if rank == 0 else 1,
+                remove_columns=eval_dataset.column_names,
+                desc="Tokenizing validation data",
+            )
+        else:
+            tokenized_eval_dataset = None
+        
+        # Load model
+        logger.info(f"Loading model from {config.model_name_or_path}")
+        model = AutoModelForCausalLM.from_pretrained(
+            config.model_name_or_path,
+            trust_remote_code=config.trust_remote_code,
+            dtype=torch.bfloat16,
+            attn_implementation="flash_attention_2" if config.use_flash_attention_2 else None,
+            use_cache=False,
+        )
+
+        # Enable gradient checkpointing
+        model.gradient_checkpointing_enable()
+        
+        # Configure LoRA
+        if config.use_lora:
+            logger.info("Applying LoRA configuration...")
+            model = prepare_model_for_kbit_training(model)
+            peft_config = LoraConfig(
+                r=config.lora_r,
+                lora_alpha=config.lora_alpha,
+                lora_dropout=config.lora_dropout,
+                target_modules=config.lora_target_modules,
+                bias="none",
+                task_type="CAUSAL_LM",
+            )
+            model = get_peft_model(model, peft_config)
+            if rank == 0:
+                model.print_trainable_parameters()
+        
+        # Data collator
+        data_collator = DataCollatorForLanguageModeling(
+            tokenizer=tokenizer,
+            mlm=False,
+        )
+        
+        # FSDP configuration for native Trainer
+        fsdp_config = {
+            "fsdp_sharding_strategy": "FULL_SHARD",
+            "fsdp_state_dict_type": "FULL_STATE_DICT",
+            "fsdp_offload_params": False,
+            "fsdp_backward_prefetch": "BACKWARD_PRE",
+            "fsdp_forward_prefetch": False,
+            "fsdp_use_orig_params": True,
+            "fsdp_cpu_ram_efficient_loading": True,
+            "fsdp_sync_module_states": True,
+            "fsdp_auto_wrap_policy": "TRANSFORMER_BASED_WRAP",
+        }
+        
+        # Training arguments with native FSDP
+        training_args = TrainingArguments(
+            output_dir=config.output_dir,
+            num_train_epochs=config.num_train_epochs,
+            per_device_train_batch_size=config.per_device_train_batch_size,
+            per_device_eval_batch_size=config.per_device_eval_batch_size,
+            gradient_accumulation_steps=config.gradient_accumulation_steps,
+            learning_rate=config.learning_rate,
+            weight_decay=config.weight_decay,
+            warmup_ratio=config.warmup_ratio,
+            lr_scheduler_type=config.lr_scheduler_type,
+            max_grad_norm=config.max_grad_norm,
+            logging_steps=config.logging_steps,
+            save_steps=config.save_steps,
+            eval_steps=config.eval_steps if eval_dataset else None,
+            save_total_limit=config.save_total_limit,
+            bf16=True,
+            dataloader_num_workers=config.dataloader_num_workers,
+            remove_unused_columns=config.remove_unused_columns,
+            report_to=["tensorboard"],
+            logging_dir=config.logging_dir,
+            save_strategy="steps",
+            eval_strategy="steps" if eval_dataset else "no",
+            load_best_model_at_end=False,
+            seed=config.seed,
+            gradient_checkpointing=True,
+            gradient_checkpointing_kwargs={"use_reentrant": False},
+            optim="adamw_torch_fused",
+            ddp_find_unused_parameters=False,
+            ddp_timeout=7200,
+            save_on_each_node=False,
+            fsdp=["full_shard", "auto_wrap"],
+            fsdp_config=fsdp_config,
+        )
+        
+        # Initialize Trainer
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=tokenized_dataset,
+            eval_dataset=tokenized_eval_dataset,
+            data_collator=data_collator,
+            processing_class=tokenizer,
+            callbacks=[RayTrainReportCallback()],
+        )
+        
+        # Train
+        logger.info("Starting training...")
+        train_result = trainer.train()
+        
+        # Save final model (only on rank 0)
+        if rank == 0:
+            logger.info("Training completed. Saving final model...")
+            trainer.save_model()
+            trainer.save_state()
+            
+            # Ensure GPU operations are complete
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            
+            metrics = train_result.metrics
+            trainer.log_metrics("train", metrics)
+            trainer.save_metrics("train", metrics)
+            
+            # Final report to Ray Train
+            train.report(metrics)
+        
+        # Wait for all processes
+        if torch.distributed.is_initialized():
+            torch.distributed.barrier()
+        
+        logger.info("Training finished successfully!")
+
+    def main():
+        """Main function to launch Ray Train with native FSDP."""
+        
+        # Initialize Ray
+        if not ray.is_initialized():
+            ray.init(address="auto")
+        
+        # Create config
+        config = SFTConfig()
+        
+        # Configure Ray Train scaling
+        available_gpus = int(ray.available_resources().get("GPU", 0))
+        print(f"Detected available_gpus: {available_gpus}")
+        scaling_config = ScalingConfig(
+            num_workers=available_gpus,
+            use_gpu=True,
+            resources_per_worker={
+                "CPU": 4,
+                "GPU": 1,
+            },
+            placement_strategy="SPREAD",
+        )
+        
+        # Create TorchTrainer with native FSDP
+        trainer = TorchTrainer(
+            train_loop_per_worker=train_func,
+            train_loop_config=config.to_dict(),
+            scaling_config=scaling_config,
+            torch_config=train.torch.TorchConfig(
+                backend="nccl",
+                timeout_s=7200,
+            ),
+            run_config=RunConfig(
+                name="qwen3-14b-sft-lora-fsdp",
+                storage_path=os.path.join(os.environ.get("HOME", "/tmp"), "ray_results"),
+                checkpoint_config=CheckpointConfig(
+                    num_to_keep=2,
+                    checkpoint_frequency=0,
+                ),
+                failure_config=FailureConfig(
+                    max_failures=2,
+                ),
+            ),
+        )
+        
+        # Start training
+        result = trainer.fit()
+        
+        print("Training completed!")
+        print(f"Results: {result}")
+        if result.metrics:
+            print(f"Final metrics: {result.metrics}")
+
+
+    if __name__ == "__main__":
+        main()
+    EOF
+pre_script:
+   - mkdir -p $LOG_ROOT/$HOSTNAME
+   - PROCESS_LOG=$LOG_ROOT/fine-tune.log
+train:
+  env:
+    - name: HOME
+      value: "/efs/home/{{ .Release.Name }}"
+    - name: LOG_ROOT
+      value: "/efs/home/{{ .Release.Name }}/logs"
+    - name: MODEL_PATH
+      value: "/fsx/pretrained-models/Qwen/Qwen3-14B"
+    - name: OUTPUT_ROOT
+      value: "/efs/home/{{ .Release.Name }}/output"
+    - name: NCCL_SOCKET_IFNAME 
+      value: "^lo,docker0"
+    - name: NCCL_DEBUG
+      value: "WARN"
+    - name: NCCL_TIMEOUT
+      value: "7200"
+    - name: TORCH_NCCL_ASYNC_ERROR_HANDLING
+      value: "1"
+    - name: "PYTORCH_ALLOC_CONF"
+      value: "expandable_segments:True"
+    - name: FI_EFA_USE_DEVICE_RDMA
+      value: "1"
+    - name: FI_PROVIDER
+      value: "efa"
+    - name: FI_EFA_FORK_SAFE
+      value: "1"
+    - name: "RDMAV_FORK_SAFE"
+      value: "1"
+  command:
+    - python
+  args:
+    - /tmp/train.py
+    - '2>&1 | tee $PROCESS_LOG' 
