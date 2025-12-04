@@ -325,17 +325,7 @@ Features:
 
 ## Legacy Examples
 
-### TensorFlow
-
-| Model | Accelerator | Description |
-|-------|-------------|-------------|
-| [Mask R-CNN](./examples/legacy/maskrcnn/) | Nvidia GPU | Training on COCO 2017 dataset |
-
-### Neuronx Nemo Megatron (Deprecated)
-
-| Model | Accelerator | Description |
-|-------|-------------|-------------|
-| [Llama 2 7B/13B/70B](./examples/legacy/neuronx-nemo-megatron/) | AWS Trainium1 | Pre-training on Wikicorpus |
+See [README.md](./examples/legacy/README.md)
 
 ## Architecture Concepts
 

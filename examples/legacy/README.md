@@ -1,4 +1,4 @@
-## Legacy Tutorials
+## Legacy Examples
 
 
 ### [TensorFlow](https://www.tensorflow.org/)
@@ -27,3 +27,21 @@
 | Model      | Accelerator | Notes |
 | ----------- | ----------- | -------- |
 | [GPT2 345M Pre-train](./megatron-deepspeed/gpt2_345m/README.md)  | Nvidia GPU    | Pre-train GPT2 345M on Wikicorpus dataset  |
+
+### [Neuronx Distributed](https://github.com/aws-neuron/neuronx-distributed)
+
+| Model      | Accelerator | Notes |
+| ----------- | ----------- | -------- |
+| [GPT Neox 6.9B Pre-train ](./neuronx-distributed/gpt_neox_6.9b/README.md)   | AWS Trainium1  | GPT Neox 6.9B pre-train on Wikicorpus |
+| [GPT Neox 20B Pre-train ](./neuronx-distributed/gpt_neox_20b/README.md)     | AWS Trainium1  | GPT Neox 20B pre-train on Wikicorpus |
+| [Llama 2 7B Pre-train ](./neuronx-distributed/llama2_7b/README.md)     | AWS Trainium1  | Llama2 7B pre-train on Wikicorpus |
+| [Llama 2 7B Pre-train](./neuronx-distributed/llama2_7b_ptl/README.md) | AWS Trainium1     | Llama2 7B pre-train on Wikicorpus with PyTorch Lightning |
+| [Llama 2 13B Pre-train ](./neuronx-distributed/llama2_13b/README.md)   | AWS Trainium1   | Llama2 13B pre-train on Wikicorpus |
+| [Llama 2 13B Pre-train](./neuronx-distributed/llama2_13b_ptl/README.md) | AWS Trainium1     | Llama2 13B pre-train on Wikicorpus with PyTorch Lightning |
+| [Llama 2 70B Pre-train ](./neuronx-distributed/llama2_70b/README.md)   | AWS Trainium1   | Llama2 70B pre-train on Wikicorpus |
+| [Llama 2 70B Pre-train](./neuronx-distributed/llama2_70b_ptl/README.md)    | AWS Trainium1  | Llama2 70B pre-train on Wikicorpus with PyTorch Lightning |
+| [Llama 3 8B Pre-train ](./neuronx-distributed/llama3_8b/README.md)  | AWS Trainium1    | Llama3 8B pre-train on Wikicorpus |
+| [Llama 3 70B Pre-train ](./neuronx-distributed/llama3_70b/README.md)  | AWS Trainium1    | Llama3 70B pre-train on Wikicorpus |
+| [Llama 3 70B Pre-train ](./neuronx-distributed/llama3_70b_ptl/README.md)  | AWS Trainium1    | Llama3 70B pre-train on Wikicorpus with PyTorch Lightning |
+| [Llama 3.1 8B Pre-train ](./neuronx-distributed/llama31_8b/README.md)   | AWS Trainium1   | Llama3.1 8B pre-train on Wikicorpus |
+| [Llama 3.1 70B Pre-train ](./neuronx-distributed/llama31_70b/README.md)  | AWS Trainium1    | Llama3.1 70B pre-train on Wikicorpus |
