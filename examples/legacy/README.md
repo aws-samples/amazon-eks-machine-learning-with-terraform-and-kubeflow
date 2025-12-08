@@ -1,8 +1,9 @@
 ## Legacy Examples
 
 
-### [TensorFlow](https://www.tensorflow.org/)
+**Following examples are deprecated.**
 
+### [TensorFlow](https://www.tensorflow.org/)
 
 | Model      | Accelerator | Notes |
 | ----------- | ----------- | -------- |
@@ -10,8 +11,6 @@
 
 
 ### [Neuronx Nemo Megatron](https://github.com/aws-neuron/neuronx-nemo-megatron)
-
-**Following examples are deprecated.**
 
 | Model      | Accelerator | Notes |
 | ----------- | ----------- | -------- |
@@ -21,8 +20,6 @@
 
 ### [Megatron DeepSpeed](https://github.com/deepspeedai/Megatron-DeepSpeed)
 
-
-**Following examples are deprecated.**
 
 | Model      | Accelerator | Notes |
 | ----------- | ----------- | -------- |
@@ -45,3 +42,12 @@
 | [Llama 3 70B Pre-train ](./neuronx-distributed/llama3_70b_ptl/README.md)  | AWS Trainium1    | Llama3 70B pre-train on Wikicorpus with PyTorch Lightning |
 | [Llama 3.1 8B Pre-train ](./neuronx-distributed/llama31_8b/README.md)   | AWS Trainium1   | Llama3.1 8B pre-train on Wikicorpus |
 | [Llama 3.1 70B Pre-train ](./neuronx-distributed/llama31_70b/README.md)  | AWS Trainium1    | Llama3.1 70B pre-train on Wikicorpus |
+
+
+### [Hugging Face Accelerate](https://huggingface.co/docs/accelerate/en/index)
+
+| Model      | Accelerator | Notes |
+| ----------- | ----------- | -------- |
+| [Llama 2 7B Fine-tuning](./accelerate/llama2-ft-fsdp/README.md)    | Nvidia GPU | Llama 2 7B Fine-tuning with FSDP on smangrul/code-chat-assistant-v1 |
+| [Llama 2 13B Fine-tuning](./accelerate/llama2-ft-fsdp/README.md)    | Nvidia GPU  | Llama 2 13B Fine-tuning with FSDP on smangrul/code-chat-assistant-v1|
+| [Llama 2 70B Fine-tuning](./accelerate/llama2-ft-fsdp/README.md)   | Nvidia GPU   | Llama 2 70B Fine-tuning with FSDP on smangrul/code-chat-assistant-v1|

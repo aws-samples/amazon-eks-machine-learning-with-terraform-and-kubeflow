@@ -6,9 +6,7 @@
 | Model      | Accelerator | Notes |
 | ----------- | ----------- | -------- |
 | [Bert GLUE MRPC Pre-training](./accelerate/bert-glue-mrpc/README.md)    | Nvidia GPU  | BERT Glue MRPC Pretraining    |
-| [Llama 2 7B Fine-tuning](./accelerate/llama2-ft-fsdp/README.md)    | Nvidia GPU | Llama 2 7B Fine-tuning with FSDP on smangrul/code-chat-assistant-v1 |
-| [Llama 2 13B Fine-tuning](./accelerate/llama2-ft-fsdp/README.md)    | Nvidia GPU  | Llama 2 13B Fine-tuning with FSDP on smangrul/code-chat-assistant-v1|
-| [Llama 2 70B Fine-tuning](./accelerate/llama2-ft-fsdp/README.md)   | Nvidia GPU   | Llama 2 70B Fine-tuning with FSDP on smangrul/code-chat-assistant-v1|
+| [Qwen/Qwen3-14B Fine-tuning](./accelerate/qwen3-14b-sft/README.md)    | Nvidia GPU  | Qwen/Qwen3-14B PEFT  |
 
 ### [Nemo](https://github.com/NVIDIA/NeMo)
 
