@@ -41,7 +41,7 @@ To uninstall the Helm chart for the fine-tuning job, execute:
 
 ## Evaluate Fine-tuned Model
 
-The Helm values are defined in [test-checkpoint.yaml](./test-checkpoint.yaml).
+The Helm values are defined in [evaluate.yaml](./evaluate.yaml).
 
 To launch evaluation job, execute:
 
