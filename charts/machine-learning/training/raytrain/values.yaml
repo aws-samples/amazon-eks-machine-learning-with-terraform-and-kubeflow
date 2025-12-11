@@ -30,3 +30,4 @@ train:
   env: []
   command: []
   args: []
+framework: "ray_train"

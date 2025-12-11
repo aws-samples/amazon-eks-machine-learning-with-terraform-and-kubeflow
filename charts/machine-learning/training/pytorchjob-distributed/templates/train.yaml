@@ -51,6 +51,19 @@ data:
     rm -rf $GIT_CLONE_DIR
     {{- end }}
 ---
+{{- if .Values.framework }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: framework-scripts-{{ .Release.Name }}
+data:
+{{- $frameworkGlob := printf "scripts/%s/*" .Values.framework }}
+{{- range $path, $_ := .Files.Glob $frameworkGlob }}
+  {{ base $path }}: |
+{{ $.Files.Get $path | nindent 4 }}
+{{- end }}
+---
+{{- end }}
 apiVersion: kubeflow.org/v1
 kind: PyTorchJob
 metadata:
@@ -85,6 +98,12 @@ spec:
                 mode: 365
                 path: train-script.sh
               name: train-script-{{ .Release.Name }}
+          {{- if .Values.framework }}
+          - name: framework-scripts
+            configMap:
+              defaultMode: 420
+              name: framework-scripts-{{ .Release.Name }}
+          {{- end }}
           - name: shm
             hostPath:
               path: /dev/shm
@@ -143,6 +162,10 @@ spec:
               volumeMounts:
                 - mountPath: /etc/config
                   name: config
+                {{- if .Values.framework }}
+                - mountPath: /etc/framework-scripts
+                  name: framework-scripts
+                {{- end }}
                 - mountPath: /dev/shm
                   name: shm
                 {{- $pv_index := 1 }}
@@ -177,6 +200,12 @@ spec:
                 mode: 365
                 path: train-script.sh
               name: train-script-{{ .Release.Name }}
+          {{- if .Values.framework }}
+          - name: framework-scripts
+            configMap:
+              defaultMode: 420
+              name: framework-scripts-{{ .Release.Name }}
+          {{- end }}
           - name: shm
             hostPath:
               path: /dev/shm
@@ -235,6 +264,10 @@ spec:
               volumeMounts:
                 - mountPath: /etc/config
                   name: config
+                {{- if .Values.framework }}
+                - mountPath: /etc/framework-scripts
+                  name: framework-scripts
+                {{- end }}
                 - mountPath: /dev/shm
                   name: shm
                 {{- $pv_index := 1 }}

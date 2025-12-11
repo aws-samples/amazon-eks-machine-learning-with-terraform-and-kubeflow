@@ -1,4 +1,5 @@
 image:
+framework:
 backoff_limit: 2000
 resources:
   requests: {}
