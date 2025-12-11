@@ -39,6 +39,44 @@ To uninstall the Helm chart for the fine-tuning job, execute:
 
     helm uninstall accel-qwen3-14b-sft -n kubeflow-user-example-com
 
+## Evaluate Fine-tuned Model
+
+The Helm values are defined in [test-checkpoint.yaml](./test-checkpoint.yaml).
+
+To launch evaluation job, execute:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug accel-qwen3-14b-sft \
+        charts/machine-learning/training/pytorchjob-distributed \
+        -f examples/training/accelerate/qwen3-14b-sft/evaluate.yaml -n kubeflow-user-example-com
+
+You can tail the logs using following command:
+
+    kubectl logs -f pytorchjob-accel-qwen3-14b-sft-worker-0 -n kubeflow-user-example-com
+
+To uninstall the Helm chart for the fine-tuning job, execute:
+
+    helm uninstall accel-qwen3-14b-sft -n kubeflow-user-example-com
+
+## Convert Fine-tuned Model to Hugging Face
+
+The Helm values are defined in [convert-hf.yaml](./convert-hf.yaml).
+
+To launch model conversion job, execute:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug accel-qwen3-14b-sft \
+        charts/machine-learning/training/pytorchjob-distributed \
+        -f examples/training/accelerate/qwen3-14b-sft/convert-hf.yaml -n kubeflow-user-example-com
+
+You can tail the logs using following command:
+
+    kubectl logs -f pytorchjob-accel-qwen3-14b-sft-worker-0 -n kubeflow-user-example-com
+
+To uninstall the Helm chart for the fine-tuning job, execute:
+
+    helm uninstall accel-qwen3-14b-sft -n kubeflow-user-example-com
+
 ## Output
 
 To access the output stored on EFS and FSx for Lustre file-systems, execute following commands:
