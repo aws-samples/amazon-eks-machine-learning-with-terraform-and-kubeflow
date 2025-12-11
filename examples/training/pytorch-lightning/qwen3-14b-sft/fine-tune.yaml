@@ -1,0 +1,78 @@
+image: 'nvcr.io/nvidia/pytorch:25.10-py3'
+framework: 'pytorch_lightning'
+ebs:
+  storage: 200Gi
+  mount_path: /tmp
+resources:
+  requests:
+    "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
+  limits:
+    "nvidia.com/gpu": 8 
+    "vpc.amazonaws.com/efa": 4
+  nnodes: 2
+  nproc_per_node: 8
+  node_type: 'p4d.24xlarge'  
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+pre_script: 
+  - pip3 install --upgrade pip
+  - pip install lightning==2.5.6
+        transformers==4.57.1
+        datasets==4.4.1
+        peft==0.18.0
+        accelerate==1.12.0
+        tensorboard==2.20.0
+        sentencepiece==0.2.1
+        torchao==0.14.1
+        wandb==0.23.0
+        mpi4py==4.1.1
+  - export MASTER_ADDR="$PET_MASTER_ADDR"
+  - export MASTER_PORT="$PET_MASTER_PORT"
+  - export NODE_RANK="$PET_NODE_RANK"
+  - export WORLD_SIZE="$((PET_NNODES*PET_NPROC_PER_NODE))"
+  - mkdir -p $HOME/logs/$PET_NODE_RANK
+  - PROCESS_LOG=$HOME/logs/$PET_NODE_RANK/fine_tune.log
+  - cd $SCRIPTS_DIR
+train:
+  env:
+    - name: HOME
+      value: "/efs/home/{{ .Release.Name }}"
+    - name: MODEL_PATH
+      value: "/fsx/pretrained-models/Qwen/Qwen3-14B"
+    - name: NCCL_SOCKET_IFNAME 
+      value: "^lo,docker0"
+    - name: NCCL_DEBUG
+      value: "WARN"
+    - name: FI_EFA_USE_DEVICE_RDMA
+      value: "1"
+    - name: FI_PROVIDER
+      value: "efa"
+    - name: FI_EFA_FORK_SAFE
+      value: "1"
+    - name: RDMAV_FORK_SAFE
+      value: "1"
+    - name: TRITON_CACHE_DIR
+      value: /tmp
+    - name: XDG_CACHE_HOME
+      value: /tmp
+    - name: SCRIPTS_DIR
+      value: /etc/framework-scripts
+  command:
+    - python
+  args:
+    - fine_tune.py
+    - --num_nodes=$PET_NNODES
+    - --gpus_per_node=$PET_NPROC_PER_NODE
+    - --hf_model_id="Qwen/Qwen3-14B"
+    - --model_path=$MODEL_PATH
+    - --max_steps=10000
+    - --micro_batch_size=1
+    - --accumulate_grad_batches=4
+    - --val_check_interval=400
+    - --limit_val_batches=40
+    - --early_stopping_threshold=0.0001
+    - --early_stopping_patience=3
+    - '2>&1 | tee $PROCESS_LOG'  
