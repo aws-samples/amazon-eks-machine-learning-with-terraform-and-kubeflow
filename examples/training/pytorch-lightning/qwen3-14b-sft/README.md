@@ -1,4 +1,4 @@
-# Fine-tuning Qwen3-14B using PyTorch FSDP with Accelerate library
+# Fine-tuning Qwen3-14B using PyTorch FSDP with PyTorch Lightning
 
 This example illustrates fine-tuning Qwen3-14B using PyTorch FSDP with [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/) framework for supervised fine-tuning (SFT).
 
