@@ -1,3 +1,16 @@
+{{- if .Values.framework }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: framework-scripts-{{ .Release.Name }}
+data:
+{{- $frameworkGlob := printf "scripts/%s/*" .Values.framework }}
+{{- range $path, $_ := .Files.Glob $frameworkGlob }}
+  {{ base $path }}: |
+{{ $.Files.Get $path | nindent 4 }}
+{{- end }}
+---
+{{- end }}
 apiVersion: ray.io/v1
 kind: RayService
 metadata:
@@ -43,10 +56,16 @@ spec:
             volumeMounts:
               - mountPath: /dev/shm
                 name: shm
-              - mountPath: /etc/vllm/config
-                name: vllm-config
-              - mountPath: /etc/vllm/code
-                name: vllm-code
+              - mountPath: /etc/engine-config
+                name: engine-config
+              {{- if .Values.engine.code }}
+              - mountPath: /etc/engine-code
+                name: engine-code
+              {{- end }}
+              {{- if .Values.framework }}
+              - mountPath: /etc/framework-scripts
+                name: framework-scripts
+              {{- end }}
               {{- $pv_index := 1 }}
               {{- range $pv := .Values.pvc }}
               - mountPath: {{ $pv.mount_path }}
@@ -67,18 +86,22 @@ spec:
               hostPath:
                 path: /dev/shm
                 type: Directory
-            - name: vllm-config
+            - name: engine-config
               configMap:
-                items:
-                - key: engine-config.json
-                  path: engine-config.json
-                name: vllm-config-{{ .Release.Name }}
-            - name: vllm-code
+                defaultMode: 420
+                name: engine-config-{{ .Release.Name }}
+            {{- if .Values.engine.code }}
+            - name: engine-code
               configMap:
-                items:
-                - key: vllm_asyncllmengine.py
-                  path: vllm_asyncllmengine.py
-                name: vllm-code-{{ .Release.Name }}
+                defaultMode: 420
+                name: engine-code-{{ .Release.Name }}
+            {{- end }}
+            {{- if .Values.framework }}
+            - name: framework-scripts
+              configMap:
+                defaultMode: 420
+                name: framework-scripts-{{ .Release.Name }}
+            {{- end }}
             {{- $pv_index := 1 }}
             {{- range $pv := .Values.pvc }}
             - name: pv-{{ $pv_index }}
@@ -142,10 +165,16 @@ spec:
             volumeMounts:
               - mountPath: /dev/shm
                 name: shm
-              - mountPath: /etc/vllm/config
-                name: vllm-config
-              - mountPath: /etc/vllm/code
-                name: vllm-code
+              - mountPath: /etc/engine-config
+                name: engine-config
+              {{- if .Values.engine.code }}
+              - mountPath: /etc/engine-code
+                name: engine-code
+              {{- end }}
+              {{- if .Values.framework }}
+              - mountPath: /etc/framework-scripts
+                name: framework-scripts
+              {{- end }}
               {{- $pv_index := 1 }}
               {{- range $pv := .Values.pvc }}
               - mountPath: {{ $pv.mount_path }}
@@ -166,18 +195,22 @@ spec:
               hostPath:
                 path: /dev/shm
                 type: Directory
-            - name: vllm-config
+            - name: engine-config
               configMap:
-                items:
-                - key: engine-config.json
-                  path: engine-config.json
-                name: vllm-config-{{ .Release.Name }}
-            - name: vllm-code
+                defaultMode: 420
+                name: engine-config-{{ .Release.Name }}
+            {{- if .Values.engine.code }}
+            - name: engine-code
               configMap:
-                items:
-                - key: vllm_asyncllmengine.py
-                  path: vllm_asyncllmengine.py
-                name: vllm-code-{{ .Release.Name }}
+                defaultMode: 420
+                name: engine-code-{{ .Release.Name }}
+            {{- end }}
+            {{- if .Values.framework }}
+            - name: framework-scripts
+              configMap:
+                defaultMode: 420
+                name: framework-scripts-{{ .Release.Name }}
+            {{- end }}
             {{- $pv_index := 1 }}
             {{- range $pv := .Values.pvc }}
             - name: pv-{{ $pv_index }}

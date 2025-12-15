@@ -20,12 +20,12 @@ ray:
     serveConfigV2: |
       applications:
         - name: deepseek-r1-distill-qwen-32b
-          import_path: vllm_asyncllmengine:deployment
+          import_path: openai_api:deployment
           runtime_env:
             env_vars:
               LD_LIBRARY_PATH: "/home/ray/anaconda3/lib/python3.11/site-packages/cusparselt/lib:/usr/local/cuda/lib64"
-              ENGINE_CONFIG: "/etc/vllm/config/engine-config.json"
-              PYTHONPATH: "/etc/vllm/code"
+              ENGINE_CONFIG: "/etc/engine-config/engine-config.json"
+              PYTHONPATH: "/etc/framework-scripts"
             pip:
               - "vllm==0.11.0"
               - "pandas==2.3.0"
@@ -42,7 +42,7 @@ ray:
               num_gpus: 8
   service_unhealthy_threshold_secs: 900
   deployment_unhealthy_threshold_secs: 300
-vllm:
+engine:
   config:
     served_model_name: "deepSeek-r1-distill-qwen-32b"
     model: "/fsx/pretrained-models/deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"

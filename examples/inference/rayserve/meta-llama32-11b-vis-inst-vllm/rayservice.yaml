@@ -20,12 +20,12 @@ ray:
     serveConfigV2: |
       applications:
         - name: meta-llama32-11b-vis-inst
-          import_path: vllm_asyncllmengine:deployment
+          import_path: openai_api:deployment
           runtime_env:
             env_vars:
               LD_LIBRARY_PATH: "/home/ray/anaconda3/lib/python3.11/site-packages/cusparselt/lib:/usr/local/cuda/lib64"
-              ENGINE_CONFIG: "/etc/vllm/config/engine-config.json"
-              PYTHONPATH: "/etc/vllm/code"
+              ENGINE_CONFIG: "/etc/engine-config/engine-config.json"
+              PYTHONPATH: "/etc/framework-scripts"
             pip:
               - "vllm==0.10.2"
               - "pandas==2.3.0"
@@ -40,7 +40,7 @@ ray:
               target_ongoing_requests: 32
   service_unhealthy_threshold_secs: 900
   deployment_unhealthy_threshold_secs: 300
-vllm:
+engine:
   config:
     served_model_name: "meta-llama32-11b-vision-instruct"
     model: "/fsx/pretrained-models/meta-llama/Llama-3.2-11B-Vision-Instruct"

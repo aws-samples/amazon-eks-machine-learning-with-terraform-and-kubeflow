@@ -37,11 +37,11 @@ ray:
     serveConfigV2: |
       applications:
         - name: meta-llama3-8b-instruct
-          import_path: vllm_asyncllmengine:deployment
+          import_path: openai_api:deployment
           runtime_env:
             env_vars:
-              ENGINE_CONFIG: "/etc/vllm/config/engine-config.json"
-              PYTHONPATH: "/etc/vllm/code"
+              ENGINE_CONFIG: "/etc/engine-config/engine-config.json"
+              PYTHONPATH: "/etc/framework-scripts"
           deployments:
           - name: VLLMDeployment
             max_ongoing_requests: 48
@@ -54,7 +54,7 @@ ray:
                 "neuron_cores": 8
   service_unhealthy_threshold_secs: 900
   deployment_unhealthy_threshold_secs: 900
-vllm:
+engine:
   config:
     served_model_name: "meta-llama3-8b-instruct"
     model: "/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct"

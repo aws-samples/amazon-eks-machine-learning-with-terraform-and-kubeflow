@@ -24,3 +24,4 @@ resources:
   limits: {}
 tolerations: []
 pvc: []
+framework: vllm
