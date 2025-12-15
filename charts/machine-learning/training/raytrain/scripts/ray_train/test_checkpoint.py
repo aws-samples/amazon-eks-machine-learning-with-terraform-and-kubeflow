@@ -12,6 +12,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import PeftModel
 import evaluate
 from vllm import LLM, SamplingParams
+import ray
 
 @dataclass
 class Config:
@@ -46,13 +47,29 @@ class Config:
     def checkpoint_path(self) -> str:
         """Find the latest checkpoint in the checkpoints directory."""
         ckpt_dir_path = Path(self.checkpoints_dir)
-        # Look for checkpoint_* directories from Ray Train
-        ckpt_dirs = [d for d in ckpt_dir_path.glob("checkpoint_*") if d.is_dir()]
+        
+        # Look for checkpoint_* directories, potentially nested under TorchTrainer_* dirs
+        ckpt_dirs = []
+        
+        # First, check if there are TorchTrainer_* directories (Ray Train structure)
+        trainer_dirs = list(ckpt_dir_path.glob("TorchTrainer_*"))
+        if trainer_dirs:
+            # Sort trainer directories by modification time and get the latest
+            latest_trainer_dir = max(trainer_dirs, key=lambda p: p.stat().st_mtime)
+            # Look inside the latest trainer directory for checkpoint_* directories
+            ckpt_dirs = [d for d in latest_trainer_dir.glob("checkpoint_*") if d.is_dir()]
+        else:
+            # Fallback: look directly for checkpoint_* directories
+            ckpt_dirs = [d for d in ckpt_dir_path.glob("checkpoint_*") if d.is_dir()]
+        
         if not ckpt_dirs:
             raise FileNotFoundError(f"No checkpoint directories found in {ckpt_dir_path}")
-        ckpt_dirs = sorted(ckpt_dirs, key=lambda p: p.stat().st_mtime)
+        
+        # Sort by modification time and get the latest checkpoint
+        latest_ckpt = max(ckpt_dirs, key=lambda p: p.stat().st_mtime)
+        
         # Return the checkpoint subdirectory inside the Ray checkpoint
-        return str(ckpt_dirs[-1] / "checkpoint")
+        return str(latest_ckpt / "checkpoint")
     
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> 'Config':
@@ -104,14 +121,14 @@ def load_checkpoint_in_memory(config: Config):
         print("\nLoading fully fine-tuned model...")
         model = AutoModelForCausalLM.from_pretrained(
             checkpoint_path,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             trust_remote_code=True,
         )
     else:
         print(f"\nLoading base model: {config.base_model}")
         base_model = AutoModelForCausalLM.from_pretrained(
             config.model_path,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             trust_remote_code=True,
         )
         print("\nLoading LoRA adapter...")
@@ -324,7 +341,11 @@ def main():
     parser = create_parser_from_dataclass(Config)
     args = parser.parse_args()
     config = Config.from_args(args)
-    
+
+    # Initialize Ray with runtime_env
+    if not ray.is_initialized():
+        ray.init()
+
     run_testing(config)
 
 if __name__ == "__main__":

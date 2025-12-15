@@ -21,11 +21,8 @@ ray:
         - transformers==4.57.1 
         - datasets==4.4.1
         - peft==0.18.0 
-        - tensorboard==2.20.0
         - sentencepiece==0.2.1
         - torchao==0.14.1
-        - wandb==0.23.0
-        - mpi4py==4.1.1
 image:
 image_pull_policy: Always
 ebs:
@@ -34,19 +31,17 @@ ebs:
 resources:
   requests:
     "nvidia.com/gpu": 8
-    "vpc.amazonaws.com/efa": 4
   limits:
-    "nvidia.com/gpu": 8 
-    "vpc.amazonaws.com/efa": 4 
-  nnodes: 2 
-  node_type: 'p4d.24xlarge' 
+    "nvidia.com/gpu": 8
+  nnodes: 1 
+  node_type: 'g6e.48xlarge' 
 tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"
     effect: "NoSchedule"
 pre_script:
     - mkdir -p $HOME/logs/$HOSTNAME
-    - PROCESS_LOG=$HOME/logs/$HOSTNAME/fine_tune.log
+    - PROCESS_LOG=$HOME/logs/$HOSTNAME/convert_checkpoint_to_hf.log
     - cd $SCRIPTS_DIR
 train:
   env:
@@ -75,14 +70,7 @@ train:
   command:
     - python
   args:
-    - fine_tune.py
-    - --hf_model_id="Qwen/Qwen3-14B"
+    - convert_checkpoint_to_hf.py
+    - --base_model="Qwen/Qwen3-14B"
     - --model_path=$MODEL_PATH
-    - --per_device_train_batch_size=2
-    - --per_device_eval_batch_size=2
-    - --gradient_accumulation_steps=2
-    - --eval_steps=10
-    - --max_eval_samples=64
-    - --early_stopping_threshold=0.0001
-    - --early_stopping_patience=3
     - '2>&1 | tee $PROCESS_LOG' 
