@@ -177,8 +177,8 @@ class TritonPythonModel:
             self.model = torch.compile(self.model)
     
     def _init_service(self):
-        """Initialize model service"""
-        max_batch_size = int(self.model_config.get('max_batch_size', 8))
+        """Initialize model service - loads model, tokenizer, and sets up bucketing"""
+        max_batch_size = int(self.model_config.get('max_batch_size', 0))
         using_decoupled = pb_utils.using_decoupled_model_transaction_policy(self.model_config)
         
         assert not using_decoupled, \
@@ -191,9 +191,9 @@ class TritonPythonModel:
         with open(model_args_filepath) as file:
             properties = json.load(file)
         
-        # Initialize bucket configurations
-        self.bucket_batch_size = sorted(properties.get("bucket_batch_size", [1, 2, 4, 8]))
-        self.bucket_seq_len = sorted(properties.get("bucket_seq_len", [32, 64, 128]))
+        # Initialize bucket configurations for XLA
+        self.bucket_batch_size = sorted(properties.get("bucket_batch_size", [1, 2, 4, 8])) if self._is_xla else None
+        self.bucket_seq_len = sorted(properties.get("bucket_seq_len", [32, 64, 128])) if self._is_xla else None
         
         # Validate power of 2
         for bs in self.bucket_batch_size:
@@ -202,10 +202,10 @@ class TritonPythonModel:
         for bsl in self.bucket_seq_len:
             assert (bsl & (bsl-1) == 0), f"bucket seq len {bsl} is not power of 2"
         
-        self.max_batch_size = max(self.bucket_batch_size)
-        self.max_seq_len = max(self.bucket_seq_len)
+        self.max_batch_size = max(self.bucket_batch_size) if self.bucket_batch_size else properties.get("max_batch_size", 1)
+        self.max_seq_len = max(self.bucket_seq_len) if self.bucket_seq_len else properties.get("max_seq_len", 128)
         
-        assert self.max_batch_size == max_batch_size, \
+        assert max_batch_size == 0 or self.max_batch_size == max_batch_size, \
             f"Triton Server max_batch_size {max_batch_size} != model max_batch_size: {self.max_batch_size}"
         
         # Embedding-specific configuration
