@@ -8,15 +8,18 @@
 | [Bert GLUE MRPC Pre-training](./accelerate/bert-glue-mrpc/README.md)    | Nvidia GPU  | BERT Glue MRPC Pretraining    |
 | [Qwen/Qwen3-14B Fine-tuning](./accelerate/qwen3-14b-sft/README.md)    | Nvidia GPU  | Qwen/Qwen3-14B PEFT  |
 
-### [Nemo](https://github.com/NVIDIA/NeMo)
+
+### [Nemo 2.0](https://docs.nvidia.com/nemo-framework/user-guide/latest/overview.html)
 
 | Model      | Accelerator | Notes |
 | ----------- | ----------- | -------- |
-| [Llama 2 7B PEFT LoRA](./nemo-megatron/llama2-7b-peft/README.md)  | Nvidia GPU     | Llama 2 7B PEFT LoRA on Pubmedqa dataset |
-| [Llama 3.1 8B PEFT LoRA](./nemo-megatron/llama31-8b-peft-dolphin/README.md) | Nvidia GPU       | Llama 3.1 8B PEFT LoRA on Dolphin dataset |
-| [Mistral 7B v0.1 PEFT LoRA](./nemo-megatron/mistral-7b-v01-peft/README.md)   | Nvidia GPU     | Mistral 7B v0.1 PEFT LoRA on Pubmedqa dataset |
-| [Mistral 7B v0.1  PEFT LoRA](./nemo-megatron/mistral-7b-v01-peft-dolphin/README.md) | Nvidia GPU       | Mistral 7B v0.1 PEFT LoRA  PEFT LoRA on Dolphin dataset |
+| [Qwen/Qwen3-14B Fine-tuning](./nemo2/qwen3-14b-sft/README.md)    | Nvidia GPU  | Qwen/Qwen3-14B PEFT  |
 
+### [PyTorch Lightning](https://github.com/Lightning-AI/pytorch-lightning)
+
+| Model      | Accelerator | Notes |
+| ----------- | ----------- | -------- |
+| [Qwen/Qwen3-14B Fine-tuning](./pytorch-lightning/qwen3-14b-sft/README.md)    | Nvidia GPU  | Qwen/Qwen3-14B PEFT  |
 
 ### [Neuronx Distributed Training](https://github.com/aws-neuron/neuronx-distributed-training)
 
@@ -29,7 +32,8 @@
 
 | Model      | Accelerator | Notes |
 | ----------- | ----------- | -------- |
-| [BERT](./raytrain/lightning-bert/README.md)   | Nvidia GPU  | Fine-tune BERT  using Lightning|
+| [BERT](./raytrain/lightning-bert/README.md)   | Nvidia GPU  | Fine-tune BERT|
+| [Qwen/Qwen3-14B Fine-tuning](./raytrain/qwen3-14b-sft/README.md)   | Nvidia GPU  | Qwen/Qwen3-14B PEFT |
 
 
 
