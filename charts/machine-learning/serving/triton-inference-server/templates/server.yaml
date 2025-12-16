@@ -1,3 +1,16 @@
+{{- if .Values.framework }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: framework-scripts-{{ .Release.Name }}
+data:
+{{- $frameworkGlob := printf "scripts/%s/*" .Values.framework }}
+{{- range $path, $_ := .Files.Glob $frameworkGlob }}
+  {{ base $path }}: |
+{{ $.Files.Get $path | nindent 4 }}
+{{- end }}
+---
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -84,6 +97,12 @@ spec:
           hostPath:
             path: /dev/shm
             type: Directory
+        {{- if .Values.framework }}
+        - name: framework-scripts
+          configMap:
+            defaultMode: 420
+            name: framework-scripts-{{ .Release.Name }}
+        {{- end }}
         {{- $pv_index := 1 }}
         {{- range $pv := .Values.pvc }}
         - name: pv-{{ $pv_index }}
@@ -156,6 +175,10 @@ spec:
               name: config
             - mountPath: /dev/shm
               name: shm
+            {{- if .Values.framework }}
+            - mountPath: /etc/framework-scripts
+              name: framework-scripts
+            {{- end }}
             {{- $pv_index := 1 }}
             {{- range $pv := .Values.pvc }}
             - mountPath: {{ $pv.mount_path }}
