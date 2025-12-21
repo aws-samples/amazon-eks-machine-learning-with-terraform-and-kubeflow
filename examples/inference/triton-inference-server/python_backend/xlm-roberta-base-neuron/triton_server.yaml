@@ -70,12 +70,12 @@ pre_script:
   - MODEL_NAME=xml-roberta-base
   - mkdir -p $MODEL_REPO/$MODEL_NAME/$VERSION
   - cp $SCRIPTS_DIR/masked_lm.py $MODEL_REPO/$MODEL_NAME/$VERSION/model.py
+  - cp $SCRIPTS_DIR/encoder_base.py $MODEL_REPO/$MODEL_NAME/$VERSION/encoder_base.py
   - cp /tmp/model.json $MODEL_REPO/$MODEL_NAME/$VERSION/model.json
   - cp /tmp/config.pbtxt $MODEL_REPO/$MODEL_NAME/config.pbtxt
   - export NEURON_CC_FLAGS="--model-type transformer --enable-fast-loading-neuron-binaries"
   - export NEURON_COMPILE_CACHE_URL=$CACHE_DIR
   - export TOKENIZERS_PARALLELISM="false"
-  - export PYTHONPATH=$SCRIPTS_DIR:$PYTHONPATH
 server:
   ports:
     - name: 'http'

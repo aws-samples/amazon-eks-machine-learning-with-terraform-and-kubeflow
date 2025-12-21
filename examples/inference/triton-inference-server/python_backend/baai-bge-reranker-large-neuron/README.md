@@ -20,14 +20,14 @@ This example uses a custom Docker container for Triton Inference Server with PyT
 To download Hugging Face BAAI Bge Reranker Large pre-trained model weights, replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm install --debug triton-server-baai-bge-reranker-large-neuronx     \
+    helm install --debug triton-server-baai-bge-reranker-large-neuron     \
         charts/machine-learning/model-prep/hf-snapshot    \
         --set-json='env=[{"name":"HF_MODEL_ID","value":"BAAI/bge-reranker-large"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
         -n kubeflow-user-example-com
 
 Uninstall the Helm chart at completion:
 
-    helm uninstall triton-server-baai-bge-reranker-large-neuronx -n kubeflow-user-example-com
+    helm uninstall triton-server-baai-bge-reranker-large-neuron -n kubeflow-user-example-com
 
 
 ## Launch Triton Server
@@ -35,7 +35,7 @@ Uninstall the Helm chart at completion:
 To launch Triton server:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm install --debug triton-server-baai-bge-reranker-large-neuronx \
+    helm install --debug triton-server-baai-bge-reranker-large-neuron \
         charts/machine-learning/serving/triton-inference-server \
         -f examples/inference/triton-inference-server/python_backend/baai-bge-reranker-large-neuron/triton_server.yaml -n kubeflow-user-example-com
 
@@ -45,8 +45,8 @@ To launch Triton server:
 To stop the service:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm uninstall triton-server-baai-bge-reranker-large-neuronx -n kubeflow-user-example-com
+    helm uninstall triton-server-baai-bge-reranker-large-neuron -n kubeflow-user-example-com
 
 ### Logs
 
-Triton server logs are available in `/efs/home/triton-server-baai-bge-reranker-large-neuronx/logs` folder. 
+Triton server logs are available in `/efs/home/triton-server-baai-bge-reranker-large-neuron/logs` folder. 

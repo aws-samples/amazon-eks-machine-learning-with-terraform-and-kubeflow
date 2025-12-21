@@ -1,11 +1,11 @@
 import numpy as np
+import torch
 from transformers import AutoModelForSequenceClassification
 import triton_python_backend_utils as pb_utils
 from encoder_base import EncoderBaseModel
 
-
 class TritonPythonModel(EncoderBaseModel):
-    """Sequence Classification implementation using EncoderBaseModel"""
+    """Sequence Classification implementation (Fixed for EncoderBaseModel)"""
     
     def _init_output_config(self):
         """Initialize output tensor configuration for sequence classification"""
@@ -17,62 +17,47 @@ class TritonPythonModel(EncoderBaseModel):
         self.logger.log_info(f"Loading AutoModelForSequenceClassification from {model_location}")
         return AutoModelForSequenceClassification.from_pretrained(model_location)
     
-    def _process_outputs(self, model_output, original_lengths):
-        """Process sequence classification logits - return per-sequence predictions
+    def _process_outputs(self, model_output, attention_mask):
+        """Process sequence classification logits - one prediction per sequence"""
         
-        Args:
-            model_output: Model output with .logits attribute
-            original_lengths: List of original sequence lengths (not used for seq classification)
-            
-        Returns:
-            List of logits arrays, one per input
-        """
-        # Get logits and move to CPU
-        logits = model_output.logits.detach().cpu()
+        # 1. Get the logits and move to CPU
+        # Shape: [Batch_Padded, Num_Labels]
+        logits = model_output.logits.detach().cpu().numpy().astype(self.logits_dtype)
         
-        # For sequence classification, we have one prediction per input
-        # Shape: [batch_size, num_labels]
-        results = []
-        for i in range(len(original_lengths)):
-            # Convert to numpy then to list for Triton
-            results.append(logits[i].numpy().astype(self.logits_dtype).tolist())
-        
-        return results
+        # 2. Return the full numpy array or a list of rows
+        # We do NOT slice by input_count here because encoder_base.py 
+        # will handle the final [:input_batch_size] slice.
+        return [logits[i] for i in range(len(logits))]
     
-    def _create_response(self, result):
-        """Create Triton response from processed logits
+    def _create_response(self, request_results):
+        """Create Triton response from a slice of results
         
         Args:
-            result: List of logits for single input [num_labels]
-            
-        Returns:
-            pb_utils.InferenceResponse with logits tensor
+            request_results: List of numpy arrays [num_labels] for a single request
         """
-        output_tensor = pb_utils.Tensor("logits", np.array(result, dtype=self.logits_dtype))
+        # Stack the list of arrays into a single [Batch, Num_Labels] tensor
+        output_array = np.stack(request_results)
+        
+        output_tensor = pb_utils.Tensor("logits", output_array)
         return pb_utils.InferenceResponse(output_tensors=[output_tensor])
     
     @staticmethod
     def auto_complete_config(auto_complete_model_config):
         """Auto-complete Triton config for sequence classification"""
         inputs = [{"name": "text_input", "data_type": "TYPE_STRING", "dims": [1]}]
+        # Dimensions are [Num_Labels]
         outputs = [{"name": "logits", "data_type": "TYPE_FP32", "dims": [-1]}]
 
         config = auto_complete_model_config.as_dict()
-        input_names = []
-        output_names = []
-        for input in config['input']:
-            input_names.append(input['name'])
-        for output in config['output']:
-            output_names.append(output['name'])
+        input_names = [i['name'] for i in config.get('input', [])]
+        output_names = [o['name'] for o in config.get('output', [])]
 
-        for input in inputs:
-            if input['name'] not in input_names:
-                auto_complete_model_config.add_input(input)
-        for output in outputs:
-            if output['name'] not in output_names:
-                auto_complete_model_config.add_output(output)
+        for inp in inputs:
+            if inp['name'] not in input_names:
+                auto_complete_model_config.add_input(inp)
+        for out in outputs:
+            if out['name'] not in output_names:
+                auto_complete_model_config.add_output(out)
 
         auto_complete_model_config.set_model_transaction_policy(dict(decoupled=False))
-        auto_complete_model_config.set_max_batch_size(0)
-
         return auto_complete_model_config
