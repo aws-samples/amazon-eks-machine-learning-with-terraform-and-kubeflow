@@ -21,11 +21,6 @@
 | ----------- | ----------- | -------- |
 | [Qwen/Qwen3-14B Fine-tuning](./pytorch-lightning/qwen3-14b-sft/README.md)    | Nvidia GPU  | Qwen/Qwen3-14B PEFT  |
 
-### [Neuronx Distributed Training](https://github.com/aws-neuron/neuronx-distributed-training)
-
-| Model      | Accelerator | Notes |
-| ----------- | ----------- | -------- |
-| [Llama 3 70B ](./neuronx-distributed-training/llama3_70b/README.md)    | AWS Trainium1    |  Llama3 70B pre-train on Wikicorpus |
 
 ### [RayTrain](https://docs.ray.io/en/latest/train/train.html)
 
