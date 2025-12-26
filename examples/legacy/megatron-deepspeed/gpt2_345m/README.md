@@ -6,8 +6,12 @@ This example shows how to use [pytorch-distributed](../../../charts/machine-lear
 
 The example also shows use of [data-process](../../../charts/machine-learning/data-prep/data-process/Chart.yaml) Helm chart to pre-process the [Hugging Face Wikicorpus](https://huggingface.co/datasets/wikicorpus) dataset.
 
-## Prerequisites
-Before proceeding, complete the [Prerequisites](../../../../README.md#prerequisites) and [Getting started](../../../../README.md#getting-started). See [What is in the YAML file](../../../../README.md#yaml-recipes) to understand the common fields in the Helm values files. There are some fields that are specific to a machine learning chart.
+## Build and Push Docker Container
+
+This example uses a custom Docker container for Megatron-Deepspeed. Build and push this container using following command (replace `aws-region` with your AWS Region name):
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    ./containers/megatron-deepspeed/build_tools/build_and_push.sh aws-region
 
 ## Implicitly defined environment variables
 
