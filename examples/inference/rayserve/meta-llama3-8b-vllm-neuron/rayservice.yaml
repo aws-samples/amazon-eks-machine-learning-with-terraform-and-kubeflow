@@ -1,5 +1,5 @@
 ray:
-  version: '2.49.0'
+  version: '2.52.1'
   dashboard:
     host: '0.0.0.0'
   restart_policy:
@@ -30,9 +30,7 @@ ray:
     - name: NEURON_COMPILE_CACHE_URL
       value: "/tmp"
     - name: NEURON_COMPILED_ARTIFACTS
-      value: /efs/home/{{ .Release.Name }}/config
-    - name: VLLM_NEURON_FRAMEWORK
-      value: "neuronx-distributed-inference"
+      value: /efs/home/{{ .Release.Name }}/neuron-compiler-artifacts
   serve_config_v2: 
     serveConfigV2: |
       applications:
@@ -60,16 +58,12 @@ engine:
     model: "/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct"
     tokenizer: "/fsx/pretrained-models/meta-llama/Meta-Llama-3-8B-Instruct"
     tensor_parallel_size: 8
-    disable_log_stats: true
-    disable_log_requests: true
     max_num_seqs: 4
     dtype: "auto"
     max_model_len: 8192
-    gpu_memory_utilization: 0.9
-    enforce_eager: false
-    enable_prefix_caching: true
-    preemption_mode: "swap"
-    override_neuron_config: {"continuous_batching": {"max_num_seqs": 4,"optimized_paged_attention": true}}
+    max_num_batched_tokens: 8192
+    enable_prefix_caching: false
+    enable_chunked_prefill: false
 image:
 image_pull_policy: IfNotPresent
 scheduler_name: neuron-scheduler
@@ -94,3 +88,4 @@ pvc:
     mount_path: /fsx
   - name: pv-efs
     mount_path: /efs
+framework: vllm-0.12.0

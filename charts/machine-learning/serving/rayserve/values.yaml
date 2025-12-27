@@ -1,5 +1,5 @@
 ray:
-  version: '2.49.0'
+  version: '2.52.1'
   dashboard:
     host: '0.0.0.0'
   ports: []
@@ -24,4 +24,4 @@ resources:
   limits: {}
 tolerations: []
 pvc: []
-framework: vllm
+framework: vllm-0.11.0

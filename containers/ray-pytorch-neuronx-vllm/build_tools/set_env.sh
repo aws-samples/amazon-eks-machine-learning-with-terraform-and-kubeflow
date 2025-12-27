@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
 export IMAGE_NAME=ray-neuronx-vllm
-export IMAGE_TAG=ray2.49.0-py311-2.26.1-0.9.0.1
+export IMAGE_TAG=ray2.52.1-py312-2.27.0-0.11.0

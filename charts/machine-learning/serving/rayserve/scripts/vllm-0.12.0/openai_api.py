@@ -1,0 +1,470 @@
+import os
+import sys
+import json
+import asyncio
+import traceback
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, Response, StreamingResponse
+from ray import serve
+from vllm.engine.arg_utils import AsyncEngineArgs
+from vllm.engine.async_llm_engine import AsyncLLMEngine
+
+from vllm.entrypoints.openai.serving_chat import OpenAIServingChat
+from vllm.entrypoints.openai.serving_completion import OpenAIServingCompletion
+from vllm.entrypoints.openai.serving_tokenization import OpenAIServingTokenization
+
+from vllm.entrypoints.pooling.embed.serving import OpenAIServingEmbedding
+from vllm.entrypoints.pooling.classify.serving import ServingClassification
+from vllm.entrypoints.pooling.score.serving import ServingScores
+from vllm.entrypoints.openai.serving_models import (BaseModelPath,
+                                                    LoRAModulePath,
+                                                    OpenAIServingModels)
+
+from vllm.entrypoints.openai.protocol import (
+    ChatCompletionRequest,
+    ChatCompletionResponse,
+    CompletionRequest,
+    CompletionResponse,
+    TokenizeRequest,
+    TokenizeResponse,
+    ErrorResponse,
+)
+
+from vllm.entrypoints.pooling.embed.protocol import (
+    EmbeddingRequest,
+    EmbeddingResponse,
+)
+
+from vllm.entrypoints.pooling.classify.protocol import (
+    ClassificationRequest,
+    ClassificationResponse,
+)
+
+from vllm.entrypoints.pooling.score.protocol import (
+    RerankRequest,
+    RerankResponse,
+    ScoreRequest,
+    ScoreResponse,
+)
+
+from vllm.entrypoints.logger import RequestLogger
+from vllm.entrypoints.chat_utils import load_chat_template
+try:
+    from vllm.config import StructuredOutputsConfig
+except ImportError:
+    StructuredOutputsConfig = None
+
+import vllm
+
+app = FastAPI()
+
+@serve.deployment()
+@serve.ingress(app)
+class VLLMDeployment:
+    def __init__(self):
+        # Load engine configuration
+        config_path = os.getenv("ENGINE_CONFIG")
+        if not config_path:
+            raise ValueError("ENGINE_CONFIG env variable for engine config path is required")
+        if not os.path.isfile(config_path):
+            raise FileNotFoundError(f"ENGINE_CONFIG {config_path} does not exist")
+
+        with open(config_path, "r") as f:
+            self._engine_config = json.load(f)
+
+        self._served_model_name = self._engine_config.get("served_model_name")
+        if not self._served_model_name:
+            raise ValueError("served_model_name is required in engine config")
+
+        # Initialize engine
+        self._supported_tasks = self._engine_config.pop("supported_tasks", ["generate"]) 
+        print(f"Engine config: {self._engine_config}", flush=True)
+
+        try:
+            self._engine_args = AsyncEngineArgs(**self._engine_config)
+            print(f"Engine args: {self._engine_args}", flush=True)
+            print("Initializing engine", flush=True)
+            self._engine_client = AsyncLLMEngine.from_engine_args(self._engine_args)
+            print("Engine initialized", flush=True)
+        except Exception as e:
+            print(f"Failed to initialize engine: {e}", flush=True)
+            traceback.print_exc()
+            sys.exit(1)
+
+        self._app_inited = False
+        self._init_lock = asyncio.Lock()
+
+    async def _create_openai_handlers(self):
+        if self._app_inited:
+            return
+        
+        # Use lock to ensure thread-safe initialization
+        async with self._init_lock:
+            if self._app_inited:
+                return
+            
+            print("Initializing OpenAI handlers")
+            try:
+                supported_tasks = await self._engine_client.get_supported_tasks()
+            except AttributeError:
+                supported_tasks = self._supported_tasks
+                print(f"Using supported_tasks from config: {supported_tasks}")
+                
+            vllm_config = self._engine_client.vllm_config
+            print(f"vllm_config: {vllm_config}")
+            model_config = self._engine_client.model_config
+            
+            served_model_names=[self._served_model_name]
+            base_model_paths = [
+                BaseModelPath(name=name, model_path=self._engine_config.get("model"))
+                for name in served_model_names
+            ]
+            # Merge default_mm_loras into the static lora_modules
+            default_mm_loras = (vllm_config.lora_config.default_mm_loras
+                                if vllm_config.lora_config is not None else {})
+
+            lora_modules = self._engine_config.get("lora_modules", None)
+            if default_mm_loras:
+                default_mm_lora_paths = [
+                    LoRAModulePath(
+                        name=modality,
+                        path=lora_path,
+                    ) for modality, lora_path in default_mm_loras.items()
+                ]
+                if lora_modules is None:
+                    lora_modules = default_mm_lora_paths
+                else:
+                    lora_modules += default_mm_lora_paths
+
+            print("Initialize serving models")
+            self._serving_models = OpenAIServingModels(
+                engine_client=self._engine_client,
+                base_model_paths=base_model_paths,
+                lora_modules=lora_modules,
+            )
+
+            enable_log_requests=self._engine_config.get("enable_log_requests", False)
+            if enable_log_requests:
+                max_log_len = self._engine_config.get("max_log_len", 4096)
+                request_logger = RequestLogger(max_log_len=max_log_len)
+            else:
+                request_logger = None
+
+            chat_template=self._engine_config.get("chat_template")
+            resolved_chat_template = load_chat_template(chat_template) if chat_template else None
+            
+            structured_outputs_config=self._get_structured_outputs_config()
+
+            return_tokens_as_token_ids=self._engine_config.get("return_tokens_as_token_ids", False)
+            enable_prompt_tokens_details=self._engine_config.get("enable_prompt_tokens_details", False)
+            enable_force_include_usage=self._engine_config.get("enable_force_include_usage", False)
+            log_error_stack=self._engine_config.get("log_error_stack", False)
+            chat_template_content_format=self._engine_config.get("chat_template_content_format", "auto")
+            response_role=self._engine_config.get("response_role", "assistant")
+            trust_request_chat_template=self._engine_config.get("trust_request_chat_template", False)
+            enable_auto_tools=self._engine_config.get("enable_auto_tool_choice", False)
+            exclude_tools_when_tool_choice_none=self._engine_config.get("exclude_tools_when_tool_choice_none", False)
+            tool_parser=self._engine_config.get("tool_call_parser")
+            enable_log_outputs=self._engine_config.get("enable_log_outputs", False)
+
+            vllm_version = tuple(map(int, vllm.__version__.split('.')[:3]))
+            assert vllm_version >= (0, 9, 0), "Minimum VLLM version required is 0.9.0"
+
+            # Initialize serving chat (handles /v1/chat/completions)
+            print("Initialize serving chat")
+            self._serving_chat = OpenAIServingChat(
+                engine_client=self._engine_client,
+                models=self._serving_models,
+                request_logger=request_logger,
+                response_role=response_role,
+                chat_template=resolved_chat_template,
+                chat_template_content_format=chat_template_content_format,
+                return_tokens_as_token_ids=return_tokens_as_token_ids,
+                enable_auto_tools=enable_auto_tools,
+                tool_parser=tool_parser,
+                reasoning_parser=structured_outputs_config.reasoning_parser if structured_outputs_config else "",
+                enable_prompt_tokens_details=enable_prompt_tokens_details,
+                **({"enable_force_include_usage": enable_force_include_usage} if vllm_version >= (0, 10, 0) else {}),
+                **({"enable_log_outputs": enable_log_outputs} if vllm_version >= (0, 10, 1) else {}),
+                **({"log_error_stack": log_error_stack} if vllm_version >= (0, 10, 2) else {}),
+                **({"exclude_tools_when_tool_choice_none": exclude_tools_when_tool_choice_none} if vllm_version >= (0, 10, 2) else {}),
+                **({"trust_request_chat_template": trust_request_chat_template} if vllm_version >= (0, 11, 0) else {}),
+            ) if "generate" in supported_tasks else None
+
+            # Initialize serving completion (handles /v1/completions)
+            print("Initialize serving completion")
+            self._serving_completion = OpenAIServingCompletion(
+                engine_client=self._engine_client,
+                models=self._serving_models,
+                request_logger=request_logger,
+                return_tokens_as_token_ids=return_tokens_as_token_ids,
+                **({"enable_prompt_tokens_details": enable_prompt_tokens_details} if vllm_version >= (0, 10, 0) else {}),
+                **({"enable_force_include_usage": enable_force_include_usage} if vllm_version >= (0, 10, 0) else {}),
+                **({"log_error_stack": log_error_stack} if vllm_version >= (0, 10, 2) else {}),
+            ) if "generate" in supported_tasks else None
+            
+            # Initialize serving tokenization (handles /v1/tokenize)
+            print("Initialize serving tokenization")
+            self._serving_tokenization = OpenAIServingTokenization(
+                engine_client=self._engine_client,
+                models=self._serving_models,
+                request_logger=request_logger,
+                chat_template=resolved_chat_template,
+                chat_template_content_format=chat_template_content_format,
+                **({"log_error_stack": log_error_stack} if vllm_version >= (0, 10, 2) else {}),
+            ) 
+            
+            # Check if model actually supports embeddings by checking task
+            print("Initialize serving embeddings")
+            self._serving_embedding = OpenAIServingEmbedding(
+                engine_client=self._engine_client,
+                models=self._serving_models,
+                request_logger=request_logger,
+                chat_template=resolved_chat_template,
+                chat_template_content_format=chat_template_content_format,
+                **({"log_error_stack": log_error_stack} if vllm_version >= (0, 10, 2) else {}),
+            ) if "embed" in supported_tasks else None
+        
+            self._serving_classification = ServingClassification(
+                engine_client=self._engine_client,
+                models=self._serving_models,
+                request_logger=request_logger,
+                **({"log_error_stack": log_error_stack} if vllm_version >= (0, 10, 2) else {}),
+            ) if "classify" in supported_tasks else None
+
+            self._serving_scores = ServingScores(
+                engine_client=self._engine_client,
+                models=self._serving_models,
+                request_logger=request_logger,
+                **({"log_error_stack": log_error_stack} if vllm_version >= (0, 10, 2) else {}),
+            ) if ("embed" in supported_tasks or "score" in supported_tasks) else None
+            
+            self._app_inited = True
+            print("OpenAI handlers initialized successfully")
+
+    def _get_structured_outputs_config(self):
+        if StructuredOutputsConfig is None:
+            return None
+        
+        structured_outputs_config=self._engine_config.get("structured_outputs_config")
+        if isinstance(structured_outputs_config, dict):
+            structured_outputs_config = StructuredOutputsConfig(**structured_outputs_config)
+        else:
+            structured_outputs_config = StructuredOutputsConfig(
+                    backend='auto',
+                    disable_fallback=False,
+                    disable_any_whitespace=False,
+                    disable_additional_properties=False,
+                    reasoning_parser='',
+                    enable_in_reasoning=False
+                )
+        return structured_outputs_config
+    
+    @app.get("/ping")
+    async def ping(self) -> JSONResponse:
+        return await self.health()
+
+    @app.get("/health")
+    async def health(self) -> JSONResponse:
+        try:
+            await self._engine_client.check_health()
+            return JSONResponse({"status": "ok"})
+        except Exception as e:
+            print(f"Health check failed: {e}")
+            return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
+
+    @app.get("/version")
+    async def get_version(self) -> JSONResponse:
+        await self._create_openai_handlers()
+        return JSONResponse({
+            "vllm_version": vllm.__version__,
+            "api_version": "v1",
+            "model": self._served_model_name,
+            "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+            "capabilities": {
+                "chat_completions": self._serving_chat is not None,
+                "completions": self._serving_completion is not None,
+                "embeddings": self._serving_embedding is not None,
+                "classification": self._serving_classification is not None,
+                "scores": self._serving_scores is not None,
+                "tokenization": True
+            }
+        })
+
+    @app.get("/v1/models")
+    async def list_models(self) -> Response:
+        await self._create_openai_handlers()
+        response = await self._serving_models.show_available_models()
+        return JSONResponse(content=response.model_dump())
+
+    @app.get("/v1/models/{model_id}")
+    async def retrieve_model(self, model_id: str) -> Response:
+        await self._create_openai_handlers()
+        response = await self._serving_models.show_model_info(model_id)
+        return JSONResponse(content=response.model_dump())
+
+    @app.post("/v1/tokenize")
+    async def tokenize(self, tokenize_request:TokenizeRequest, raw_request: Request) -> Response:
+        await self._create_openai_handlers()
+        try:
+            response = await self._serving_tokenization.create_tokenize(tokenize_request, raw_request)
+            if isinstance(response, ErrorResponse):
+                return JSONResponse(content=response.model_dump(),
+                                    status_code=response.error.code)
+            elif isinstance(response, TokenizeResponse):
+                return JSONResponse(content=response.model_dump())
+            else:
+                raise RuntimeError(f"Unexpected response type {type(response)}")
+        except Exception as e:
+            print(f"Tokenization error: {e}")
+            print(traceback.format_exc())
+            return JSONResponse(
+                status_code=400 if isinstance(e, ValueError) else 500,
+                content={"error": {"message": str(e), "type": "server_error"}}
+            )
+
+    @app.post("/v1/embeddings")
+    async def create_embeddings(self, embedding_request: EmbeddingRequest, raw_request: Request) -> Response:
+        await self._create_openai_handlers()
+        try: 
+            response = await self._serving_embedding.create_embedding(embedding_request, raw_request)
+            if isinstance(response, ErrorResponse):
+                return JSONResponse(content=response.model_dump(),
+                                    status_code=response.error.code)
+            elif isinstance(response, EmbeddingResponse):
+                return JSONResponse(content=response.model_dump())
+            else:
+                raise RuntimeError(f"Unexpected response type {type(response)}")
+            
+        except Exception as e:
+            print(f"Embedding error: {e}")
+            print(traceback.format_exc())
+            return JSONResponse(
+                status_code=400 if isinstance(e, ValueError) else 500,
+                content={"error": {"message": str(e), "type": "server_error"}}
+            )
+
+    @app.post("/v1/score")
+    async def create_score(self, score_request: ScoreRequest, raw_request: Request) -> Response:
+        await self._create_openai_handlers()
+        try: 
+            response = await self._serving_scores.create_score(score_request, raw_request)
+            if isinstance(response, ErrorResponse):
+                return JSONResponse(content=response.model_dump(),
+                                    status_code=response.error.code)
+            elif isinstance(response, ScoreResponse):
+                return JSONResponse(content=response.model_dump())
+            else:
+                raise RuntimeError(f"Unexpected response type {type(response)}")
+            
+        except Exception as e:
+            print(f"Score error: {e}")
+            print(traceback.format_exc())
+            return JSONResponse(
+                status_code=400 if isinstance(e, ValueError) else 500,
+                content={"error": {"message": str(e), "type": "server_error"}}
+            )
+    @app.post("/v1/classify")
+    async def create_classify(self, classify_request: ClassificationRequest,
+                        raw_request: Request) -> Response:
+        await self._create_openai_handlers()
+        try: 
+            response = await self._serving_classification.create_classify(classify_request, raw_request)
+            if isinstance(response, ErrorResponse):
+                return JSONResponse(content=response.model_dump(),
+                                    status_code=response.error.code)
+            elif isinstance(response, ClassificationResponse):
+                return JSONResponse(content=response.model_dump())
+            else:
+                raise RuntimeError(f"Unexpected response type {type(response)}")
+            
+        except Exception as e:
+            print(f"Classify error: {e}")
+            print(traceback.format_exc())
+            return JSONResponse(
+                status_code=400 if isinstance(e, ValueError) else 500,
+                content={"error": {"message": str(e), "type": "server_error"}}
+            )
+        
+    @app.post("/v1/rerank")
+    async def create_rerank(self, rerank_request: RerankRequest,
+                        raw_request: Request) -> Response:
+        await self._create_openai_handlers()
+        try: 
+            response = await self._serving_scores.do_rerank(rerank_request, raw_request)
+            if isinstance(response, ErrorResponse):
+                return JSONResponse(content=response.model_dump(),
+                                    status_code=response.error.code)
+            elif isinstance(response, RerankResponse):
+                return JSONResponse(content=response.model_dump())
+            else:
+                raise RuntimeError(f"Unexpected response type {type(response)}")
+            
+        except Exception as e:
+            print(f"Rerank error: {e}")
+            print(traceback.format_exc())
+            return JSONResponse(
+                status_code=400 if isinstance(e, ValueError) else 500,
+                content={"error": {"message": str(e), "type": "server_error"}}
+            )
+        
+    @app.post("/v1/chat/completions")
+    async def chat_completions(self, chat_request: ChatCompletionRequest, raw_request: Request) -> Response:
+        await self._create_openai_handlers()
+        try:
+            response = await self._serving_chat.create_chat_completion(chat_request, raw_request)
+            
+            if isinstance(response, ErrorResponse):
+                return JSONResponse(content=response.model_dump(),
+                                    status_code=response.error.code)
+
+            elif isinstance(response, ChatCompletionResponse):
+                return JSONResponse(content=response.model_dump())
+
+            return StreamingResponse(content=response, media_type="text/event-stream")
+                
+        except asyncio.CancelledError:
+            return Response(status_code=499, content="Request cancelled")
+        except Exception as e:
+            print(f"Chat completion error: {e}")
+            print(traceback.format_exc())
+            return JSONResponse(
+                status_code=400 if isinstance(e, ValueError) else 500,
+                content={"error": {"message": str(e), "type": "server_error"}}
+            )
+
+    @app.post("/v1/completions")
+    async def completions(self, completion_request: CompletionRequest, raw_request: Request) -> Response:
+        await self._create_openai_handlers()
+        try:
+            response = await self._serving_completion.create_completion(completion_request, raw_request)
+            if isinstance(response, ErrorResponse):
+                return JSONResponse(content=response.model_dump(),
+                                    status_code=response.error.code)
+            elif isinstance(response, CompletionResponse):
+                return JSONResponse(content=response.model_dump())
+
+            return StreamingResponse(content=response, media_type="text/event-stream")
+                
+        except asyncio.CancelledError:
+            return Response(status_code=499, content="Request cancelled")
+        except Exception as e:
+            print(f"Completion error: {e}")
+            print(traceback.format_exc())
+            return JSONResponse(
+                status_code=400 if isinstance(e, ValueError) else 500,
+                content={"error": {"message": str(e), "type": "server_error"}}
+            )
+
+    async def check_health(self):
+        """Custom health check method for Ray Serve.
+        Ensures app state is initialized before health checks pass.
+        """
+        if not self._app_inited:
+            print("Health check: app state not initialized yet")
+            await self._create_openai_handlers()
+            assert self._app_inited, "Failed to initialize app state"
+            print("Health check: app state initialized")
+
+deployment = VLLMDeployment.bind()

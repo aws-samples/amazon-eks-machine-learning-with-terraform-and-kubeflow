@@ -1,5 +1,5 @@
 ray:
-  version: '2.49.0'
+  version: '2.52.1'
   dashboard:
     host: '0.0.0.0'
   ports:
@@ -23,7 +23,7 @@ ray:
           import_path: openai_api:deployment
           runtime_env:
             env_vars:
-              LD_LIBRARY_PATH: "/home/ray/anaconda3/lib/python3.11/site-packages/cusparselt/lib:/usr/local/cuda/lib64"
+              LD_LIBRARY_PATH: "/home/ray/anaconda3/lib/python3.12/site-packages/nvidia/cusparselt/lib:/usr/local/cuda/lib64"
               ENGINE_CONFIG: "/etc/engine-config/engine-config.json"
               PYTHONPATH: "/etc/framework-scripts"
             pip:
