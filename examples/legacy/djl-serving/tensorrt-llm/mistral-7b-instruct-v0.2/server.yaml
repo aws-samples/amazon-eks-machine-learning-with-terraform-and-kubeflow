@@ -1,5 +1,5 @@
 image: 
-  name: deepjavalibrary/djl-serving:0.32.0-tensorrt-llm
+  name: deepjavalibrary/djl-serving:0.34.0-tensorrt-llm
   pull_policy: Always
 resources:
   node_type: g6.48xlarge
