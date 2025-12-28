@@ -46,7 +46,7 @@ To launch the data processing job, execute:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nxdt-llama3-70b\
         charts/machine-learning/data-prep/data-process \
-        -f examples/training/neuronx-distributed-training/llama3_70b/wikicorpus.yaml -n kubeflow-user-example-com
+        -f examples/legacy/neuronx-distributed-training/llama3_70b/wikicorpus.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -65,7 +65,7 @@ To launch compile job:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nxdt-llama3-70b\
         charts/machine-learning/training/pytorchjob-distributed \
-        -f examples/training/neuronx-distributed-training/llama3_70b/compile.yaml -n kubeflow-user-example-com
+        -f examples/legacy/neuronx-distributed-training/llama3_70b/compile.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -84,7 +84,7 @@ To launch the pre-training job:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nxdt-llama3-70b\
         charts/machine-learning/training/pytorchjob-distributed \
-        -f examples/training/neuronx-distributed-training/llama3_70b/pretrain.yaml -n kubeflow-user-example-com
+        -f examples/legacy/neuronx-distributed-training/llama3_70b/pretrain.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 

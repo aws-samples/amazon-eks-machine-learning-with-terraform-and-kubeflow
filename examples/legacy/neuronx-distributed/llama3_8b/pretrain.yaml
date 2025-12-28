@@ -1,4 +1,4 @@
-image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.8.0-neuronx-py311-sdk2.26.1-ubuntu22.04'
+image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.9.0-neuronx-py312-sdk2.27.0-ubuntu24.04'
 backoff_limit: 2000
 ebs:
   storage: 200Gi
@@ -20,7 +20,7 @@ tolerations:
 git:
   repo_url: "https://github.com/aws-neuron/neuronx-distributed.git"
   branch: main
-  commit: fecfe75b0d40ff8831718e02584bcac8eb9550ae
+  commit: 47f695c2e23ce0fd6afc35529549ed41ba3cc16d
 pre_script: 
   - pip3 install --upgrade pip
   - SCRIPT_DIR=$GIT_CLONE_DIR/examples/training/llama/tp_zero1_llama_hf_pretrain

@@ -40,7 +40,7 @@ To convert checkpoint:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-mistral-7b-v01-peft \
         charts/machine-learning/data-prep/data-process \
-        -f examples/training/nemo-megatron/mistral-7b-v01-peft/hf_to_nemo.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatronmistral-7b-v01-peft/hf_to_nemo.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -57,7 +57,7 @@ To preprocess `pubmedqa` dataset:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-mistral-7b-v01-peft \
         charts/machine-learning/data-prep/data-process \
-        -f examples/training/nemo-megatron/mistral-7b-v01-peft/preprocess.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatronmistral-7b-v01-peft/preprocess.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -74,7 +74,7 @@ To do peft:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-mistral-7b-v01-peft \
        charts/machine-learning/training/pytorchjob-distributed \
-        -f examples/training/nemo-megatron/mistral-7b-v01-peft/peft.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatronmistral-7b-v01-peft/peft.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -91,7 +91,7 @@ To evaluate peft trained model over test dataset:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-mistral-7b-v01-peft \
        charts/machine-learning/training/pytorchjob-distributed \
-        -f examples/training/nemo-megatron/mistral-7b-v01-peft/peft_eval.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatronmistral-7b-v01-peft/peft_eval.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -108,7 +108,7 @@ To compute test accuracy of peft trained model over the test dataset:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-mistral-7b-v01-peft \
         charts/machine-learning/data-prep/data-process \
-        -f examples/training/nemo-megatron/mistral-7b-v01-peft/peft_accuracy.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatronmistral-7b-v01-peft/peft_accuracy.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -125,7 +125,7 @@ To merge PEFT model to base model:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-mistral-7b-v01-peft \
         charts/machine-learning/data-prep/data-process \
-        -f examples/training/nemo-megatron/mistral-7b-v01-peft/merge_peft.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatronmistral-7b-v01-peft/merge_peft.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -142,7 +142,7 @@ To convert checkpoint:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-mistral-7b-v01-peft \
         charts/machine-learning/data-prep/data-process \
-        -f examples/training/nemo-megatron/mistral-7b-v01-peft/nemo_to_hf.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatronmistral-7b-v01-peft/nemo_to_hf.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 

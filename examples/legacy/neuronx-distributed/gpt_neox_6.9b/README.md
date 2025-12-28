@@ -30,7 +30,7 @@ To launch the data processing job, execute:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nxd-gpt-neox-6-9b \
         charts/machine-learning/data-prep/data-process \
-        -f examples/training/neuronx-distributed/gpt_neox_6.9b/wikicorpus.yaml -n kubeflow-user-example-com
+        -f examples/legacy/neuronx-distributed/gpt_neox_6.9b/wikicorpus.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -49,7 +49,7 @@ To launch compile job:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nxd-gpt-neox-6-9b \
         charts/machine-learning/training/pytorchjob-distributed \
-        -f examples/training/neuronx-distributed/gpt_neox_6.9b/compile.yaml -n kubeflow-user-example-com
+        -f examples/legacy/neuronx-distributed/gpt_neox_6.9b/compile.yaml -n kubeflow-user-example-com
 
 Uninstall the Helm chart at completion:
 
@@ -68,7 +68,7 @@ To launch the pre-training job:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nxd-gpt-neox-6-9b \
         charts/machine-learning/training/pytorchjob-distributed \
-        -f examples/training/neuronx-distributed/gpt_neox_6.9b/pretrain.yaml -n kubeflow-user-example-com
+        -f examples/legacy/neuronx-distributed/gpt_neox_6.9b/pretrain.yaml -n kubeflow-user-example-com
 
 Uninstall the Helm chart at completion:
 

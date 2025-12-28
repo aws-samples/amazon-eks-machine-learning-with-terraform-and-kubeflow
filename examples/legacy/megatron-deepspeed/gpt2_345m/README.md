@@ -32,7 +32,7 @@ To launch the data processing job, execute:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug mds-gpt2-345m \
         charts/machine-learning/data-prep/data-process \
-        -f examples/training/megatron-deepspeed/gpt2_345m/wikicorpus.yaml -n kubeflow-user-example-com
+        -f examples/legacy/megatron-deepspeed/gpt2_345m/wikicorpus.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -51,7 +51,7 @@ To launch distributed data parallel (DDP) training  with [DeepSpeed ZeRO-1](http
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug mds-gpt2-345m \
         charts/machine-learning/training/pytorchjob-distributed \
-        -f examples/training/megatron-deepspeed/gpt2_345m/pretrain-ddp-zero1.yaml -n kubeflow-user-example-com
+        -f examples/legacy/megatron-deepspeed/gpt2_345m/pretrain-ddp-zero1.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -70,7 +70,7 @@ To launch distributed data parallel (DDP) training  with Megatron tensor-paralle
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug mds-gpt2-345m \
         charts/machine-learning/training/pytorchjob-distributed \
-        -f examples/training/megatron-deepspeed/gpt2_345m/pretrain-ddp-tp-pp-zero1.yaml -n kubeflow-user-example-com
+        -f examples/legacy/megatron-deepspeed/gpt2_345m/pretrain-ddp-tp-pp-zero1.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 

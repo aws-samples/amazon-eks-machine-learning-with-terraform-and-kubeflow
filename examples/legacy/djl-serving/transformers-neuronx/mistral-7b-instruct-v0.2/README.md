@@ -33,7 +33,7 @@ To launch the server:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug djl-lmi-mistral-7b-instruct-v02-tnx \
         charts/machine-learning/serving/djl-lmi-server \
-        -f examples/inference/djl-serving/transformers-neuronx/mistral-7b-instruct-v0.2/server.yaml -n kubeflow-user-example-com
+        -f examples/legacy/djl-serving/transformers-neuronx/mistral-7b-instruct-v0.2/server.yaml -n kubeflow-user-example-com
 
 
 ## Stop Service

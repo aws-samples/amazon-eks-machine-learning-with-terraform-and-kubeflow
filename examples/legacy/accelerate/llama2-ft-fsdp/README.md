@@ -71,7 +71,7 @@ To launch fine-tuning job,  execute:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug accel-llama2-7b \
         charts/machine-learning/training/pytorchjob-distributed \
-        -f examples/training/accelerate/llama2-ft-fsdp/7b.yaml -n kubeflow-user-example-com
+        -f examples/legacy/accelerate/llama2-ft-fsdp/7b.yaml -n kubeflow-user-example-com
 
 You can tail the logs using following command:
 
@@ -91,7 +91,7 @@ To launch fine-tuning job,  execute:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug accel-llama2-13b \
         charts/machine-learning/training/pytorchjob-distributed \
-        -f examples/training/accelerate/llama2-ft-fsdp/13b.yaml -n kubeflow-user-example-com
+        -f examples/legacy/accelerate/llama2-ft-fsdp/13b.yaml -n kubeflow-user-example-com
 
 You can tail the logs using following command:
 
@@ -111,7 +111,7 @@ To launch fine-tuning job,  execute:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug accel-llama2-70b \
         charts/machine-learning/training/pytorchjob-distributed \
-        -f examples/training/accelerate/llama2-ft-fsdp/70b.yaml -n kubeflow-user-example-com
+        -f examples/legacy/accelerate/llama2-ft-fsdp/70b.yaml -n kubeflow-user-example-com
 
 You can tail the logs using following command:
 
