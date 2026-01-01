@@ -17,6 +17,12 @@ variable "cluster_name" {
   type    = string
 }
 
+variable "eks_admin_role_arn" {
+  description = "IAM role ARN to grant EKS cluster admin access. If empty, auto-detects from current caller."
+  type        = string
+  default     = ""
+}
+
 variable "k8s_version" {
   description = "kubernetes version"
   default = "1.33"
@@ -514,6 +520,63 @@ variable nvidia_capacity_reservation_id {
   description = "targetted odcr id for nvidia devices"
   type = string
   default = ""
+}
+
+#################################################
+# SageMaker HyperPod Variables
+#################################################
+
+variable "hyperpod_enabled" {
+  description = "Enable SageMaker HyperPod EKS integration for resilient ML workloads"
+  type        = bool
+  default     = false
+}
+
+variable "hyperpod_cluster_name" {
+  description = "Name for the SageMaker HyperPod cluster. If empty, uses cluster_name-cluster"
+  type        = string
+  default     = ""
+}
+
+variable "hyperpod_instance_groups" {
+  description = <<-EOT
+    Configuration for HyperPod instance groups. Each group can have different instance types.
+
+    Supported instance types include:
+    - CPU: ml.m5.xlarge, ml.m5.2xlarge, ml.m5.4xlarge, ml.m5.12xlarge, ml.m5.24xlarge
+    - GPU: ml.g5.xlarge, ml.g5.2xlarge, ml.g5.4xlarge, ml.g5.8xlarge, ml.g5.12xlarge, ml.g5.24xlarge, ml.g5.48xlarge
+    - GPU High-end: ml.p4d.24xlarge, ml.p4de.24xlarge, ml.p5.48xlarge
+    - Trainium: ml.trn1.2xlarge, ml.trn1.32xlarge, ml.trn1n.32xlarge
+    - Trainium2: ml.trn2.48xlarge
+
+    deep_health_checks options: ["InstanceStress", "InstanceConnectivity"]
+  EOT
+  type = list(object({
+    name               = string
+    instance_type      = string
+    instance_count     = number
+    ebs_volume_gb      = optional(number, 500)
+    deep_health_checks = optional(list(string), ["InstanceStress", "InstanceConnectivity"])
+  }))
+  default = [
+    {
+      name           = "worker-group-gpu"
+      instance_type  = "ml.g5.2xlarge"
+      instance_count = 1
+      ebs_volume_gb  = 500
+    }
+  ]
+}
+
+variable "hyperpod_node_recovery" {
+  description = "HyperPod node recovery mode. 'Automatic' enables self-healing for failed nodes."
+  type        = string
+  default     = "Automatic"
+
+  validation {
+    condition     = contains(["Automatic", "None"], var.hyperpod_node_recovery)
+    error_message = "hyperpod_node_recovery must be either 'Automatic' or 'None'."
+  }
 }
 
 # END variables

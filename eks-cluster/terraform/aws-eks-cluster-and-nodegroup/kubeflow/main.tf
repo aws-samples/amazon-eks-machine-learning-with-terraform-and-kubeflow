@@ -142,6 +142,8 @@ resource "helm_release" "user_profile_pv_fsx" {
 }
 
 resource "helm_release" "kubeflow-training-operator" {
+  count = var.enable_training_operator ? 1 : 0
+
   name       = "kubeflow-training-operator"
   chart      = "${var.local_helm_repo}/ml-platform/kubeflow-training-operator"
   version  = "1.0.0"

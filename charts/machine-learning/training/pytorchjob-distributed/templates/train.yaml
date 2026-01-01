@@ -64,6 +64,10 @@ data:
 {{- end }}
 ---
 {{- end }}
+{{- $nodeType := .Values.resources.node_type }}
+{{- if and .Values.hyperpod .Values.hyperpod.enabled }}
+{{- $nodeType = printf "ml.%s" .Values.resources.node_type }}
+{{- end }}
 apiVersion: kubeflow.org/v1
 kind: PyTorchJob
 metadata:
@@ -72,6 +76,10 @@ metadata:
     app.kubernetes.io/name: {{ .Release.Name }}
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
+  {{- if and .Values.hyperpod .Values.hyperpod.enabled .Values.hyperpod.auto_restart }}
+  annotations:
+    sagemaker.amazonaws.com/enable-job-auto-restart: "true"
+  {{- end }}
 spec:
   nprocPerNode: "{{ .Values.resources.nproc_per_node }}"
   runPolicy:
@@ -88,6 +96,9 @@ spec:
             sidecar.istio.io/inject: 'false'
             app.kubernetes.io/instance: {{ .Release.Name }}
             app.kubernetes.io/managed-by: {{ .Release.Service }}
+            {{- if and .Values.hyperpod .Values.hyperpod.enabled .Values.hyperpod.auto_restart }}
+            sagemaker.amazonaws.com/enable-job-auto-restart: "true"
+            {{- end }}
         spec:
           volumes:
           - name: config
@@ -136,17 +147,31 @@ spec:
               {{- if $v.effect }}
               effect: "{{ $v.effect }}"
               {{- end }}
-          {{- end }} 
+          {{- end }}
+          {{- if and .Values.hyperpod .Values.hyperpod.enabled .Values.hyperpod.tolerations }}
+          {{- range $v := .Values.hyperpod.tolerations }}
+            - key: {{ $v.key }}
+              {{- if $v.operator }}
+              operator: "{{ $v.operator }}"
+              {{- end }}
+              {{- if $v.value }}
+              value: "{{ $v.value }}"
+              {{- end }}
+              {{- if $v.effect }}
+              effect: "{{ $v.effect }}"
+              {{- end }}
+          {{- end }}
+          {{- end }}
           nodeSelector:
-            node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
+            node.kubernetes.io/instance-type: {{ $nodeType }}
           containers:
             - name: pytorch
               env:
               {{- range $v := .Values.train.env }}
               - name: {{ $v.name }}
                 value: "{{ tpl $v.value $ }}"
-              {{- end }} 
-              command: 
+              {{- end }}
+              command:
               - /etc/config/train-script.sh
               resources:
                 requests:
@@ -178,7 +203,7 @@ spec:
                 - name: ebs
                   mountPath: {{ .Values.ebs.mount_path | default "/tmp" }}
                 {{- end }}
-    
+
     {{- if gt (int .Values.resources.nnodes) 1  }}
     Worker:
       replicas: {{ sub .Values.resources.nnodes 1 }}
@@ -190,6 +215,9 @@ spec:
             sidecar.istio.io/inject: 'false'
             app.kubernetes.io/instance: {{ .Release.Name }}
             app.kubernetes.io/managed-by: {{ .Release.Service }}
+            {{- if and .Values.hyperpod .Values.hyperpod.enabled .Values.hyperpod.auto_restart }}
+            sagemaker.amazonaws.com/enable-job-auto-restart: "true"
+            {{- end }}
         spec:
           volumes:
           - name: config
@@ -238,9 +266,23 @@ spec:
               {{- if $v.effect }}
               effect: "{{ $v.effect }}"
               {{- end }}
-          {{- end }} 
+          {{- end }}
+          {{- if and .Values.hyperpod .Values.hyperpod.enabled .Values.hyperpod.tolerations }}
+          {{- range $v := .Values.hyperpod.tolerations }}
+            - key: {{ $v.key }}
+              {{- if $v.operator }}
+              operator: "{{ $v.operator }}"
+              {{- end }}
+              {{- if $v.value }}
+              value: "{{ $v.value }}"
+              {{- end }}
+              {{- if $v.effect }}
+              effect: "{{ $v.effect }}"
+              {{- end }}
+          {{- end }}
+          {{- end }}
           nodeSelector:
-            node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
+            node.kubernetes.io/instance-type: {{ $nodeType }}
           containers:
             - name: pytorch
               env:

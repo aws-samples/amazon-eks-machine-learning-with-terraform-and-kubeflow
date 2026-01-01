@@ -336,6 +336,11 @@ resource "aws_eks_cluster" "eks_cluster" {
     subnet_ids = flatten([aws_subnet.private.*.id])
   }
 
+  # Required for SageMaker HyperPod integration
+  access_config {
+    authentication_mode = "API_AND_CONFIG_MAP"
+  }
+
   provisioner "local-exec" {
     when    = destroy
     command = "kubectl config unset current-context"
@@ -345,6 +350,46 @@ resource "aws_eks_cluster" "eks_cluster" {
     command = "aws --region ${var.region} eks update-kubeconfig --name ${aws_eks_cluster.eks_cluster.name}"
   }
 
+}
+
+# Grant the Terraform executor cluster admin access via EKS access entry
+# Users can specify their IAM role ARN via variable, or it will be auto-detected from assumed-role
+locals {
+  # Extract role name from assumed-role ARN: arn:aws:sts::ACCOUNT:assumed-role/ROLE_NAME/session
+  caller_arn_parts     = split("/", data.aws_caller_identity.current.arn)
+  caller_is_assumed    = length(local.caller_arn_parts) > 1 && contains(split(":", data.aws_caller_identity.current.arn), "assumed-role")
+  detected_role_name   = local.caller_is_assumed ? local.caller_arn_parts[1] : ""
+  detected_role_arn    = local.detected_role_name != "" ? "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.detected_role_name}" : ""
+  # Use variable if provided, otherwise use detected role
+  terraform_admin_role = var.eks_admin_role_arn != "" ? var.eks_admin_role_arn : local.detected_role_arn
+}
+
+resource "aws_eks_access_entry" "terraform_executor" {
+  count         = local.terraform_admin_role != "" ? 1 : 0
+  cluster_name  = aws_eks_cluster.eks_cluster.name
+  principal_arn = local.terraform_admin_role
+  type          = "STANDARD"
+
+  lifecycle {
+    ignore_changes = [principal_arn]
+  }
+}
+
+resource "aws_eks_access_policy_association" "terraform_executor_admin" {
+  count         = local.terraform_admin_role != "" ? 1 : 0
+  cluster_name  = aws_eks_cluster.eks_cluster.name
+  principal_arn = local.terraform_admin_role
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.terraform_executor]
+
+  lifecycle {
+    ignore_changes = [principal_arn]
+  }
 }
 
 resource "aws_security_group_rule" "eks_cluster_ingress" {
@@ -669,9 +714,18 @@ resource "kubernetes_namespace" "auth" {
 
 resource "kubernetes_namespace" "kubeflow" {
   metadata {
-    labels = {
-      istio-injection = "enabled"
-    }
+    labels = merge(
+      { istio-injection = "enabled" },
+      # Add Helm labels when HyperPod is enabled so its training operator can manage resources here
+      var.hyperpod_enabled ? {
+        "app.kubernetes.io/managed-by" = "Helm"
+      } : {}
+    )
+
+    annotations = var.hyperpod_enabled ? {
+      "meta.helm.sh/release-name"      = "hyperpod"
+      "meta.helm.sh/release-namespace" = "kube-system"
+    } : {}
 
     name = var.kubeflow_namespace
   }
@@ -1443,6 +1497,8 @@ module "kubeflow-components" {
   profile_controller_role_arn = module.profiles-controller-irsa.iam_role_arn
   kubeflow_user_profile       = "kubeflow-user-example-com"
   kubeflow_platform_enabled   = var.kubeflow_platform_enabled
+  # Disable Kubeflow Training Operator when HyperPod is enabled (HyperPod provides its own)
+  enable_training_operator    = !var.hyperpod_enabled
 
   efs_fs_id = aws_efs_file_system.fs.id
   fsx = {
