@@ -1,0 +1,20 @@
+# HyperPod Configuration Overlay for BERT GLUE-MRPC Training
+#
+# This overlay enables running the training job on SageMaker HyperPod nodes
+# with automatic node recovery and job auto-restart.
+#
+# Usage:
+#   helm install bert-hp \
+#     ../../../../charts/machine-learning/training/pytorchjob-elastic/ \
+#     -f pretrain.yaml \
+#     -f hyperpod.yaml \
+#     -n kubeflow-user-example-com
+#
+# Features enabled:
+# - Automatic 'ml.' prefix added to node_type (g6.48xlarge -> ml.g6.48xlarge)
+# - HyperPod health-aware scheduling tolerations
+# - Job auto-restart on node failures
+
+hyperpod:
+  enabled: true
+  auto_restart: true

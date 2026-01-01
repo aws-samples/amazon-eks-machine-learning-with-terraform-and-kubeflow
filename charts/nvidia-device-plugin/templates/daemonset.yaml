@@ -27,6 +27,7 @@ spec:
                 - key: "node.kubernetes.io/instance-type"
                   operator: In
                   values:
+                  # Standard EC2 GPU instances
                   - g4dn.xlarge
                   - g4dn.2xlarge
                   - g4dn.4xlarge
@@ -64,6 +65,27 @@ spec:
                   - p5.48xlarge
                   - p5e.48xlarge
                   - p5en.48xlarge
+                  # SageMaker HyperPod instances (ml.* prefix)
+                  - ml.g5.xlarge
+                  - ml.g5.2xlarge
+                  - ml.g5.4xlarge
+                  - ml.g5.8xlarge
+                  - ml.g5.12xlarge
+                  - ml.g5.16xlarge
+                  - ml.g5.24xlarge
+                  - ml.g5.48xlarge
+                  - ml.g6.xlarge
+                  - ml.g6.2xlarge
+                  - ml.g6.4xlarge
+                  - ml.g6.8xlarge
+                  - ml.g6.12xlarge
+                  - ml.g6.16xlarge
+                  - ml.g6.24xlarge
+                  - ml.g6.48xlarge
+                  - ml.p4d.24xlarge
+                  - ml.p4de.24xlarge
+                  - ml.p5.48xlarge
+                  - ml.p5e.48xlarge
       containers:
       - image: nvcr.io/nvidia/k8s-device-plugin:{{ .Chart.AppVersion }}
         name: nvidia-device-plugin-ctr

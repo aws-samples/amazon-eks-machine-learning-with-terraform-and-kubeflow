@@ -1,0 +1,21 @@
+# HyperPod Configuration Overlay for Qwen3-14B Fine-Tuning
+#
+# This overlay enables running the fine-tune job on SageMaker HyperPod nodes
+# with automatic node recovery and job auto-restart.
+#
+# Usage:
+#   helm install qwen-sft-hp \
+#     ../../../../charts/machine-learning/training/pytorchjob-distributed/ \
+#     -f fine-tune.yaml \
+#     -f hyperpod.yaml \
+#     -n kubeflow-user-example-com
+#
+# Features enabled:
+# - Automatic 'ml.' prefix added to node_type (p4d.24xlarge -> ml.p4d.24xlarge)
+# - HyperPod health-aware scheduling tolerations
+# - Job auto-restart on node failures
+# - Checkpointless training (jobs resume from last checkpoint automatically)
+
+hyperpod:
+  enabled: true
+  auto_restart: true
