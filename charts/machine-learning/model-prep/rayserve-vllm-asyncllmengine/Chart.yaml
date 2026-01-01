@@ -1,6 +1,0 @@
-apiVersion: v2
-name: rayserve-vllm-engine
-description: A Helm chart for Ray Serve vLLM Engine
-type: application
-version: 1.0.0
-appVersion: "v1"
