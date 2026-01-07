@@ -112,7 +112,12 @@ cp terraform.tfvars.example terraform.tfvars # Add/modify variables as needed
 ### 6. Create Home Folders on Shared Storage
 
 ```bash
+cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/
 kubectl apply -f eks-cluster/utils/attach-pvc.yaml -n kubeflow
+# wait for the `attach-pvc` Pod to be in "ready" Status. 
+# check status of the Pod by running
+kubectl get pods -n kubeflow -w
+# Once the attach-pvc Pod is Ready, run the following commands
 kubectl exec -it -n kubeflow attach-pvc -- /bin/bash
 
 # Inside pod
