@@ -25,8 +25,17 @@ The solution deploys a complete MLOps platform using Terraform on Amazon EKS wit
   - inf2.xlarge, inf2.48xlarge, trn1.32xlarge (8+ each)
   - Increase EC2 Service Limits for additional EC2 instance types you plan to use
 - [EC2 Key Pair](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html)
-- [S3 Bucket](https://docs.aws.amazon.com/AmazonS3/latest/userguide/create-bucket-overview.html) in selected region
+- **S3 Bucket** for Terraform state and FSx Lustre data (see below)
 - Your public IP address (from [AWS check ip](http://checkip.amazonaws.com/))
+
+### Create S3 Bucket
+
+Create an S3 bucket before proceeding. This bucket stores Terraform state and FSx Lustre data. The bucket name must be globally unique.
+
+```bash
+# Replace <YOUR_S3_BUCKET> with a unique name (e.g., my-mlops-bucket-12345)
+aws s3 mb s3://<YOUR_S3_BUCKET> --region us-west-2
+```
 
 ## Getting Started
 
@@ -40,7 +49,7 @@ Use CloudFormation template [ml-ops-desktop.yaml](./ml-ops-desktop.yaml) to crea
 
 * Once the stack status in CloudFormation console is ```CREATE_COMPLETE```, find the ML Ops desktop instance launched in your stack in the Amazon EC2 console, and [connect to the instance using SSH](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/AccessingInstancesLinux.html) as user ```ubuntu```, using your SSH key pair.
 * When you connect using SSH, and you see the message ```"Cloud init in progress! Logs: /var/log/cloud-init-output.log"```, disconnect and try later after about 15 minutes. The desktop installs the Amazon DCV server on first-time startup, and reboots after the install is complete.
-* If you see the message ```Amazon DCV server is enabled!```, run the command ```sudo passwd ubuntu``` to set a new password for user ```ubuntu```. Now you are ready to connect to the desktop using the [Amazon DCV client](https://docs.aws.amazon.com/dcv/latest/userguide/client.html)
+* If you see the message ```ML Ops desktop is enabled!```, run the command ```sudo passwd ubuntu``` to set a new password for user ```ubuntu```. Now you are ready to connect to the desktop using the [Amazon DCV client](https://docs.aws.amazon.com/dcv/latest/userguide/client.html)
 * The build machine desktop uses EC2 [user-data](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html) to initialize the desktop. Most *transient* failures in the desktop initialization can be fixed by rebooting the desktop.
 
 
@@ -60,27 +69,31 @@ cd amazon-eks-machine-learning-with-terraform-and-kubeflow
 
 ### 4. Configure Terraform Backend
 
+Configure S3 backend for Terraform state storage. Replace `<YOUR_S3_BUCKET>` with the S3 bucket you created in Prerequisites. The `<S3_PREFIX>` is a folder path in your bucket (e.g., `eks-ml-platform`) - it will be created automatically.
+
 ```bash
-./eks-cluster/utils/s3-backend.sh S3_BUCKET S3_PREFIX
+# Example: ./eks-cluster/utils/s3-backend.sh my-mlops-bucket-12345 eks-ml-platform
+./eks-cluster/utils/s3-backend.sh <YOUR_S3_BUCKET> <S3_PREFIX>
 ```
 
 ### 5. Initialize and Apply Terraform
 
-* Logout from AWS Public ECR as otherwise `terraform apply` command may fail. 
-* Specify at least three AWS Availability Zones from your AWS Region in `azs` terraform variable. 
-* Replace `S3_BUCKET` with your S3 bucket name. 
-* To use Amazon EC2 [P4](https://aws.amazon.com/ec2/instance-types/p4/), and [P5](https://aws.amazon.com/ec2/instance-types/p5/) instances, set `cuda_efa_az` terrraform variable to a zone in `azs` that supports P-family instances. 
-* To use Amazon EC2 [Inf2](https://aws.amazon.com/ec2/instance-types/inf2/), [Trn1](https://aws.amazon.com/ec2/instance-types/trn1/), and  [Trn2](https://aws.amazon.com/ec2/instance-types/trn2/) instances, set `neuron_az` terraform variable to a zone in your `azs` that supports these instance types. 
+* Logout from AWS Public ECR as otherwise `terraform apply` command may fail.
+* Specify at least three AWS Availability Zones from your AWS Region in `azs` terraform variable.
+* Replace `<YOUR_S3_BUCKET>` with the S3 bucket you created in Prerequisites.
+* To use Amazon EC2 [P4](https://aws.amazon.com/ec2/instance-types/p4/), and [P5](https://aws.amazon.com/ec2/instance-types/p5/) instances, set `cuda_efa_az` terrraform variable to a zone in `azs` that supports P-family instances.
+* To use Amazon EC2 [Inf2](https://aws.amazon.com/ec2/instance-types/inf2/), [Trn1](https://aws.amazon.com/ec2/instance-types/trn1/), and  [Trn2](https://aws.amazon.com/ec2/instance-types/trn2/) instances, set `neuron_az` terraform variable to a zone in your `azs` that supports these instance types.
 
 ```bash
 docker logout public.ecr.aws
 cd eks-cluster/terraform/aws-eks-cluster-and-nodegroup
 terraform init
 
+# Replace <YOUR_S3_BUCKET> with your actual S3 bucket name
 terraform apply -var="profile=default" -var="region=us-west-2" \
   -var="cluster_name=my-eks-cluster" \
   -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' \
-  -var="import_path=s3://S3_BUCKET/ml-platform/" \
+  -var="import_path=s3://<YOUR_S3_BUCKET>/eks-ml-platform/" \
   -var="cuda_efa_az=us-west-2c" \
   -var="neuron_az=us-west-2d"
 ```
@@ -99,7 +112,12 @@ cp terraform.tfvars.example terraform.tfvars # Add/modify variables as needed
 ### 6. Create Home Folders on Shared Storage
 
 ```bash
+cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/
 kubectl apply -f eks-cluster/utils/attach-pvc.yaml -n kubeflow
+# wait for the `attach-pvc` Pod to be in "ready" Status. 
+# check status of the Pod by running
+kubectl get pods -n kubeflow -w
+# Once the attach-pvc Pod is Ready, run the following commands
 kubectl exec -it -n kubeflow attach-pvc -- /bin/bash
 
 # Inside pod
@@ -414,10 +432,11 @@ kubectl delete -f eks-cluster/utils/attach-pvc.yaml -n kubeflow
 
 ```bash
 cd eks-cluster/terraform/aws-eks-cluster-and-nodegroup
+# Replace <YOUR_S3_BUCKET> with your actual S3 bucket name
 terraform destroy -var="profile=default" -var="region=us-west-2" \
   -var="cluster_name=my-eks-cluster" \
   -var='azs=["us-west-2d","us-west-2b","us-west-2c"]' \
-  -var="import_path=s3://S3_BUCKET/ml-platform/"
+  -var="import_path=s3://<YOUR_S3_BUCKET>/ml-platform/"
 ```
 
 ## Supported Technologies
@@ -452,11 +471,11 @@ terraform destroy -var="profile=default" -var="region=us-west-2" \
 # Install kubectl
 ./eks-cluster/utils/install-kubectl-linux.sh
 
-# Configure S3 backend
-./eks-cluster/utils/s3-backend.sh S3_BUCKET S3_PREFIX
+# Configure S3 backend (replace <YOUR_S3_BUCKET> and <S3_PREFIX> with your values)
+./eks-cluster/utils/s3-backend.sh <YOUR_S3_BUCKET> <S3_PREFIX>
 
-# Prepare S3 bucket with COCO dataset
-./eks-cluster/utils/prepare-s3-bucket.sh S3_BUCKET
+# Prepare S3 bucket with COCO dataset (replace <YOUR_S3_BUCKET> with your value)
+./eks-cluster/utils/prepare-s3-bucket.sh <YOUR_S3_BUCKET>
 
 # Create EKS cluster with logging
 ./eks-cluster/terraform/aws-eks-cluster-and-nodegroup/create_eks.sh
