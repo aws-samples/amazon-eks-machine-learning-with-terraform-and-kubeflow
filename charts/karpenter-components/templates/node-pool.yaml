@@ -24,13 +24,7 @@ spec:
       - key: karpenter.sh/capacity-type
         operator: In
         values:
-          {{- if .Values.capacity_types }}
-          {{- range .Values.capacity_types }}
-          - {{ . | quote }}
-          {{- end }}
-          {{- else }}
           - {{ .Values.capacity_type | quote }}
-          {{- end }}
       - key: node.kubernetes.io/instance-type
         operator: In
         values:
@@ -85,13 +79,7 @@ spec:
       - key: karpenter.sh/capacity-type
         operator: In
         values:
-          {{- if .Values.capacity_types }}
-          {{- range .Values.capacity_types }}
-          - {{ . | quote }}
-          {{- end }}
-          {{- else }}
           - {{ .Values.capacity_type | quote }}
-          {{- end }}
       - key: node.kubernetes.io/instance-type
         operator: In
         values:
@@ -166,8 +154,8 @@ spec:
       - key: karpenter.sh/capacity-type
         operator: In
         values:
-          {{- if .Values.capacity_types }}
-          {{- range .Values.capacity_types }}
+          {{- if and .Values.odcr.enabled .Values.odcr.cudaefa.capacity_types }}
+          {{- range .Values.odcr.cudaefa.capacity_types }}
           - {{ . | quote }}
           {{- end }}
           {{- else }}

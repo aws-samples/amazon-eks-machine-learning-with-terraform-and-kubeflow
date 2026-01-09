@@ -13,19 +13,6 @@ spec:
     - tags:
         "kubernetes.io/cluster/{{ .Values.cluster_id }}": "owned"
 
-  {{- if and .Values.odcr.enabled (or (gt (len .Values.odcr.cuda.ids) 0) (gt (len .Values.odcr.cuda.tags) 0)) }}
-  capacityReservationSelectorTerms:
-    {{- range .Values.odcr.cuda.ids }}
-    - id: {{ . }}
-    {{- end }}
-    {{- if gt (len .Values.odcr.cuda.tags) 0 }}
-    - tags:
-        {{- range $key, $value := .Values.odcr.cuda.tags }}
-        {{ $key }}: {{ $value | quote }}
-        {{- end }}
-    {{- end }}
-  {{- end }}
-
   amiSelectorTerms:
     - alias: al2023@v20251103
 
@@ -93,19 +80,6 @@ spec:
   securityGroupSelectorTerms:
     - tags:
         "kubernetes.io/cluster/{{ .Values.cluster_id }}": "owned"
-
-  {{- if and .Values.odcr.enabled (or (gt (len .Values.odcr.neuron.ids) 0) (gt (len .Values.odcr.neuron.tags) 0)) }}
-  capacityReservationSelectorTerms:
-    {{- range .Values.odcr.neuron.ids }}
-    - id: {{ . }}
-    {{- end }}
-    {{- if gt (len .Values.odcr.neuron.tags) 0 }}
-    - tags:
-        {{- range $key, $value := .Values.odcr.neuron.tags }}
-        {{ $key }}: {{ $value | quote }}
-        {{- end }}
-    {{- end }}
-  {{- end }}
 
   amiSelectorTerms:
     - alias: al2023@v20251103

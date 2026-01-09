@@ -3,19 +3,13 @@ role_name:
 cluster_id:
 consolidate_after: "600s"
 capacity_type: "on-demand"
-capacity_types:
-  - "on-demand"
 max_pods: 20
 
-# ODCR Configuration
+# ODCR Configuration (cudaefa only)
 odcr:
   enabled: false
-  neuron:
-    ids: []
-    tags: {}
-  cuda:
-    ids: []
-    tags: {}
   cudaefa:
+    capacity_types:
+      - "on-demand"
     ids: []
     tags: {}

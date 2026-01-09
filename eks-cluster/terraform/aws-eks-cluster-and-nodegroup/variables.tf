@@ -516,35 +516,11 @@ variable nvidia_capacity_reservation_id {
   default = ""
 }
 
-# Karpenter ODCR Configuration
+# Karpenter ODCR Configuration (cudaefa NodePool only)
 variable "karpenter_odcr_enabled" {
-  description = "Enable ODCR support for Karpenter"
+  description = "Enable ODCR support for Karpenter cudaefa NodePool"
   type        = bool
   default     = false
-}
-
-variable "karpenter_odcr_neuron_ids" {
-  description = "List of ODCR IDs for Neuron instances (e.g., ['cr-xxx', 'cr-yyy'])"
-  type        = list(string)
-  default     = []
-}
-
-variable "karpenter_odcr_neuron_tags" {
-  description = "Tags to select ODCRs for Neuron instances (e.g., {purpose = 'ml-training'})"
-  type        = map(string)
-  default     = {}
-}
-
-variable "karpenter_odcr_cuda_ids" {
-  description = "List of ODCR IDs for CUDA instances (e.g., ['cr-xxx', 'cr-yyy'])"
-  type        = list(string)
-  default     = []
-}
-
-variable "karpenter_odcr_cuda_tags" {
-  description = "Tags to select ODCRs for CUDA instances (e.g., {purpose = 'ml-inference'})"
-  type        = map(string)
-  default     = {}
 }
 
 variable "karpenter_odcr_cudaefa_ids" {
@@ -559,8 +535,8 @@ variable "karpenter_odcr_cudaefa_tags" {
   default     = {}
 }
 
-variable "karpenter_capacity_types" {
-  description = "Karpenter capacity types list: 'on-demand', 'spot', 'reserved'"
+variable "karpenter_odcr_capacity_types" {
+  description = "Karpenter ODCR capacity types list: 'on-demand', 'spot', 'reserved'"
   type        = list(string)
   default     = ["on-demand"]
 }

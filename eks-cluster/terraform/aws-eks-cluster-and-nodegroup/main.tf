@@ -1145,17 +1145,11 @@ resource "helm_release" "karpenter_components" {
       cluster_id: "${aws_eks_cluster.eks_cluster.id}"
       consolidate_after: "${var.karpenter_consolidate_after}"
       capacity_type: "${var.karpenter_capacity_type}"
-      capacity_types: ${jsonencode(var.karpenter_capacity_types)}
       max_pods: "${var.karpenter_max_pods}"
       odcr:
         enabled: ${var.karpenter_odcr_enabled}
-        neuron:
-          ids: ${jsonencode(var.karpenter_odcr_neuron_ids)}
-          tags: ${jsonencode(var.karpenter_odcr_neuron_tags)}
-        cuda:
-          ids: ${jsonencode(var.karpenter_odcr_cuda_ids)}
-          tags: ${jsonencode(var.karpenter_odcr_cuda_tags)}
         cudaefa:
+          capacity_types: ${jsonencode(var.karpenter_odcr_capacity_types)}
           ids: ${jsonencode(var.karpenter_odcr_cudaefa_ids)}
           tags: ${jsonencode(var.karpenter_odcr_cudaefa_tags)}
     EOT
