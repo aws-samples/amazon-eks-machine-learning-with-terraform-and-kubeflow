@@ -4,3 +4,12 @@ cluster_id:
 consolidate_after: "600s"
 capacity_type: "on-demand"
 max_pods: 20
+
+# ODCR Configuration (cudaefa only)
+odcr:
+  enabled: false
+  cudaefa:
+    capacity_types:
+      - "on-demand"
+    ids: []
+    tags: {}

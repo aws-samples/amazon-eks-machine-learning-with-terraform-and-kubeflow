@@ -23,10 +23,11 @@ spec:
         values: ["linux"]
       - key: karpenter.sh/capacity-type
         operator: In
-        values: [ {{ .Values.capacity_type }} ]
+        values:
+          - {{ .Values.capacity_type | quote }}
       - key: node.kubernetes.io/instance-type
         operator: In
-        values: 
+        values:
           - "inf2.xlarge"
           - "inf2.8xlarge"
           - "inf2.24xlarge"
@@ -77,10 +78,11 @@ spec:
         values: ["linux"]
       - key: karpenter.sh/capacity-type
         operator: In
-        values: [ {{ .Values.capacity_type }} ]
+        values:
+          - {{ .Values.capacity_type | quote }}
       - key: node.kubernetes.io/instance-type
         operator: In
-        values: 
+        values:
           - "g4dn.xlarge"
           - "g4dn.2xlarge"
           - "g4dn.4xlarge"
@@ -151,13 +153,20 @@ spec:
         values: ["linux"]
       - key: karpenter.sh/capacity-type
         operator: In
-        values: [ {{ .Values.capacity_type }} ]
+        values:
+          {{- if and .Values.odcr.enabled .Values.odcr.cudaefa.capacity_types }}
+          {{- range .Values.odcr.cudaefa.capacity_types }}
+          - {{ . | quote }}
+          {{- end }}
+          {{- else }}
+          - {{ .Values.capacity_type | quote }}
+          {{- end }}
       - key: karpenter.k8s.aws/instance-network-bandwidth
         operator: Gt
         values: [ "99999" ]
       - key: node.kubernetes.io/instance-type
         operator: In
-        values: 
+        values:
           - "p4d.24xlarge"
           - "p4de.24xlarge"
           - "p5.48xlarge"
@@ -176,6 +185,6 @@ spec:
         effect: NoExecute
       kubelet:
         maxPods: {{ .Values.max_pods }}
-      
+
   limits:
     nvidia.com/gpu: 1024
