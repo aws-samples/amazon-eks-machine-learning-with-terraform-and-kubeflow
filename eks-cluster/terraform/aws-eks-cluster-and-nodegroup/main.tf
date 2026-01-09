@@ -987,13 +987,19 @@ module "karpenter" {
     s3_policy = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
   }
 
-  # ODCR support - add permission to describe capacity reservations
+  # ODCR support - add permissions for capacity reservations
   iam_policy_statements = var.karpenter_odcr_enabled ? [
     {
       sid       = "AllowDescribeCapacityReservations"
       effect    = "Allow"
       actions   = ["ec2:DescribeCapacityReservations"]
       resources = ["*"]
+    },
+    {
+      sid       = "AllowRunInstancesOnCapacityReservation"
+      effect    = "Allow"
+      actions   = ["ec2:RunInstances", "ec2:CreateFleet"]
+      resources = ["arn:aws:ec2:${var.region}:${data.aws_caller_identity.current.account_id}:capacity-reservation/*"]
     }
   ] : []
 
