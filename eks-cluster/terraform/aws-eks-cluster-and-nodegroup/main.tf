@@ -987,6 +987,16 @@ module "karpenter" {
     s3_policy = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
   }
 
+  # ODCR support - add permission to describe capacity reservations
+  iam_policy_statements = var.karpenter_odcr_enabled ? [
+    {
+      sid       = "AllowDescribeCapacityReservations"
+      effect    = "Allow"
+      actions   = ["ec2:DescribeCapacityReservations"]
+      resources = ["*"]
+    }
+  ] : []
+
 }
 
 resource "kubectl_manifest" "aws_auth" {
@@ -1100,6 +1110,8 @@ resource "helm_release" "karpenter" {
         clusterName: "${aws_eks_cluster.eks_cluster.id}"
         clusterEndpoint: "${aws_eks_cluster.eks_cluster.endpoint}"
         interruptionQueue: "${module.karpenter[0].queue_name}"
+        featureGates:
+          reservedCapacity: ${var.karpenter_odcr_enabled}
       serviceAccount:
         annotations:
           eks.amazonaws.com/role-arn: "${module.karpenter[0].iam_role_arn}"
@@ -1127,7 +1139,19 @@ resource "helm_release" "karpenter_components" {
       cluster_id: "${aws_eks_cluster.eks_cluster.id}"
       consolidate_after: "${var.karpenter_consolidate_after}"
       capacity_type: "${var.karpenter_capacity_type}"
+      capacity_types: ${jsonencode(var.karpenter_capacity_types)}
       max_pods: "${var.karpenter_max_pods}"
+      odcr:
+        enabled: ${var.karpenter_odcr_enabled}
+        neuron:
+          ids: ${jsonencode(var.karpenter_odcr_neuron_ids)}
+          tags: ${jsonencode(var.karpenter_odcr_neuron_tags)}
+        cuda:
+          ids: ${jsonencode(var.karpenter_odcr_cuda_ids)}
+          tags: ${jsonencode(var.karpenter_odcr_cuda_tags)}
+        cudaefa:
+          ids: ${jsonencode(var.karpenter_odcr_cudaefa_ids)}
+          tags: ${jsonencode(var.karpenter_odcr_cudaefa_tags)}
     EOT
   ]
 

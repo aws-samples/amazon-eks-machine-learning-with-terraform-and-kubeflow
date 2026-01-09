@@ -5,22 +5,35 @@ metadata:
   name: default
   namespace: {{ .Values.namespace }}
 spec:
-  amiFamily: AL2023                
-  subnetSelectorTerms:          
+  amiFamily: AL2023
+  subnetSelectorTerms:
     - tags:
         karpenter.sh/discovery: "{{ .Values.cluster_id }}"
-  securityGroupSelectorTerms:   
+  securityGroupSelectorTerms:
     - tags:
         "kubernetes.io/cluster/{{ .Values.cluster_id }}": "owned"
 
+  {{- if and .Values.odcr.enabled (or (gt (len .Values.odcr.cuda.ids) 0) (gt (len .Values.odcr.cuda.tags) 0)) }}
+  capacityReservationSelectorTerms:
+    {{- range .Values.odcr.cuda.ids }}
+    - id: {{ . }}
+    {{- end }}
+    {{- if gt (len .Values.odcr.cuda.tags) 0 }}
+    - tags:
+        {{- range $key, $value := .Values.odcr.cuda.tags }}
+        {{ $key }}: {{ $value | quote }}
+        {{- end }}
+    {{- end }}
+  {{- end }}
+
   amiSelectorTerms:
     - alias: al2023@v20251103
-  
+
   role: "{{ .Values.role_name }}"
 
-  tags:                  
+  tags:
     name: {{ .Values.cluster_id }}-karpenter
-  
+
   metadataOptions:
     httpEndpoint: enabled
     httpProtocolIPv6: disabled
@@ -39,7 +52,7 @@ spec:
   userData: |
     #!/bin/bash
     # update routes if more than one ENI
-    TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` 
+    TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
     ALL_MACS=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/)
 
     MAC_ARRAY=($ALL_MACS)
@@ -51,7 +64,7 @@ spec:
         IF_NAME=$(ip -o link show | grep -F "link/ether $TRIMMED_MAC" | awk -F'[ :]+' '{print $2}')
 
         IF_IP=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/$TRIMMED_MAC/local-ipv4s | head -1)
-        
+
         CIDR=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/$TRIMMED_MAC/subnet-ipv4-cidr-block)
 
         network=$(echo $CIDR | cut -d/ -f1)
@@ -73,22 +86,35 @@ metadata:
   name: neuron
   namespace: {{ .Values.namespace }}
 spec:
-  amiFamily: AL2023                
-  subnetSelectorTerms:          
+  amiFamily: AL2023
+  subnetSelectorTerms:
     - tags:
         karpenter.sh/discovery/neuron: "{{ .Values.cluster_id }}"
-  securityGroupSelectorTerms:   
+  securityGroupSelectorTerms:
     - tags:
         "kubernetes.io/cluster/{{ .Values.cluster_id }}": "owned"
-  
+
+  {{- if and .Values.odcr.enabled (or (gt (len .Values.odcr.neuron.ids) 0) (gt (len .Values.odcr.neuron.tags) 0)) }}
+  capacityReservationSelectorTerms:
+    {{- range .Values.odcr.neuron.ids }}
+    - id: {{ . }}
+    {{- end }}
+    {{- if gt (len .Values.odcr.neuron.tags) 0 }}
+    - tags:
+        {{- range $key, $value := .Values.odcr.neuron.tags }}
+        {{ $key }}: {{ $value | quote }}
+        {{- end }}
+    {{- end }}
+  {{- end }}
+
   amiSelectorTerms:
     - alias: al2023@v20251103
 
   role: "{{ .Values.role_name }}"
 
-  tags:                  
+  tags:
     name: {{ .Values.cluster_id }}-karpenter
-  
+
   metadataOptions:
     httpEndpoint: enabled
     httpProtocolIPv6: disabled
@@ -107,7 +133,7 @@ spec:
   userData: |
     #!/bin/bash
     # update routes if more than one ENI
-    TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` 
+    TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
     ALL_MACS=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/)
 
     MAC_ARRAY=($ALL_MACS)
@@ -119,7 +145,7 @@ spec:
         IF_NAME=$(ip -o link show | grep -F "link/ether $TRIMMED_MAC" | awk -F'[ :]+' '{print $2}')
 
         IF_IP=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/$TRIMMED_MAC/local-ipv4s | head -1)
-        
+
         CIDR=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/$TRIMMED_MAC/subnet-ipv4-cidr-block)
 
         network=$(echo $CIDR | cut -d/ -f1)
@@ -141,22 +167,35 @@ metadata:
   name: cudaefa
   namespace: {{ .Values.namespace }}
 spec:
-  amiFamily: AL2023                
-  subnetSelectorTerms:          
+  amiFamily: AL2023
+  subnetSelectorTerms:
     - tags:
         karpenter.sh/discovery/cudaefa: "{{ .Values.cluster_id }}"
-  securityGroupSelectorTerms:   
+  securityGroupSelectorTerms:
     - tags:
         "kubernetes.io/cluster/{{ .Values.cluster_id }}": "owned"
-  
+
+  {{- if and .Values.odcr.enabled (or (gt (len .Values.odcr.cudaefa.ids) 0) (gt (len .Values.odcr.cudaefa.tags) 0)) }}
+  capacityReservationSelectorTerms:
+    {{- range .Values.odcr.cudaefa.ids }}
+    - id: {{ . }}
+    {{- end }}
+    {{- if gt (len .Values.odcr.cudaefa.tags) 0 }}
+    - tags:
+        {{- range $key, $value := .Values.odcr.cudaefa.tags }}
+        {{ $key }}: {{ $value | quote }}
+        {{- end }}
+    {{- end }}
+  {{- end }}
+
   amiSelectorTerms:
     - alias: al2023@v20251103
 
   role: "{{ .Values.role_name }}"
 
-  tags:                  
+  tags:
     name: {{ .Values.cluster_id }}-karpenter
-  
+
   metadataOptions:
     httpEndpoint: enabled
     httpProtocolIPv6: disabled
@@ -175,7 +214,7 @@ spec:
   userData: |
     #!/bin/bash
     # update routes if more than one ENI
-    TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"` 
+    TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
     ALL_MACS=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/)
 
     MAC_ARRAY=($ALL_MACS)
@@ -187,7 +226,7 @@ spec:
         IF_NAME=$(ip -o link show | grep -F "link/ether $TRIMMED_MAC" | awk -F'[ :]+' '{print $2}')
 
         IF_IP=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/$TRIMMED_MAC/local-ipv4s | head -1)
-        
+
         CIDR=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/$TRIMMED_MAC/subnet-ipv4-cidr-block)
 
         network=$(echo $CIDR | cut -d/ -f1)
