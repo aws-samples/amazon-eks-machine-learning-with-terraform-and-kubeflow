@@ -23,28 +23,11 @@ Following variables are implicitly defined by the [pytorch-distributed](../../..
 
 To download Hugging Face Mistral 7B pre-trained model weights, replace `YourHuggingFaceToken` with your Hugging Face token below, and execute:
 
-cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-helm install --debug nemo-mistral-7b-v01-peft-dolphin     \
-    charts/machine-learning/model-prep/hf-snapshot    \
-    --set-json='env=[{"name":"HF_MODEL_ID","value":"mistralai/Mistral-7B-v0.1"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
-    -n kubeflow-user-example-com
-
-Uninstall the Helm chart at completion:
-
-    helm uninstall nemo-mistral-7b-v01-peft-dolphin -n kubeflow-user-example-com
-
-## Convert HuggingFace Checkpoint to Nemo Checkpoint
-
-To convert checkpoint:
-
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm install --debug nemo-mistral-7b-v01-peft-dolphin \
-        charts/machine-learning/data-prep/data-process \
-        -f examples/legacy/nemo-megatron/mistral-7b-v01-peft-dolphin/hf_to_nemo.yaml -n kubeflow-user-example-com
-
-To monitor the logs, execute:
-
-    kubectl logs -f data-process-nemo-mistral-7b-v01-peft-dolphin -n kubeflow-user-example-com
+    helm install --debug nemo-mistral-7b-v01-peft-dolphin     \
+        charts/machine-learning/model-prep/hf-snapshot    \
+        --set-json='env=[{"name":"HF_MODEL_ID","value":"mistralai/Mistral-7B-v0.1"},{"name":"HF_TOKEN","value":"YourHuggingFaceToken"}]' \
+        -n kubeflow-user-example-com
 
 Uninstall the Helm chart at completion:
 
@@ -58,6 +41,23 @@ To preprocess `dolphin` dataset:
     helm install --debug nemo-mistral-7b-v01-peft-dolphin \
         charts/machine-learning/data-prep/data-process \
         -f examples/legacy/nemo-megatron/mistral-7b-v01-peft-dolphin/preprocess.yaml -n kubeflow-user-example-com
+
+To monitor the logs, execute:
+
+    kubectl logs -f data-process-nemo-mistral-7b-v01-peft-dolphin -n kubeflow-user-example-com
+
+Uninstall the Helm chart at completion:
+
+    helm uninstall nemo-mistral-7b-v01-peft-dolphin -n kubeflow-user-example-com
+
+## Convert HuggingFace Checkpoint to Nemo Checkpoint
+
+To convert checkpoint:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug nemo-mistral-7b-v01-peft-dolphin \
+        charts/machine-learning/data-prep/data-process \
+        -f examples/legacy/nemo-megatron/mistral-7b-v01-peft-dolphin/hf_to_nemo.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 

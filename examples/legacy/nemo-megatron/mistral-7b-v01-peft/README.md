@@ -33,23 +33,6 @@ Uninstall the Helm chart at completion:
 
     helm uninstall nemo-mistral-7b-v01-peft -n kubeflow-user-example-com
 
-## Convert HuggingFace Checkpoint to Nemo Checkpoint
-
-To convert checkpoint:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm install --debug nemo-mistral-7b-v01-peft \
-        charts/machine-learning/data-prep/data-process \
-        -f examples/legacy/nemo-megatron/mistral-7b-v01-peft/hf_to_nemo.yaml -n kubeflow-user-example-com
-
-To monitor the logs, execute:
-
-    kubectl logs -f data-process-nemo-mistral-7b-v01-peft -n kubeflow-user-example-com
-
-Uninstall the Helm chart at completion:
-
-    helm uninstall nemo-mistral-7b-v01-peft -n kubeflow-user-example-com
-
 ## Preprocess `pubmedqa`` dataset
 
 To preprocess `pubmedqa` dataset:
@@ -58,6 +41,23 @@ To preprocess `pubmedqa` dataset:
     helm install --debug nemo-mistral-7b-v01-peft \
         charts/machine-learning/data-prep/data-process \
         -f examples/legacy/nemo-megatron/mistral-7b-v01-peft/preprocess.yaml -n kubeflow-user-example-com
+
+To monitor the logs, execute:
+
+    kubectl logs -f data-process-nemo-mistral-7b-v01-peft -n kubeflow-user-example-com
+
+Uninstall the Helm chart at completion:
+
+    helm uninstall nemo-mistral-7b-v01-peft -n kubeflow-user-example-com
+    
+## Convert HuggingFace Checkpoint to Nemo Checkpoint
+
+To convert checkpoint:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm install --debug nemo-mistral-7b-v01-peft \
+        charts/machine-learning/data-prep/data-process \
+        -f examples/legacy/nemo-megatron/mistral-7b-v01-peft/hf_to_nemo.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
