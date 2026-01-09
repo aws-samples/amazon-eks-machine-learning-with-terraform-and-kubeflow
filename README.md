@@ -98,7 +98,7 @@ terraform apply -var="profile=default" -var="region=us-west-2" \
   -var="neuron_az=us-west-2d"
 ```
 
-Alternatively: 
+Alternatively:
 
 ```bash
 docker logout public.ecr.aws
@@ -107,6 +107,27 @@ terraform init
 
 cp terraform.tfvars.example terraform.tfvars # Add/modify variables as needed
 ./create_eks.sh
+```
+
+#### Using On-Demand Capacity Reservations (ODCR)
+
+To use [ODCR](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-capacity-reservations.html) with Karpenter for guaranteed GPU/Neuron capacity, first create capacity reservations in the AWS Console or CLI, then add the ODCR variables:
+
+```bash
+terraform apply -var="profile=default" -var="region=us-west-2" \
+  -var="cluster_name=my-eks-cluster" \
+  -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' \
+  -var="import_path=s3://<YOUR_S3_BUCKET>/eks-ml-platform/" \
+  -var="cuda_efa_az=us-west-2c" \
+  -var="neuron_az=us-west-2d" \
+  -var="karpenter_odcr_enabled=true" \
+  -var='karpenter_capacity_types=["reserved","on-demand"]' \
+  -var='karpenter_odcr_cuda_ids=["cr-xxxxx","cr-yyyyy"]'
+```
+
+Verify nodes launch with reserved capacity:
+```bash
+kubectl get nodes -l karpenter.sh/nodepool=cuda -o jsonpath='{range .items[*]}{.metadata.name}: {.metadata.labels.karpenter\.sh/capacity-type}{"\n"}{end}'
 ```
 
 ### 6. Create Home Folders on Shared Storage
@@ -299,6 +320,7 @@ Enable optional components via Terraform variables:
 | Component | Variable | Default |
 |-----------|----------|---------|
 | [Airflow](https://airflow.apache.org/) | airflow_enabled | false |
+| [Karpenter ODCR](https://karpenter.sh/docs/concepts/nodeclasses/#speccapacityreservationselectorterms) | karpenter_odcr_enabled | false |
 | [Kubeflow](https://www.kubeflow.org/) | kubeflow_platform_enabled | false |
 | [KServe](https://kserve.github.io/website/latest/) | kserve_enabled | false |
 | [Kueue](https://kueue.sigs.k8s.io/) | kueue_enabled | false |
