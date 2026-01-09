@@ -24,6 +24,7 @@ def find_matching_helm_pods(release_name:str,
 
 def wait_for_helm_release_pods(release_name:str, 
                                namespace:str='kubeflow-user-example-com', 
+                               interval:float=60,
                                timeout:float=3600):
     """Wait for all pods in a helm release to complete successfully"""
     print(f"Waiting for pods in release '{release_name}' to complete...")
@@ -35,7 +36,7 @@ def wait_for_helm_release_pods(release_name:str,
             
             if not matching_pods:
                 print(f"No pods found in Hem release: {release_name} waiting...")
-                time.sleep(60)
+                time.sleep(interval)
                 continue
             
             all_completed = True
@@ -56,7 +57,7 @@ def wait_for_helm_release_pods(release_name:str,
         except Exception as e:
             print(f"Error checking pods: {e}")
         
-        time.sleep(60)
+        time.sleep(interval)
     
     print(f"Timeout waiting for pods to complete")
     return False
@@ -107,6 +108,7 @@ def is_application_healthy(name:str, namespace: str) -> bool:
     
 def wait_for_rayservice_ready(release_name:str, 
                               namespace:str='kubeflow-user-example-com', 
+                              interval:float=60,
                               timeout:float=1800) -> bool:
     """Wait for RayService to be ready and healthy"""
     print(f"Waiting for RayService '{release_name}' to be ready...")
@@ -130,7 +132,7 @@ def wait_for_rayservice_ready(release_name:str,
             
             if not matching_rayservice:
                 print(f"No RayService found for release: {release_name}, waiting...")
-                time.sleep(60)
+                time.sleep(interval)
                 continue
             
             rayservice_name = matching_rayservice['metadata']['name']
@@ -146,7 +148,7 @@ def wait_for_rayservice_ready(release_name:str,
                     print("Waiting for Ray Serve application to be Ready")
                     if (time.time() - start_time) > timeout:
                         break
-                    time.sleep(60)
+                    time.sleep(interval)
                     continue
                 
                 if app_healthy:
@@ -156,7 +158,7 @@ def wait_for_rayservice_ready(release_name:str,
         except Exception as e:
             print(f"Error checking RayService: {e}")
         
-        time.sleep(60)
+        time.sleep(interval)
     
     print(f"Timeout waiting for RayService to be Running and Healthy")
     return False
@@ -176,7 +178,7 @@ def find_k8s_service(service_name:str,
     
     return target_service
 
-def find_matching_helm_services(release_name, namespace='kubeflow-user-example-com'):
+def find_matching_helm_services(release_name:str, namespace:str='kubeflow-user-example-com'):
     """Find services managed by a specific Helm release"""
     helm_services = v1.list_namespaced_service(
         namespace=namespace
@@ -192,7 +194,8 @@ def find_matching_helm_services(release_name, namespace='kubeflow-user-example-c
     return matching_services
 
 # Wait for Triton server to be ready
-def wait_for_triton_server(release_name, namespace='kubeflow-user-example-com', timeout=1800):
+def wait_for_triton_server(release_name:str, namespace:str='kubeflow-user-example-com', 
+                           interval:float=60, timeout:float=1800):
     """Wait for Triton server pods to be running and ready"""
     print(f"Waiting for Triton server '{release_name}' to be ready...")
     start_time = time.time()
@@ -203,7 +206,7 @@ def wait_for_triton_server(release_name, namespace='kubeflow-user-example-com', 
             
             if not matching_pods:
                 print(f"No pods found in Hem release: {release_name} waiting...")
-                time.sleep(60)
+                time.sleep(interval)
                 continue
             
             all_ready = True
@@ -223,7 +226,7 @@ def wait_for_triton_server(release_name, namespace='kubeflow-user-example-com', 
         except Exception as e:
             print(f"Error checking pods: {e}")
         
-        time.sleep(60)
+        time.sleep(interval)
     
     print(f"Timeout waiting for Triton server to be ready")
     return False

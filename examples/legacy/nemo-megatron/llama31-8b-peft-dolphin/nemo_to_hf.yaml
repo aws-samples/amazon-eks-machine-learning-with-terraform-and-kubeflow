@@ -1,10 +1,12 @@
-image: nvcr.io/nvidia/nemo:24.01.framework
+image: nvcr.io/nvidia/nemo:24.12
 resources:
   requests:
     "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
   limits:
     "nvidia.com/gpu": 8
-  node_type: 'g6e.48xlarge' 
+    "vpc.amazonaws.com/efa": 4
+  node_type: 'p4d.24xlarge'  
 ebs:
   storage: 500Gi
   mount_path: /tmp
@@ -12,13 +14,8 @@ tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"
     effect: "NoSchedule"
-git:
-  repo_url: 'https://github.com/NVIDIA/NeMo.git'
-  branch: main
-  commit: d2283e3620cd7f99dbe29fdf079757ab9f6cdf01
-pre_script: 
-  - pip install transformers==4.40.2
-  - SCRIPT_DIR=scripts/nlp_language_modeling
+pre_script:
+  - SCRIPT_DIR=/opt/NeMo/scripts/checkpoint_converters
   - cd $SCRIPT_DIR
   - mkdir -p $LOG_ROOT
   - OUTPUT_LOG=$LOG_ROOT/nemo_to_hf.log
@@ -34,7 +31,7 @@ process:
     - name: MODEL_PATH
       value: /fsx/pretrained-models/meta-llama/Llama-3.1-8B
     - name: EXP_NAME
-      value: peft_dolphin
+      value: peft
     - name: HF_TOKEN
       value: "{{ .Values.hf_token }}"
   command:
@@ -45,5 +42,4 @@ process:
     - --output_path=$TMP_OUTPUT_PATH/model.bin
     - --hf_input_path=$MODEL_PATH
     - --hf_output_path=$TMP_OUTPUT_PATH
-    - --cpu-only
     - '2>&1 | tee $OUTPUT_LOG'

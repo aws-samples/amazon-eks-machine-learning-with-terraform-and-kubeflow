@@ -40,7 +40,7 @@ To convert checkpoint:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-mistral-7b-v01-peft-dolphin \
         charts/machine-learning/data-prep/data-process \
-        -f examples/legacy/nemo-megatronmistral-7b-v01-peft-dolphin/hf_to_nemo.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatron/mistral-7b-v01-peft-dolphin/hf_to_nemo.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -57,7 +57,7 @@ To preprocess `dolphin` dataset:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-mistral-7b-v01-peft-dolphin \
         charts/machine-learning/data-prep/data-process \
-        -f examples/legacy/nemo-megatronmistral-7b-v01-peft-dolphin/preprocess.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatron/mistral-7b-v01-peft-dolphin/preprocess.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -74,7 +74,7 @@ To do peft:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-mistral-7b-v01-peft-dolphin \
        charts/machine-learning/training/pytorchjob-distributed \
-        -f examples/legacy/nemo-megatronmistral-7b-v01-peft-dolphin/peft.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatron/mistral-7b-v01-peft-dolphin/peft.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -91,7 +91,7 @@ To evaluate peft trained model over test dataset:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-mistral-7b-v01-peft-dolphin \
        charts/machine-learning/training/pytorchjob-distributed \
-        -f examples/legacy/nemo-megatronmistral-7b-v01-peft-dolphin/peft_eval.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatron/mistral-7b-v01-peft-dolphin/peft_eval.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -109,7 +109,7 @@ To merge PEFT model to base model:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-mistral-7b-v01-peft-dolphin \
         charts/machine-learning/data-prep/data-process \
-        -f examples/legacy/nemo-megatronmistral-7b-v01-peft-dolphin/merge_peft.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatron/mistral-7b-v01-peft-dolphin/merge_peft.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -126,7 +126,7 @@ To convert checkpoint:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-mistral-7b-v01-peft-dolphin \
         charts/machine-learning/data-prep/data-process \
-        -f examples/legacy/nemo-megatronmistral-7b-v01-peft-dolphin/nemo_to_hf.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatron/mistral-7b-v01-peft-dolphin/nemo_to_hf.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 

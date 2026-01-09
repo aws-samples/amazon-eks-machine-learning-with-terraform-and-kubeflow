@@ -40,7 +40,7 @@ To convert checkpoint:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-llama31-8b-peft-dolphin \
         charts/machine-learning/data-prep/data-process \
-        -f examples/legacy/nemo-megatronllama31-8b-peft-dolphin/hf_to_nemo.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatron/llama31-8b-peft-dolphin/hf_to_nemo.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -57,7 +57,7 @@ To preprocess `dolphin` dataset:
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug nemo-llama31-8b-peft-dolphin \
         charts/machine-learning/data-prep/data-process \
-        -f examples/legacy/nemo-megatronllama31-8b-peft-dolphin/preprocess.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatron/llama31-8b-peft-dolphin/preprocess.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -75,7 +75,7 @@ To do peft:
     helm install --debug nemo-llama31-8b-peft-dolphin \
        charts/machine-learning/training/pytorchjob-distributed \
        --set hf_token="YourHuggingFaceToken" \
-        -f examples/legacy/nemo-megatronllama31-8b-peft-dolphin/peft.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatron/llama31-8b-peft-dolphin/peft.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -93,7 +93,7 @@ To evaluate peft trained model over test dataset:
     helm install --debug nemo-llama31-8b-peft-dolphin \
        charts/machine-learning/training/pytorchjob-distributed \
        --set hf_token="YourHuggingFaceToken" \
-        -f examples/legacy/nemo-megatronllama31-8b-peft-dolphin/peft_eval.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatron/llama31-8b-peft-dolphin/peft_eval.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -112,7 +112,7 @@ To merge PEFT model to base model:
     helm install --debug nemo-llama31-8b-peft-dolphin \
         charts/machine-learning/data-prep/data-process \
         --set hf_token="YourHuggingFaceToken" \
-        -f examples/legacy/nemo-megatronllama31-8b-peft-dolphin/merge_peft.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatron/llama31-8b-peft-dolphin/merge_peft.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 
@@ -130,7 +130,7 @@ To convert checkpoint:
     helm install --debug nemo-llama31-8b-peft-dolphin \
         charts/machine-learning/data-prep/data-process \
         --set hf_token="YourHuggingFaceToken" \
-        -f examples/legacy/nemo-megatronllama31-8b-peft-dolphin/nemo_to_hf.yaml -n kubeflow-user-example-com
+        -f examples/legacy/nemo-megatron/llama31-8b-peft-dolphin/nemo_to_hf.yaml -n kubeflow-user-example-com
 
 To monitor the logs, execute:
 

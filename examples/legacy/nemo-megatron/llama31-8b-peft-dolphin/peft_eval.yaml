@@ -1,4 +1,4 @@
-image: nvcr.io/nvidia/nemo:24.01.framework
+image: nvcr.io/nvidia/nemo:24.12
 resources:
   requests:
     "nvidia.com/gpu": 8
@@ -6,9 +6,9 @@ resources:
   limits:
     "nvidia.com/gpu": 8
     "vpc.amazonaws.com/efa": 4
-  nnodes: 1 
+  nnodes: 1
   nproc_per_node: 8 
-  node_type: 'g6e.48xlarge' 
+  node_type: 'p4d.24xlarge'  
 ebs:
   storage: 400Gi
   mount_path: /tmp
@@ -16,10 +16,6 @@ tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"
     effect: "NoSchedule"
-git:
-  repo_url: 'https://github.com/NVIDIA/NeMo.git'
-  branch: main
-  commit: d2283e3620cd7f99dbe29fdf079757ab9f6cdf01
 inline_script:
   - |+
     cat > /tmp/fix_peft_ckpt.py <<EOF
@@ -76,7 +72,6 @@ inline_script:
 
     EOF
 pre_script: 
-  - pip install transformers==4.40.2
   - export DISTRIBUTED_ARGS="--nproc_per_node $PET_NPROC_PER_NODE --nnodes $PET_NNODES --node_rank $PET_NODE_RANK --master_addr $PET_MASTER_ADDR --master_port $PET_MASTER_PORT"
   - echo "DISTRIBUTED_ARGS=$DISTRIBUTED_ARGS"
   - export LOGS_DIR=$LOG_ROOT/$PET_NODE_RANK
@@ -91,7 +86,7 @@ pre_script:
   - PP_SIZE=1
   - TOKENS_TO_GENERATE=700
   - OUTPUT_PREFIX=$LOG_ROOT/nemo_experiments/$EXP_NAME/eval_results
-  - PATH_TO_TRAINED_MODEL=$LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints/${EXP_NAME}.nemo
+  - export PATH_TO_TRAINED_MODEL=$LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints/${EXP_NAME}.nemo
   - export HYDRA_FULL_ERROR=1
   - export PEFT_ARGS="
     trainer.precision=bf16
@@ -118,7 +113,8 @@ pre_script:
     model.data.test_ds.output_file_path_prefix=${OUTPUT_PREFIX} 
     model.answer_only_loss=True 
     model.data.test_ds.write_predictions_to_file=True"
-  - SCRIPT_DIR=examples/nlp/language_modeling/tuning
+  - SCRIPT_DIR=/opt/NeMo/examples/nlp/language_modeling/tuning
+  - echo "PATH_TO_TRAINED_MODEL=$PATH_TO_TRAINED_MODEL"
   - python /tmp/fix_peft_ckpt.py
 train:
   env:
@@ -135,7 +131,7 @@ train:
     - name: DATA_ROOT
       value: "/fsx/home/{{ .Release.Name }}/data"
     - name: EXP_NAME
-      value: "peft_dolphin"
+      value: "peft"
     - name: HF_TOKEN
       value: "{{ .Values.hf_token }}"
   command:

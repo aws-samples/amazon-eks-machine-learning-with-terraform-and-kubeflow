@@ -1,10 +1,12 @@
-image: nvcr.io/nvidia/nemo:24.01.framework
+image: nvcr.io/nvidia/nemo:24.12
 resources:
   requests:
     "nvidia.com/gpu": 8
+    "vpc.amazonaws.com/efa": 4
   limits:
     "nvidia.com/gpu": 8
-  node_type: 'g6e.48xlarge' 
+    "vpc.amazonaws.com/efa": 4
+  node_type: 'p4d.24xlarge'  
 ebs:
   storage: 500Gi
   mount_path: /tmp
@@ -12,19 +14,14 @@ tolerations:
   - key: "nvidia.com/gpu"
     operator: "Exists"
     effect: "NoSchedule"
-git:
-  repo_url: 'https://github.com/NVIDIA/NeMo.git'
-  branch: main
-  commit: d2283e3620cd7f99dbe29fdf079757ab9f6cdf01
-pre_script: 
-  - pip install transformers==4.40.2
-  - SCRIPT_DIR=scripts/nlp_language_modeling/merge_lora_weights
+pre_script:
+  - SCRIPT_DIR=/opt/NeMo/scripts/nlp_language_modeling/merge_lora_weights
   - cd $SCRIPT_DIR
   - mkdir -p $LOG_ROOT
   - OUTPUT_LOG=$LOG_ROOT/merge_peft.log
   - PATH_TO_BASE_MODEL=$MODEL_PATH/ckpt.nemo
   - echo "PATH_TO_BASE_MODEL=$PATH_TO_BASE_MODEL"
-  - PATH_TO_PEFT_MODEL=$LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints/$EXP_NAME_fixed.nemo
+  - PATH_TO_PEFT_MODEL=$LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints/${EXP_NAME}_fixed.nemo
   - echo "PATH_TO_PEFT_MODEL=$PATH_TO_PEFT_MODEL"
   - PATH_TO_MERGED_MODEL=$LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints/merged_model.nemo
   - echo "PATH_TO_MERGED_MODEL=$PATH_TO_MERGED_MODEL"
@@ -35,12 +32,12 @@ process:
     - name: MODEL_PATH
       value: /fsx/pretrained-models/mistralai/Mistral-7B-v0.1
     - name: EXP_NAME
-      value: peft_pubmedqa
+      value: peft
   command:
     - python
   args:
     - merge.py
-    - trainer.accelerator=cpu
+    - trainer.accelerator=gpu
     - gpt_model_file=$PATH_TO_BASE_MODEL
     - lora_model_path=$PATH_TO_PEFT_MODEL
     - merged_model_path=$PATH_TO_MERGED_MODEL

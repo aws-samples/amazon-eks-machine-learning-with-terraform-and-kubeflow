@@ -1,4 +1,4 @@
-image: nvcr.io/nvidia/nemo:24.01.framework
+image: python:3.10-slim
 resources:
   requests:
     cpu: "300m"
@@ -43,6 +43,8 @@ inline_script:
 
   EOF
 pre_script: 
+  - pip3 install --upgrade pip
+  - pip3 install scikit-learn
   - export OUTPUT_PREFIX=$LOG_ROOT/nemo_experiments/$EXP_NAME/eval_results
   - OUTPUT_LOG=$LOG_ROOT/peft_accuracy.log
 process:
@@ -50,7 +52,7 @@ process:
     - name: LOG_ROOT
       value: "/efs/home/{{ .Release.Name }}/logs"
     - name: EXP_NAME
-      value: "peft_pubmedqa"
+      value: "peft"
   command:
     -  "python"
   args: 
