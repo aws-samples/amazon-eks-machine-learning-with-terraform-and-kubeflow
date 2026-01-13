@@ -355,7 +355,7 @@ spec:
             secretKeyRef:
               key: secretkey
               name: mlpipeline-minio-artifact
-        image: gcr.io/ml-pipeline/minio:RELEASE.2019-08-14T20-37-41Z-license-compliance
+        image: minio/minio:RELEASE.2022-12-12T19-27-27Z
         name: minio
         ports:
         - containerPort: 9000
@@ -684,7 +684,7 @@ spec:
               name: mlpipeline-minio-artifact
         - name: ALLOW_CUSTOM_VISUALIZATIONS
           value: 'true'
-        image: gcr.io/ml-pipeline/frontend:2.0.1
+        image: ghcr.io/kubeflow/kfp-frontend:2.14.3
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
