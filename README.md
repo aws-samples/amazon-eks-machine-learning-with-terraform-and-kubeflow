@@ -95,7 +95,7 @@ terraform apply -var="profile=default" -var="region=us-west-2" \
   -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' \
   -var="import_path=s3://<YOUR_S3_BUCKET>/eks-ml-platform/" \
   -var="cuda_efa_az=us-west-2c" \
-  -var="neuron_az=us-west-2d"
+  -var="neuron_az=us-west-2c"
 ```
 
 Alternatively: 
