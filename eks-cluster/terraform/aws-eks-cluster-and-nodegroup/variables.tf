@@ -511,13 +511,13 @@ variable "mlflow_db_max_capacity" {
 }
 
 variable neuron_capacity_reservation_id {
-  description = "targetted odcr id for neuron type devices"
+  description = "targeted odcr id for neuron type devices"
   type = string
   default = ""
 }
 
 variable nvidia_capacity_reservation_id {
-  description = "targetted odcr id for nvidia devices"
+  description = "targeted odcr id for nvidia devices"
   type = string
   default = ""
 }
@@ -528,6 +528,10 @@ variable nvidia_capacity_reservation_id {
 
 variable "hyperpod_enabled" {
   description = "Enable SageMaker HyperPod EKS integration for resilient ML workloads"
+  type        = bool
+  default     = false
+}
+
 # Karpenter ODCR Configuration (cudaefa NodePool only)
 variable "karpenter_odcr_enabled" {
   description = "Enable ODCR support for Karpenter cudaefa NodePool"
@@ -571,6 +575,7 @@ variable "hyperpod_instance_groups" {
   ]
 }
 
+
 variable "hyperpod_node_recovery" {
   description = "HyperPod node recovery mode. 'Automatic' enables self-healing for failed nodes."
   type        = string
@@ -580,6 +585,8 @@ variable "hyperpod_node_recovery" {
     condition     = contains(["Automatic", "None"], var.hyperpod_node_recovery)
     error_message = "hyperpod_node_recovery must be either 'Automatic' or 'None'."
   }
+}
+
 variable "karpenter_odcr_cudaefa_ids" {
   description = "List of ODCR IDs for CUDA EFA instances (e.g., ['cr-xxx', 'cr-yyy'])"
   type        = list(string)
