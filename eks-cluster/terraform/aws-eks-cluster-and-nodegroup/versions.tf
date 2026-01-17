@@ -16,5 +16,21 @@ terraform {
       source  = "hashicorp/helm"
       version = "~> 2.17.0"
     }
+
+    # AWSCC provider for SageMaker HyperPod
+    # Required for awscc_sagemaker_cluster resource
+    awscc = {
+      source  = "hashicorp/awscc"
+      version = ">= 1.0.0"
+    }    
   }
+}
+
+# Add AWSCC provider configuration
+provider "awscc" {
+  region = var.region
+  
+  # Use the same profile as AWS provider if specified
+  # Uncomment if using named profiles:
+  # profile = var.profile
 }

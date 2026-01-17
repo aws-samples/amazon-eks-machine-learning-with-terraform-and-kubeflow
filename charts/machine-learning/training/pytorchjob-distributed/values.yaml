@@ -6,7 +6,7 @@ resources:
   limits: {}
   nnodes: 2
   nproc_per_node:
-  node_type: 
+  node_type:
 tolerations: []
 pvc:
   - name: pv-fsx
@@ -23,3 +23,19 @@ train:
   env: []
   command: []
   args: []
+
+# SageMaker HyperPod Configuration
+# When enabled, automatically:
+# - Prefixes node_type with 'ml.' for HyperPod instance types
+# - Adds HyperPod-specific tolerations for health-aware scheduling
+# - Enables job auto-restart annotation for resilient training
+hyperpod:
+  enabled: false
+  # Additional tolerations for HyperPod nodes (merged with existing tolerations)
+  tolerations:
+    - key: "sagemaker.amazonaws.com/node-health-status"
+      operator: "Equal"
+      value: "Unschedulable"
+      effect: "NoSchedule"
+  # Enable job auto-restart on node failures
+  auto_restart: true

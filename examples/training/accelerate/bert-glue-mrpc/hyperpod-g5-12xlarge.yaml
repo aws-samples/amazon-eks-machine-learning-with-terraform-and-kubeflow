@@ -1,0 +1,23 @@
+# HyperPod Configuration for g5.12xlarge (4 GPUs)
+#
+# Usage:
+#   helm install bert-hp \
+#     ../../../../charts/machine-learning/training/pytorchjob-elastic/ \
+#     -f pretrain.yaml \
+#     -f hyperpod-g5-12xlarge.yaml \
+#     -n kubeflow
+
+# Override resources for g5.12xlarge
+resources:
+  requests:
+    "nvidia.com/gpu": 4
+  limits:
+    "nvidia.com/gpu": 4
+  nnodes: 1
+  nproc_per_node: 4
+  node_type: 'g5.12xlarge'
+
+# Enable HyperPod with auto-restart
+hyperpod:
+  enabled: true
+  auto_restart: true

@@ -63,3 +63,9 @@ variable "kubeflow_platform_enabled" {
   description = "Install Kubeflow Components, if enabled"
   type        = bool
 }
+
+variable "enable_training_operator" {
+  description = "Install Kubeflow Training Operator. Set to false if using HyperPod Training Operator."
+  type        = bool
+  default     = true
+}

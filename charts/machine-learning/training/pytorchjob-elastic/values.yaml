@@ -2,7 +2,7 @@ image:
 backoff_limit: 2000
 resources:
   nnodes: 1
-  nproc_per_node: 
+  nproc_per_node:
   node_type:
   requests: {}
   limits: {}
@@ -27,3 +27,19 @@ train:
   env: []
   command: []
   args: []
+
+# SageMaker HyperPod Configuration
+# When enabled, automatically:
+# - Prefixes node_type with 'ml.' for HyperPod instance types
+# - Adds HyperPod-specific tolerations for health-aware scheduling
+# - Enables job auto-restart annotation for resilient training
+hyperpod:
+  enabled: false
+  # Additional tolerations for HyperPod nodes (merged with existing tolerations)
+  tolerations:
+    - key: "sagemaker.amazonaws.com/node-health-status"
+      operator: "Equal"
+      value: "Unschedulable"
+      effect: "NoSchedule"
+  # Enable job auto-restart on node failures
+  auto_restart: true
