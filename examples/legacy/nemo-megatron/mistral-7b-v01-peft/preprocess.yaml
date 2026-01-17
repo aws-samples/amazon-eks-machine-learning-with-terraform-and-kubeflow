@@ -1,4 +1,4 @@
-image: nvcr.io/nvidia/nemo:24.01.framework
+image: python:3.10-bookworm
 resources:
   requests:
     cpu: "300m"

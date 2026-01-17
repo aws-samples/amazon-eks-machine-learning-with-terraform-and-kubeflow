@@ -1,4 +1,4 @@
-image: nvcr.io/nvidia/nemo:24.01.framework
+image: python:3.10-slim
 resources:
   requests:
     cpu: "300m"
@@ -56,6 +56,8 @@ inline_script:
       
   EOF
 pre_script:
+  - pip3 install --upgrade pip
+  - pip3 install datasets==3.2.0
   - 'if [ -d $DATA_ROOT ]; then rm -rf $DATA_ROOT; fi'
   - mkdir -p $DATA_ROOT
   - cd /tmp

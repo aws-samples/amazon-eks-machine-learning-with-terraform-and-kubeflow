@@ -528,6 +528,9 @@ variable nvidia_capacity_reservation_id {
 
 variable "hyperpod_enabled" {
   description = "Enable SageMaker HyperPod EKS integration for resilient ML workloads"
+# Karpenter ODCR Configuration (cudaefa NodePool only)
+variable "karpenter_odcr_enabled" {
+  description = "Enable ODCR support for Karpenter cudaefa NodePool"
   type        = bool
   default     = false
 }
@@ -577,6 +580,22 @@ variable "hyperpod_node_recovery" {
     condition     = contains(["Automatic", "None"], var.hyperpod_node_recovery)
     error_message = "hyperpod_node_recovery must be either 'Automatic' or 'None'."
   }
+variable "karpenter_odcr_cudaefa_ids" {
+  description = "List of ODCR IDs for CUDA EFA instances (e.g., ['cr-xxx', 'cr-yyy'])"
+  type        = list(string)
+  default     = []
+}
+
+variable "karpenter_odcr_cudaefa_tags" {
+  description = "Tags to select ODCRs for CUDA EFA instances (e.g., {purpose = 'distributed-training'})"
+  type        = map(string)
+  default     = {}
+}
+
+variable "karpenter_odcr_capacity_types" {
+  description = "Karpenter ODCR capacity types list: 'on-demand', 'spot', 'reserved'"
+  type        = list(string)
+  default     = ["on-demand"]
 }
 
 # END variables
