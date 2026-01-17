@@ -327,6 +327,7 @@ Enable optional components via Terraform variables:
 | [MLFlow](https://mlflow.org/) | mlflow_enabled | false |
 | [Nvidia DCGM Exporter](https://github.com/NVIDIA/dcgm-exporter) | dcgm_exporter_enabled | false |
 | [SageMaker Controller](https://github.com/aws-controllers-k8s/sagemaker-controller) | ack_sagemaker_enabled | false |
+| [SageMaker HyperPod](https://aws.amazon.com/sagemaker/ai/hyperpod/) | hyperpod_enabled | false |
 | [Slinky Slurm](https://github.com/slinkyproject) | slurm_enabled | false |
 
 ## Inference Examples
