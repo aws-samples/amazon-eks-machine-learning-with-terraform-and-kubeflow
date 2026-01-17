@@ -79,10 +79,12 @@ Configure S3 backend for Terraform state storage. Replace `<YOUR_S3_BUCKET>` wit
 ### 5. Initialize and Apply Terraform
 
 * Logout from AWS Public ECR as otherwise `terraform apply` command may fail.
-* Specify at least three AWS Availability Zones from your AWS Region in `azs` terraform variable.
+* Specify at least three AWS Availability Zones from your AWS Region in the `azs` terraform variable.
 * Replace `<YOUR_S3_BUCKET>` with the S3 bucket you created in Prerequisites.
-* To use Amazon EC2 [P4](https://aws.amazon.com/ec2/instance-types/p4/), and [P5](https://aws.amazon.com/ec2/instance-types/p5/) instances, set `cuda_efa_az` terrraform variable to a zone in `azs` that supports P-family instances.
-* To use Amazon EC2 [Inf2](https://aws.amazon.com/ec2/instance-types/inf2/), [Trn1](https://aws.amazon.com/ec2/instance-types/trn1/), and  [Trn2](https://aws.amazon.com/ec2/instance-types/trn2/) instances, set `neuron_az` terraform variable to a zone in your `azs` that supports these instance types.
+* To use Amazon EC2 [P4](https://aws.amazon.com/ec2/instance-types/p4/), and [P5](https://aws.amazon.com/ec2/instance-types/p5/) instances, set `cuda_efa_az` terrraform variable to a zone in `azs` list that supports P-family instances.
+* To use Amazon EC2 AWS [Inferentia](https://aws.amazon.com/ai/machine-learning/inferentia/) and [Trainium](https://aws.amazon.com/ai/machine-learning/trainium/) instance types instances, set `neuron_az` terraform variable to an Availability Zone in your `azs` list that supports these instance types. 
+
+The command below is just an example: You will need to adapt it specify the `azs` that support the P-family, and AWS Inferentia and Trainium instances within your AWS Region.
 
 ```bash
 docker logout public.ecr.aws
@@ -119,7 +121,7 @@ terraform apply -var="profile=default" -var="region=us-west-2" \
   -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' \
   -var="import_path=s3://<YOUR_S3_BUCKET>/eks-ml-platform/" \
   -var="cuda_efa_az=us-west-2c" \
-  -var="neuron_az=us-west-2d" \
+  -var="neuron_az=us-west-2c" \
   -var="karpenter_odcr_enabled=true" \
   -var='karpenter_odcr_capacity_types=["reserved","on-demand"]' \
   -var='karpenter_odcr_cudaefa_ids=["cr-xxxxx","cr-yyyyy"]'
@@ -453,12 +455,14 @@ kubectl delete -f eks-cluster/utils/attach-pvc.yaml -n kubeflow
 
 ### Destroy Infrastructure
 
+This command should mirror your [Apply Terraform](#5-initialize-and-apply-terraform) command:
+
 ```bash
 cd eks-cluster/terraform/aws-eks-cluster-and-nodegroup
 # Replace <YOUR_S3_BUCKET> with your actual S3 bucket name
 terraform destroy -var="profile=default" -var="region=us-west-2" \
   -var="cluster_name=my-eks-cluster" \
-  -var='azs=["us-west-2d","us-west-2b","us-west-2c"]' \
+  -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' \
   -var="import_path=s3://<YOUR_S3_BUCKET>/ml-platform/"
 ```
 
