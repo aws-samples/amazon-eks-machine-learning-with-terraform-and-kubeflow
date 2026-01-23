@@ -131,6 +131,9 @@ resource "kubernetes_secret" "kagent_db" {
     namespace = kubernetes_namespace.kagent.metadata[0].name
   }
 
+  # Note: This secret is created for operators/debugging purposes.
+  # The kagent Helm chart receives database credentials via database.postgres.url
+  # (set_sensitive in helm_release.kagent below), not from this secret.
   data = {
     host     = aws_rds_cluster.kagent[0].endpoint
     port     = "5432"
@@ -183,11 +186,11 @@ resource "helm_release" "kagent" {
     }
   }
 
-  dynamic "set" {
+  dynamic "set_sensitive" {
     for_each = var.database_type == "postgresql" ? [1] : []
     content {
-      name  = "database.postgres.secretName"
-      value = kubernetes_secret.kagent_db[0].metadata[0].name
+      name  = "database.postgres.url"
+      value = "postgresql://${var.db_username}:${random_password.kagent_db_password[0].result}@${aws_rds_cluster.kagent[0].endpoint}:5432/${var.db_name}"
     }
   }
 
@@ -293,8 +296,7 @@ resource "helm_release" "kagent" {
   values = var.additional_helm_values != "" ? [var.additional_helm_values] : []
 
   depends_on = [
-    helm_release.kagent_crds,
-    kubernetes_secret.kagent_db
+    helm_release.kagent_crds
   ]
 }
 
