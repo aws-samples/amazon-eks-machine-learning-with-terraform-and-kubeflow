@@ -33,9 +33,9 @@ module "kagent" {
 
   # Istio ingress configuration
   enable_istio_ingress = var.kagent_enable_istio_ingress
-  istio_gateway        = "ingress/istio-ingressgateway"
-  ingress_host         = "istio-ingressgateway.ingress.svc.cluster.local"
-  ingress_path_prefix  = "/kagent"
+  istio_gateway        = var.kagent_ingress_gateway != "" ? var.kagent_ingress_gateway : "${var.ingress_namespace}/${var.ingress_gateway}"
+  ingress_hosts        = var.kagent_ingress_hosts
+  ingress_path_prefix  = var.kagent_ingress_path_prefix
 
   # Istio sidecar injection
   enable_istio_injection = var.kagent_enable_istio_injection

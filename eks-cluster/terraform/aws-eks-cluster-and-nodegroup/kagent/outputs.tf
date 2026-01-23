@@ -54,7 +54,11 @@ output "ingress_enabled" {
 
 output "ingress_url" {
   description = "Ingress URL for kagent UI (if ingress is enabled)"
-  value       = var.enable_ui && var.enable_istio_ingress ? "https://${var.ingress_host}${var.ingress_path_prefix}" : null
+  value       = var.enable_ui && var.enable_istio_ingress ? (
+    var.ingress_hosts[0] == "*" ?
+      "<configured-dns-host>${var.ingress_path_prefix}" :
+      "https://${var.ingress_hosts[0]}${var.ingress_path_prefix}"
+  ) : null
 }
 
 output "bedrock_access_enabled" {

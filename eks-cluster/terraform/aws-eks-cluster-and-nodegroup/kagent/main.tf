@@ -313,9 +313,7 @@ resource "kubernetes_manifest" "kagent_virtualservice" {
       namespace = kubernetes_namespace.kagent.metadata[0].name
     }
     spec = {
-      hosts = [
-        var.ingress_host
-      ]
+      hosts = var.ingress_hosts
       gateways = [
         var.istio_gateway
       ]

@@ -657,6 +657,24 @@ variable "kagent_enable_istio_ingress" {
   default     = false
 }
 
+variable "kagent_ingress_gateway" {
+  description = "Istio Gateway name for kagent UI ingress (namespace/name format)"
+  type        = string
+  default     = ""  # Will default to ingress_namespace/ingress_gateway if not specified
+}
+
+variable "kagent_ingress_hosts" {
+  description = "List of DNS hosts for kagent UI ingress (use ['*'] for wildcard)"
+  type        = list(string)
+  default     = ["*"]
+}
+
+variable "kagent_ingress_path_prefix" {
+  description = "URL path prefix for kagent UI ingress"
+  type        = string
+  default     = "/kagent"
+}
+
 variable "kagent_enable_bedrock_access" {
   description = "Enable IRSA for Amazon Bedrock access"
   type        = bool

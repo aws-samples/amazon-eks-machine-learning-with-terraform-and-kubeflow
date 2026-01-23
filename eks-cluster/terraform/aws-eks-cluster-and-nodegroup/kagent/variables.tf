@@ -190,15 +190,15 @@ variable "enable_istio_ingress" {
 }
 
 variable "istio_gateway" {
-  description = "Istio Gateway to use for kagent UI (e.g., 'ingress/istio-ingressgateway')"
+  description = "Istio Gateway to use for kagent UI in namespace/name format (e.g., 'ingress/ingress-gateway')"
   type        = string
-  default     = "ingress/istio-ingressgateway"
+  default     = "ingress/ingress-gateway"
 }
 
-variable "ingress_host" {
-  description = "Host/domain for kagent UI ingress"
-  type        = string
-  default     = "kagent.example.com"
+variable "ingress_hosts" {
+  description = "List of DNS hosts for kagent UI ingress (use ['*'] for wildcard)"
+  type        = list(string)
+  default     = ["*"]
 }
 
 variable "ingress_path_prefix" {
