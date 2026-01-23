@@ -8,7 +8,6 @@ logs/*
 *.log
 aloasi.txt
 eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform.tfvars
-claude.md
 /shelf/
 /workspace.xml
 # Editor-based HTTP Client requests
@@ -18,9 +17,4 @@ claude.md
 # Datasource local storage ignored files
 /dataSources/
 /dataSources.local.xml
-/.idea/material_theme_project_new.xml
-/.idea/.gitignore
-/.idea/amazon-eks-machine-learning-with-terraform-and-kubeflow.iml
-/.idea/misc.xml
-/.idea/modules.xml
-/.idea/vcs.xml
+/.idea/*
