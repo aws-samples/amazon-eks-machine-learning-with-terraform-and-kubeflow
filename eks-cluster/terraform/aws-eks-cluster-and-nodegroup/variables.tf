@@ -605,4 +605,68 @@ variable "karpenter_odcr_capacity_types" {
   default     = ["on-demand"]
 }
 
+#---------------------------------------------------------------
+# kagent Configuration
+#---------------------------------------------------------------
+
+variable "kagent_enabled" {
+  description = "Install kagent - Kubernetes native AI agent framework"
+  type        = bool
+  default     = false
+}
+
+variable "kagent_namespace" {
+  description = "kagent Kubernetes namespace"
+  type        = string
+  default     = "kagent"
+}
+
+variable "kagent_version" {
+  description = "kagent Helm chart version"
+  type        = string
+  default     = "latest"
+}
+
+variable "kagent_database_type" {
+  description = "kagent database type: 'sqlite' (default, single replica) or 'postgresql' (HA, multi-replica)"
+  type        = string
+  default     = "sqlite"
+}
+
+variable "kagent_controller_replicas" {
+  description = "Number of kagent controller replicas (only >1 if using PostgreSQL)"
+  type        = number
+  default     = 1
+}
+
+variable "kagent_db_max_capacity" {
+  description = "kagent PostgreSQL Aurora Serverless v2 max capacity (ACU)"
+  type        = number
+  default     = 2
+}
+
+variable "kagent_enable_ui" {
+  description = "Enable kagent UI deployment"
+  type        = bool
+  default     = true
+}
+
+variable "kagent_enable_istio_ingress" {
+  description = "Enable Istio VirtualService for kagent UI"
+  type        = bool
+  default     = false
+}
+
+variable "kagent_enable_bedrock_access" {
+  description = "Enable IRSA for Amazon Bedrock access"
+  type        = bool
+  default     = false
+}
+
+variable "kagent_enable_istio_injection" {
+  description = "Enable Istio sidecar injection for kagent namespace"
+  type        = bool
+  default     = false
+}
+
 # END variables

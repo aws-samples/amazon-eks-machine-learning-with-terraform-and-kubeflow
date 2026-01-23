@@ -322,6 +322,7 @@ Enable optional components via Terraform variables:
 | Component | Variable | Default |
 |-----------|----------|---------|
 | [Airflow](https://airflow.apache.org/) | airflow_enabled | false |
+| [kagent](https://github.com/kagent-dev/kagent) | kagent_enabled | false |
 | [Karpenter ODCR](https://karpenter.sh/docs/concepts/nodeclasses/#speccapacityreservationselectorterms) (cudaefa only) | karpenter_odcr_enabled | false |
 | [Kubeflow](https://www.kubeflow.org/) | kubeflow_platform_enabled | false |
 | [KServe](https://kserve.github.io/website/latest/) | kserve_enabled | false |
@@ -365,6 +366,58 @@ Features:
 - MCP server registry and gateway
 - Financial information, time, and custom tool servers
 - Shared EFS storage for persistent state
+
+### kagent - Kubernetes Native AI Agents
+
+[kagent](https://github.com/kagent-dev/kagent) is a Kubernetes-native framework for building AI agents with tool capabilities.
+
+**Enable kagent:**
+```bash
+terraform apply \
+  -var="kagent_enabled=true" \
+  -var="kagent_enable_bedrock_access=true"  # Optional: for Amazon Bedrock LLM access
+```
+
+**Configuration Options:**
+- `kagent_database_type`: Choose `"sqlite"` (default, single replica) or `"postgresql"` (HA, multi-replica)
+- `kagent_enable_ui`: Enable web UI (default: `true`)
+- `kagent_enable_istio_ingress`: Expose UI via Istio ingress (default: `false`)
+- `kagent_enable_bedrock_access`: Enable IRSA for Amazon Bedrock access (default: `false`)
+
+**Access kagent UI:**
+```bash
+# Port-forward (default)
+kubectl port-forward -n kagent svc/kagent-ui 8080:8080
+
+# Or via Terraform output
+$(terraform output -raw kagent_ui_access_command)
+```
+
+**Using Amazon Bedrock with kagent:**
+
+When `kagent_enable_bedrock_access=true`, an IAM role with Bedrock permissions is automatically created and attached to the kagent controller via IRSA. Create a ModelConfig resource:
+
+```yaml
+apiVersion: kagent.solo.io/v1alpha1
+kind: ModelConfig
+metadata:
+  name: claude-sonnet
+  namespace: kagent
+spec:
+  provider: Bedrock
+  model: anthropic.claude-3-5-sonnet-20241022-v2:0
+  region: us-west-2
+```
+
+**High Availability:**
+
+For production deployments with multiple controller replicas:
+```bash
+terraform apply \
+  -var="kagent_enabled=true" \
+  -var="kagent_database_type=postgresql" \
+  -var="kagent_controller_replicas=3"
+```
 
 ## Legacy Examples
 
