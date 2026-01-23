@@ -395,7 +395,11 @@ $(terraform output -raw kagent_ui_access_command)
 
 **Using Amazon Bedrock with kagent:**
 
-When `kagent_enable_bedrock_access=true`, an IAM role with Bedrock permissions is automatically created and attached to the kagent controller via IRSA. Create a ModelConfig resource:
+When `kagent_enable_bedrock_access=true`, an IAM role with Bedrock permissions is automatically created and attached to the kagent controller via IRSA.
+
+The Terraform module creates a ServiceAccount named `kagent-sa` (configurable) and configures the Helm chart to use it. Ensure your kagent Helm chart configuration references this ServiceAccount.
+
+Create a ModelConfig resource to use Bedrock models:
 
 ```yaml
 apiVersion: kagent.solo.io/v1alpha1
@@ -408,6 +412,8 @@ spec:
   model: anthropic.claude-3-5-sonnet-20241022-v2:0
   region: us-west-2
 ```
+
+**Note**: The module automatically configures `controller.serviceAccount.name=kagent-sa` and `controller.serviceAccount.create=false` in the Helm values when Bedrock access is enabled.
 
 **High Availability:**
 

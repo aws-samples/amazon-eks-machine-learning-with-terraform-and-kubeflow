@@ -27,6 +27,11 @@ variable "eks_oidc_provider_arn" {
   type        = string
 }
 
+variable "eks_oidc_issuer" {
+  description = "EKS OIDC issuer URL (without https://)"
+  type        = string
+}
+
 variable "region" {
   description = "AWS region"
   type        = string
@@ -220,6 +225,12 @@ variable "enable_bedrock_access" {
   description = "Enable IRSA for Amazon Bedrock access"
   type        = bool
   default     = false
+}
+
+variable "bedrock_service_account_name" {
+  description = "Kubernetes ServiceAccount name for Bedrock IRSA (must match Helm chart configuration)"
+  type        = string
+  default     = "kagent-sa"
 }
 
 variable "bedrock_model_arns" {

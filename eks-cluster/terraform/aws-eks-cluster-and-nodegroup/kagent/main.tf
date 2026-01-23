@@ -19,11 +19,18 @@ resource "kubernetes_namespace" "kagent" {
 # Service Account with IRSA (for Bedrock access)
 #---------------------------------------------------------------
 
+# IMPORTANT: This ServiceAccount is created externally and configured in the Helm chart
+# The ServiceAccount name MUST match the IRSA trust policy in iam.tf
+# By default: "kagent-sa" (configurable via bedrock_service_account_name variable)
+# The Helm chart is configured to use this ServiceAccount via:
+#   - controller.serviceAccount.create = false
+#   - controller.serviceAccount.name = var.bedrock_service_account_name
+
 resource "kubernetes_service_account" "kagent" {
   count = var.enable_bedrock_access ? 1 : 0
 
   metadata {
-    name      = "kagent-controller"
+    name      = var.bedrock_service_account_name
     namespace = kubernetes_namespace.kagent.metadata[0].name
     annotations = {
       "eks.amazonaws.com/role-arn" = aws_iam_role.kagent_bedrock[0].arn

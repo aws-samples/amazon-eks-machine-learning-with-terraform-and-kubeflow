@@ -16,6 +16,7 @@ module "kagent" {
   # EKS cluster information
   eks_cluster_id        = aws_eks_cluster.eks_cluster.id
   eks_oidc_provider_arn = aws_iam_openid_connect_provider.eks_oidc_provider.arn
+  eks_oidc_issuer       = substr(aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer, 8, -1)
 
   # Database configuration
   database_type        = var.kagent_database_type

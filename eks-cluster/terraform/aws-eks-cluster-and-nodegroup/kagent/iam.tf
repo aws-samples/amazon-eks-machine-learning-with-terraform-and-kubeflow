@@ -20,8 +20,8 @@ resource "aws_iam_role" "kagent_bedrock" {
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
           StringEquals = {
-            "${replace(var.eks_oidc_provider_arn, "/^(.*provider/)/", "")}:sub" = "system:serviceaccount:${var.kagent_namespace}:kagent-controller"
-            "${replace(var.eks_oidc_provider_arn, "/^(.*provider/)/", "")}:aud" = "sts.amazonaws.com"
+            "${var.eks_oidc_issuer}:sub" = "system:serviceaccount:${var.kagent_namespace}:${var.bedrock_service_account_name}"
+            "${var.eks_oidc_issuer}:aud" = "sts.amazonaws.com"
           }
         }
       }
