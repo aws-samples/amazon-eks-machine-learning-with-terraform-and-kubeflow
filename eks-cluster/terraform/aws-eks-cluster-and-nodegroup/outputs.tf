@@ -80,3 +80,31 @@ output "slurm_db_password" {
   sensitive = true
   value = module.slurm.*.db_password
 }
+#---------------------------------------------------------------
+# kagent Outputs
+#---------------------------------------------------------------
+
+output "kagent_namespace" {
+  description = "kagent Kubernetes namespace"
+  value       = var.kagent_enabled ? module.kagent[0].namespace : null
+}
+
+output "kagent_ui_access_command" {
+  description = "kubectl port-forward command to access kagent UI locally"
+  value       = var.kagent_enabled && var.kagent_enable_ui ? module.kagent[0].ui_access_command : null
+}
+
+output "kagent_ingress_url" {
+  description = "Ingress URL for kagent UI (if Istio ingress is enabled)"
+  value       = var.kagent_enabled && var.kagent_enable_istio_ingress ? module.kagent[0].ingress_url : null
+}
+
+output "kagent_bedrock_iam_role_arn" {
+  description = "IAM role ARN for kagent Bedrock access (if enabled)"
+  value       = var.kagent_enabled && var.kagent_enable_bedrock_access ? module.kagent[0].bedrock_iam_role_arn : null
+}
+
+output "kagent_database_endpoint" {
+  description = "PostgreSQL database endpoint for kagent (if using postgresql)"
+  value       = var.kagent_enabled && var.kagent_database_type == "postgresql" ? module.kagent[0].database_endpoint : null
+}
