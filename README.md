@@ -369,13 +369,12 @@ Features:
 
 ### kagent - Kubernetes Native AI Agents
 
-[kagent](https://github.com/kagent-dev/kagent) is a Kubernetes-native framework for building AI agents with tool capabilities.
+[kagent](https://github.com/kagent-dev/kagent) is a Kubernetes-native framework for building AI agents with tool capabilities and LLM integration.
 
 **Enable kagent:**
 ```bash
 terraform apply \
-  -var="kagent_enabled=true" \
-  -var="kagent_enable_bedrock_access=true"  # Optional: for Amazon Bedrock LLM access
+  -var="kagent_enabled=true"
 ```
 
 **Configuration Options:**
@@ -393,13 +392,54 @@ kubectl port-forward -n kagent svc/kagent-ui 8080:8080
 $(terraform output -raw kagent_ui_access_command)
 ```
 
-**Using Amazon Bedrock with kagent:**
+**LLM Integration Options:**
 
-When `kagent_enable_bedrock_access=true`, an IAM role with Bedrock permissions is automatically created and attached to the kagent controller via IRSA.
+kagent supports multiple LLM providers. You can use self-hosted models in EKS or cloud-based services.
 
-The Terraform module creates a ServiceAccount named `kagent-sa` (configurable) and configures the Helm chart to use it. Ensure your kagent Helm chart configuration references this ServiceAccount.
+**Option 1: Self-Hosted Models in EKS (Recommended)**
 
-Create a ModelConfig resource to use Bedrock models:
+Deploy LLM serving solutions within the same EKS cluster:
+
+```yaml
+# Example: Using vLLM for self-hosted models
+apiVersion: kagent.solo.io/v1alpha1
+kind: ModelConfig
+metadata:
+  name: llama-3-70b
+  namespace: kagent
+spec:
+  provider: OpenAI  # vLLM provides OpenAI-compatible API
+  model: meta-llama/Meta-Llama-3-70B-Instruct
+  baseURL: http://vllm-service.inference.svc.cluster.local:8000/v1
+```
+
+See the `examples/inference/` directory for deploying vLLM, Ray Serve, or Triton in EKS.
+
+**Option 2: OpenAI or Compatible APIs**
+
+```yaml
+apiVersion: kagent.solo.io/v1alpha1
+kind: ModelConfig
+metadata:
+  name: gpt-4
+  namespace: kagent
+spec:
+  provider: OpenAI
+  model: gpt-4
+  apiKey: <secret-reference>
+```
+
+**Option 3: Amazon Bedrock (Optional)**
+
+For AWS Bedrock integration, enable IRSA:
+
+```bash
+terraform apply \
+  -var="kagent_enabled=true" \
+  -var="kagent_enable_bedrock_access=true"
+```
+
+When enabled, an IAM role with Bedrock permissions is automatically created and attached to the kagent controller via IRSA.
 
 ```yaml
 apiVersion: kagent.solo.io/v1alpha1
