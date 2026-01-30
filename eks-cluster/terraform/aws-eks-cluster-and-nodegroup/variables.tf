@@ -624,7 +624,7 @@ variable "kagent_namespace" {
 variable "kagent_version" {
   description = "kagent Helm chart version (pinned to avoid OCI chart resolution issues with 'latest')"
   type        = string
-  default     = "0.7.0"
+  default     = "0.7.11"
 }
 
 variable "kagent_database_type" {

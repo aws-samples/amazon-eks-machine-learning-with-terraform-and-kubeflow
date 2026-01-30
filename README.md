@@ -378,7 +378,7 @@ terraform apply \
 ```
 
 **Configuration Options:**
-- `kagent_version`: Helm chart version (default: `"0.7.0"`, pinned for stability - override to upgrade)
+- `kagent_version`: Helm chart version (default: `"0.7.11"`, pinned for stability - override to upgrade)
 - `kagent_database_type`: Choose `"sqlite"` (default, single replica) or `"postgresql"` (HA, multi-replica)
 - `kagent_enable_ui`: Enable web UI (default: `true`)
 - `kagent_enable_istio_ingress`: Expose UI via Istio ingress (default: `false`)
