@@ -141,7 +141,7 @@ resource "kubernetes_secret" "kagent_db" {
     username = var.db_username
     password = random_password.kagent_db_password[0].result
     # Connection string format for kagent
-    connection_string = "postgresql://${var.db_username}:${random_password.kagent_db_password[0].result}@${aws_rds_cluster.kagent[0].endpoint}:5432/${var.db_name}"
+    connection_string = "postgres://${var.db_username}:${random_password.kagent_db_password[0].result}@${aws_rds_cluster.kagent[0].endpoint}:5432/${var.db_name}"
   }
 
   type = "Opaque"
@@ -216,7 +216,7 @@ resource "helm_release" "kagent" {
     for_each = var.database_type == "postgresql" ? [1] : []
     content {
       name  = "database.postgres.url"
-      value = "postgresql://${var.db_username}:${random_password.kagent_db_password[0].result}@${aws_rds_cluster.kagent[0].endpoint}:5432/${var.db_name}"
+      value = "postgres://${var.db_username}:${random_password.kagent_db_password[0].result}@${aws_rds_cluster.kagent[0].endpoint}:5432/${var.db_name}"
     }
   }
 
