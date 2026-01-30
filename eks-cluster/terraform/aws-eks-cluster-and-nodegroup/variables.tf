@@ -267,7 +267,7 @@ variable "karpenter_namespace" {
 variable "karpenter_version" {
   description = "Karpenter version"
   type = string
-  default = "1.5.0"
+  default = "1.6.3"
 }
 
 variable "karpenter_capacity_type" {
@@ -532,9 +532,9 @@ variable "hyperpod_enabled" {
   default     = false
 }
 
-# Karpenter ODCR Configuration (cudaefa NodePool only)
-variable "karpenter_odcr_enabled" {
-  description = "Enable ODCR support for Karpenter cudaefa NodePool"
+# Karpenter Capacity Reservation Configuration (ODCR and Capacity Blocks, cudaefa NodePool only)
+variable "karpenter_cr_enabled" {
+  description = "Enable capacity reservation support (ODCR and Capacity Blocks for ML) for Karpenter cudaefa NodePool"
   type        = bool
   default     = false
 }
@@ -587,20 +587,20 @@ variable "hyperpod_node_recovery" {
   }
 }
 
-variable "karpenter_odcr_cudaefa_ids" {
-  description = "List of ODCR IDs for CUDA EFA instances (e.g., ['cr-xxx', 'cr-yyy'])"
+variable "karpenter_cr_cudaefa_ids" {
+  description = "List of capacity reservation IDs for CUDA EFA instances (ODCR or Capacity Blocks, e.g., ['cr-xxx', 'cr-yyy'])"
   type        = list(string)
   default     = []
 }
 
-variable "karpenter_odcr_cudaefa_tags" {
-  description = "Tags to select ODCRs for CUDA EFA instances (e.g., {purpose = 'distributed-training'})"
+variable "karpenter_cr_cudaefa_tags" {
+  description = "Tags to select capacity reservations for CUDA EFA instances (e.g., {purpose = 'distributed-training'})"
   type        = map(string)
   default     = {}
 }
 
-variable "karpenter_odcr_capacity_types" {
-  description = "Karpenter ODCR capacity types list: 'on-demand', 'spot', 'reserved'"
+variable "karpenter_cr_capacity_types" {
+  description = "Karpenter capacity types for capacity reservations: 'on-demand', 'spot', 'reserved'"
   type        = list(string)
   default     = ["on-demand"]
 }

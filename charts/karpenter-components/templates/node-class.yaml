@@ -149,14 +149,14 @@ spec:
     - tags:
         "kubernetes.io/cluster/{{ .Values.cluster_id }}": "owned"
 
-  {{- if and .Values.odcr.enabled (or (gt (len .Values.odcr.cudaefa.ids) 0) (gt (len .Values.odcr.cudaefa.tags) 0)) }}
+  {{- if and .Values.cr.enabled (or (gt (len .Values.cr.cudaefa.ids) 0) (gt (len .Values.cr.cudaefa.tags) 0)) }}
   capacityReservationSelectorTerms:
-    {{- range .Values.odcr.cudaefa.ids }}
+    {{- range .Values.cr.cudaefa.ids }}
     - id: {{ . }}
     {{- end }}
-    {{- if gt (len .Values.odcr.cudaefa.tags) 0 }}
+    {{- if gt (len .Values.cr.cudaefa.tags) 0 }}
     - tags:
-        {{- range $key, $value := .Values.odcr.cudaefa.tags }}
+        {{- range $key, $value := .Values.cr.cudaefa.tags }}
         {{ $key }}: {{ $value | quote }}
         {{- end }}
     {{- end }}

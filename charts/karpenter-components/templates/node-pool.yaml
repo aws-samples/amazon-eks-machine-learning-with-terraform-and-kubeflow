@@ -137,7 +137,21 @@ metadata:
 spec:
   disruption:
     consolidationPolicy: WhenEmpty
+    {{- if .Values.cr.enabled }}
+    consolidateAfter: Never
+    {{- else }}
     consolidateAfter: {{ .Values.consolidate_after }}
+    {{- end }}
+    budgets:
+    {{- if .Values.cr.enabled }}
+    - nodes: "0"
+      reasons:
+      - "Empty"
+      - "Drifted"
+      - "Underutilized"
+    {{- else }}
+    - nodes: "10%"
+    {{- end }}
   template:
     spec:
       nodeClassRef:
@@ -154,8 +168,8 @@ spec:
       - key: karpenter.sh/capacity-type
         operator: In
         values:
-          {{- if and .Values.odcr.enabled .Values.odcr.cudaefa.capacity_types }}
-          {{- range .Values.odcr.cudaefa.capacity_types }}
+          {{- if and .Values.cr.enabled .Values.cr.cudaefa.capacity_types }}
+          {{- range .Values.cr.cudaefa.capacity_types }}
           - {{ . | quote }}
           {{- end }}
           {{- else }}

@@ -1042,8 +1042,8 @@ module "karpenter" {
     s3_policy = "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
   }
 
-  # ODCR support - add permissions for capacity reservations
-  iam_policy_statements = var.karpenter_odcr_enabled ? [
+  # Capacity reservation support (ODCR and Capacity Blocks for ML)
+  iam_policy_statements = var.karpenter_cr_enabled ? [
     {
       sid       = "AllowDescribeCapacityReservations"
       effect    = "Allow"
@@ -1172,7 +1172,7 @@ resource "helm_release" "karpenter" {
         clusterEndpoint: "${aws_eks_cluster.eks_cluster.endpoint}"
         interruptionQueue: "${module.karpenter[0].queue_name}"
         featureGates:
-          reservedCapacity: ${var.karpenter_odcr_enabled}
+          reservedCapacity: ${var.karpenter_cr_enabled}
       serviceAccount:
         annotations:
           eks.amazonaws.com/role-arn: "${module.karpenter[0].iam_role_arn}"
@@ -1190,7 +1190,7 @@ resource "helm_release" "karpenter_components" {
 
   chart     = "${var.local_helm_repo}/karpenter-components"
   name      = "karpenter-components"
-  version   = "1.0.7"
+  version   = "1.0.8"
   namespace = var.karpenter_namespace
 
   values = [
@@ -1201,12 +1201,12 @@ resource "helm_release" "karpenter_components" {
       consolidate_after: "${var.karpenter_consolidate_after}"
       capacity_type: "${var.karpenter_capacity_type}"
       max_pods: "${var.karpenter_max_pods}"
-      odcr:
-        enabled: ${var.karpenter_odcr_enabled}
+      cr:
+        enabled: ${var.karpenter_cr_enabled}
         cudaefa:
-          capacity_types: ${jsonencode(var.karpenter_odcr_capacity_types)}
-          ids: ${jsonencode(var.karpenter_odcr_cudaefa_ids)}
-          tags: ${jsonencode(var.karpenter_odcr_cudaefa_tags)}
+          capacity_types: ${jsonencode(var.karpenter_cr_capacity_types)}
+          ids: ${jsonencode(var.karpenter_cr_cudaefa_ids)}
+          tags: ${jsonencode(var.karpenter_cr_cudaefa_tags)}
     EOT
   ]
 
