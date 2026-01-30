@@ -134,7 +134,13 @@ kubectl get nodes -l karpenter.sh/nodepool=cudaefa -o jsonpath='{range .items[*]
 
 #### Using Capacity Blocks for ML
 
-[Capacity Blocks for ML](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-capacity-blocks.html) let you reserve GPU instances (p4d, p5) for a defined period. First purchase a Capacity Block in the AWS Console or CLI, then configure:
+[Capacity Blocks for ML](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-capacity-blocks.html) let you reserve GPU instances (p4d, p5) for a defined period. First purchase a Capacity Block in the AWS Console or CLI, then configure.
+
+**Important:** The `cuda_efa_az` variable must match the Availability Zone of your Capacity Block reservation. Karpenter can only provision nodes in the AZ where the cudaefa subnet is tagged. You can verify your Capacity Block's AZ with:
+```bash
+aws ec2 describe-capacity-reservations --capacity-reservation-ids cr-xxxxx \
+  --query 'CapacityReservations[].AvailabilityZone' --output text
+```
 
 ```bash
 terraform apply -var="profile=default" -var="region=us-west-2" \
@@ -160,8 +166,6 @@ terraform apply -var="profile=default" -var="region=us-west-2" \
   -var='karpenter_cr_capacity_types=["reserved"]' \
   -var='karpenter_cr_cudaefa_tags={"purpose":"ml-training"}'
 ```
-
-When capacity reservations are enabled, Karpenter will not voluntarily disrupt cudaefa nodes (consolidation is disabled), protecting pre-paid capacity. Karpenter automatically drains nodes before Capacity Block expiry.
 
 ### 6. Create Home Folders on Shared Storage
 

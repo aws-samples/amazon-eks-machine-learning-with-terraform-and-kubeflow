@@ -137,21 +137,7 @@ metadata:
 spec:
   disruption:
     consolidationPolicy: WhenEmpty
-    {{- if .Values.cr.enabled }}
-    consolidateAfter: Never
-    {{- else }}
     consolidateAfter: {{ .Values.consolidate_after }}
-    {{- end }}
-    budgets:
-    {{- if .Values.cr.enabled }}
-    - nodes: "0"
-      reasons:
-      - "Empty"
-      - "Drifted"
-      - "Underutilized"
-    {{- else }}
-    - nodes: "10%"
-    {{- end }}
   template:
     spec:
       nodeClassRef:
