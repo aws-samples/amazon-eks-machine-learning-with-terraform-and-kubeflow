@@ -148,6 +148,32 @@ resource "kubernetes_secret" "kagent_db" {
 }
 
 #---------------------------------------------------------------
+# OpenAI Secret (placeholder to allow kagent controller to start)
+#---------------------------------------------------------------
+
+# The kagent Helm chart expects an OpenAI secret by default
+# Create a placeholder secret so the controller can start successfully
+# Users can update this secret later if they want to use OpenAI, or
+# use ModelConfig CRDs to point to self-hosted models (vLLM, Ray Serve, etc.)
+resource "kubernetes_secret" "kagent_openai_placeholder" {
+  metadata {
+    name      = "kagent-openai"
+    namespace = kubernetes_namespace.kagent.metadata[0].name
+    annotations = {
+      "description" = "Placeholder OpenAI secret - update with real API key if using OpenAI provider, or use ModelConfig to point to self-hosted models"
+    }
+  }
+
+  data = {
+    # Placeholder value - replace with real OpenAI API key if needed
+    # For self-hosted models (vLLM, Ray Serve), use ModelConfig CRDs instead
+    apiKey = "placeholder-update-if-using-openai"
+  }
+
+  type = "Opaque"
+}
+
+#---------------------------------------------------------------
 # kagent CRDs Helm Release (install first)
 #---------------------------------------------------------------
 

@@ -417,6 +417,17 @@ See the `examples/inference/` directory for deploying vLLM, Ray Serve, or Triton
 
 **Option 2: OpenAI or Compatible APIs**
 
+A placeholder `kagent-openai` secret is automatically created. Update it with your OpenAI API key:
+
+```bash
+kubectl create secret generic kagent-openai \
+  --from-literal=apiKey=<your-openai-api-key> \
+  -n kagent \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Then create a ModelConfig:
+
 ```yaml
 apiVersion: kagent.solo.io/v1alpha1
 kind: ModelConfig
@@ -426,7 +437,7 @@ metadata:
 spec:
   provider: OpenAI
   model: gpt-4
-  apiKey: <secret-reference>
+  # Uses kagent-openai secret automatically
 ```
 
 **Option 3: Amazon Bedrock (Optional)**
