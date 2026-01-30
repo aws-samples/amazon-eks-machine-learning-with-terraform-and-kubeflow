@@ -402,15 +402,18 @@ Deploy LLM serving solutions within the same EKS cluster:
 
 ```yaml
 # Example: Using vLLM for self-hosted models
-apiVersion: kagent.solo.io/v1alpha1
+apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
 metadata:
-  name: llama-3-70b
+  name: llama-3-8b
   namespace: kagent
 spec:
   provider: OpenAI  # vLLM provides OpenAI-compatible API
-  model: meta-llama/Meta-Llama-3-70B-Instruct
-  baseURL: http://vllm-service.inference.svc.cluster.local:8000/v1
+  model: meta-llama3-8b-instruct
+  apiKeySecret: kagent-openai
+  apiKeySecretKey: OPENAI_API_KEY
+  openAI:
+    baseUrl: http://vllm-service.inference.svc.cluster.local:8000/v1
 ```
 
 See the `examples/inference/` directory for deploying vLLM, Ray Serve, or Triton in EKS.
@@ -429,7 +432,7 @@ kubectl create secret generic kagent-openai \
 Then create a ModelConfig:
 
 ```yaml
-apiVersion: kagent.solo.io/v1alpha1
+apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
 metadata:
   name: gpt-4
@@ -437,7 +440,10 @@ metadata:
 spec:
   provider: OpenAI
   model: gpt-4
-  # Uses kagent-openai secret automatically
+  apiKeySecret: kagent-openai
+  apiKeySecretKey: OPENAI_API_KEY
+  openAI:
+    baseUrl: https://api.openai.com/v1
 ```
 
 **Option 3: Amazon Bedrock (Optional)**
@@ -453,7 +459,7 @@ terraform apply \
 When enabled, an IAM role with Bedrock permissions is automatically created and attached to the kagent controller via IRSA.
 
 ```yaml
-apiVersion: kagent.solo.io/v1alpha1
+apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
 metadata:
   name: claude-sonnet
