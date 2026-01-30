@@ -167,7 +167,7 @@ resource "kubernetes_secret" "kagent_openai_placeholder" {
   data = {
     # Placeholder value - replace with real OpenAI API key if needed
     # For self-hosted models (vLLM, Ray Serve), use ModelConfig CRDs instead
-    apiKey = "placeholder-update-if-using-openai"
+    OPENAI_API_KEY = "placeholder-update-if-using-openai"
   }
 
   type = "Opaque"

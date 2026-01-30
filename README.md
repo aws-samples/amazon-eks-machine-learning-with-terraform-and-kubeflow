@@ -421,7 +421,7 @@ A placeholder `kagent-openai` secret is automatically created. Update it with yo
 
 ```bash
 kubectl create secret generic kagent-openai \
-  --from-literal=apiKey=<your-openai-api-key> \
+  --from-literal=OPENAI_API_KEY=<your-openai-api-key> \
   -n kagent \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
