@@ -322,6 +322,7 @@ Enable optional components via Terraform variables:
 | Component | Variable | Default |
 |-----------|----------|---------|
 | [Airflow](https://airflow.apache.org/) | airflow_enabled | false |
+| [kagent](https://github.com/kagent-dev/kagent) | kagent_enabled | false |
 | [Karpenter ODCR](https://karpenter.sh/docs/concepts/nodeclasses/#speccapacityreservationselectorterms) (cudaefa only) | karpenter_odcr_enabled | false |
 | [Kubeflow](https://www.kubeflow.org/) | kubeflow_platform_enabled | false |
 | [KServe](https://kserve.github.io/website/latest/) | kserve_enabled | false |
@@ -365,6 +366,122 @@ Features:
 - MCP server registry and gateway
 - Financial information, time, and custom tool servers
 - Shared EFS storage for persistent state
+
+### kagent - Kubernetes Native AI Agents
+
+[kagent](https://github.com/kagent-dev/kagent) is a Kubernetes-native framework for building AI agents with tool capabilities and LLM integration.
+
+**Enable kagent:**
+```bash
+terraform apply \
+  -var="kagent_enabled=true"
+```
+
+**Configuration Options:**
+- `kagent_version`: Helm chart version (default: `"0.7.11"`, pinned for stability - override to upgrade)
+- `kagent_database_type`: Choose `"sqlite"` (default, single replica) or `"postgresql"` (HA, multi-replica)
+- `kagent_enable_ui`: Enable web UI (default: `true`)
+- `kagent_enable_istio_ingress`: Expose UI via Istio ingress (default: `false`)
+- `kagent_enable_bedrock_access`: Enable IRSA for Amazon Bedrock access (default: `false`)
+
+**Access kagent UI:**
+```bash
+# Port-forward (default)
+kubectl port-forward -n kagent svc/kagent-ui 8080:8080
+
+# Or via Terraform output
+$(terraform output -raw kagent_ui_access_command)
+```
+
+**LLM Integration Options:**
+
+kagent supports multiple LLM providers. You can use self-hosted models in EKS or cloud-based services.
+
+**Option 1: Self-Hosted Models in EKS (Recommended)**
+
+Deploy LLM serving solutions within the same EKS cluster:
+
+```yaml
+# Example: Using vLLM for self-hosted models
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: llama-3-8b
+  namespace: kagent
+spec:
+  provider: OpenAI  # vLLM provides OpenAI-compatible API
+  model: meta-llama3-8b-instruct
+  apiKeySecret: kagent-openai
+  apiKeySecretKey: OPENAI_API_KEY
+  openAI:
+    baseUrl: http://vllm-service.inference.svc.cluster.local:8000/v1
+```
+
+See the `examples/inference/` directory for deploying vLLM, Ray Serve, or Triton in EKS.
+
+**Option 2: OpenAI or Compatible APIs**
+
+A placeholder `kagent-openai` secret is automatically created. Update it with your OpenAI API key:
+
+```bash
+kubectl create secret generic kagent-openai \
+  --from-literal=OPENAI_API_KEY=<your-openai-api-key> \
+  -n kagent \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Then create a ModelConfig:
+
+```yaml
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: gpt-4
+  namespace: kagent
+spec:
+  provider: OpenAI
+  model: gpt-4
+  apiKeySecret: kagent-openai
+  apiKeySecretKey: OPENAI_API_KEY
+  openAI:
+    baseUrl: https://api.openai.com/v1
+```
+
+**Option 3: Amazon Bedrock (Optional)**
+
+For AWS Bedrock integration, enable IRSA:
+
+```bash
+terraform apply \
+  -var="kagent_enabled=true" \
+  -var="kagent_enable_bedrock_access=true"
+```
+
+When enabled, an IAM role with Bedrock permissions is automatically created and attached to the kagent controller via IRSA.
+
+```yaml
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: claude-sonnet
+  namespace: kagent
+spec:
+  provider: Bedrock
+  model: anthropic.claude-3-5-sonnet-20241022-v2:0
+  region: us-west-2
+```
+
+**Note**: The module automatically configures `controller.serviceAccount.name=kagent-sa` and `controller.serviceAccount.create=false` in the Helm values when Bedrock access is enabled.
+
+**High Availability:**
+
+For production deployments with multiple controller replicas:
+```bash
+terraform apply \
+  -var="kagent_enabled=true" \
+  -var="kagent_database_type=postgresql" \
+  -var="kagent_controller_replicas=3"
+```
 
 ## Legacy Examples
 
