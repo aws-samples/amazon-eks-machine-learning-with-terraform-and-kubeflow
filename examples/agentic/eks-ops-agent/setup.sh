@@ -48,12 +48,13 @@ if [ "$IS_EC2" = true ]; then
 
         # Get the role name from the instance profile
         # Try the API first, fall back to deriving from profile name (replace InstanceProfile with InstanceRole)
-        INSTANCE_ROLE_NAME=$(aws iam get-instance-profile --instance-profile-name "$INSTANCE_PROFILE_NAME" --query 'InstanceProfile.Roles[0].RoleName' --output text 2>/dev/null)
+        INSTANCE_ROLE_NAME=$(aws iam get-instance-profile --instance-profile-name "$INSTANCE_PROFILE_NAME" --query 'InstanceProfile.Roles[0].RoleName' --output text 2>/dev/null || true)
 
         # If API call failed or returned empty, try to derive role name from profile name
         if [ -z "$INSTANCE_ROLE_NAME" ] || [ "$INSTANCE_ROLE_NAME" = "None" ]; then
             # Common pattern: replace "InstanceProfile" with "InstanceRole" in the name
             INSTANCE_ROLE_NAME=$(echo "$INSTANCE_PROFILE_NAME" | sed 's/InstanceProfile/InstanceRole/')
+            echo "Derived Instance Role: ${INSTANCE_ROLE_NAME}"
         fi
 
         if [ -n "$INSTANCE_ROLE_NAME" ] && [ "$INSTANCE_ROLE_NAME" != "None" ]; then
