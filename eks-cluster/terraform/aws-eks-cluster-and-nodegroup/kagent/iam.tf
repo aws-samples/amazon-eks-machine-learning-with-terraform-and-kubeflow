@@ -49,6 +49,7 @@ resource "aws_iam_policy" "kagent_bedrock" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "BedrockFoundationModels"
         Effect = "Allow"
         Action = [
           "bedrock:InvokeModel",
@@ -57,6 +58,16 @@ resource "aws_iam_policy" "kagent_bedrock" {
           "bedrock:ListFoundationModels"
         ]
         Resource = var.bedrock_model_arns
+      },
+      {
+        Sid    = "BedrockInferenceProfiles"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream"
+        ]
+        # Allow cross-region inference profiles (required for Claude 4.x models)
+        Resource = "arn:aws:bedrock:*:*:inference-profile/*"
       }
     ]
   })
