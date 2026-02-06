@@ -92,8 +92,16 @@ echo ""
 echo -e "${YELLOW}Phase 2: Deploying to kagent...${NC}"
 echo "========================================"
 
-# Construct the Bedrock IAM role ARN
-CLUSTER_NAME=$(aws eks list-clusters --region "$AWS_REGION" --query 'clusters[0]' --output text 2>/dev/null || echo "eks-1")
+# Get cluster name from terraform output or environment variable
+if [ -z "$CLUSTER_NAME" ]; then
+    TERRAFORM_DIR="${SCRIPT_DIR}/../../../eks-cluster/terraform/aws-eks-cluster-and-nodegroup"
+    CLUSTER_NAME=$(terraform -chdir="$TERRAFORM_DIR" output -raw cluster_id 2>/dev/null || echo "")
+fi
+if [ -z "$CLUSTER_NAME" ]; then
+    echo -e "${RED}Error: Could not determine cluster name.${NC}"
+    echo "Set CLUSTER_NAME environment variable or ensure terraform state exists."
+    exit 1
+fi
 BEDROCK_ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/${CLUSTER_NAME}-kagent-bedrock-role"
 
 echo "Cluster:  ${CLUSTER_NAME}"
