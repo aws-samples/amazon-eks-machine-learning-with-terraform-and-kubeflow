@@ -2,7 +2,6 @@
 name = "eks-ops-agent"
 version = "0.1.0"
 description = "EKS Operations Agent - manages and troubleshoots Amazon EKS clusters"
-readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "langgraph>=0.2.60",
