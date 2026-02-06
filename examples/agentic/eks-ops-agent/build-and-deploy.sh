@@ -48,6 +48,7 @@ echo "Region:  ${AWS_REGION}"
 echo ""
 echo "Building Docker image..."
 docker build \
+    --no-cache \
     --platform linux/amd64 \
     -t "${IMAGE_NAME}:${VERSION}" \
     -t "${IMAGE_NAME}:latest" \
