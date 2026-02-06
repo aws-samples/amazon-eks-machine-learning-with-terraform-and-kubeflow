@@ -1,7 +1,7 @@
 # EKS Ops Agent - Dockerfile
 # Uses uv for fast Python dependency management
 
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 
 WORKDIR /app
 
