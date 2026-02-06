@@ -44,13 +44,10 @@ if [ "$IS_EC2" = true ]; then
     if [ -n "$INSTANCE_ROLE_NAME" ] && [ "$INSTANCE_ROLE_NAME" != "None" ]; then
         echo "Instance Role: ${INSTANCE_ROLE_NAME}"
 
-        # Check if policy already exists
-        POLICY_EXISTS=$(aws iam list-role-policies --role-name "$INSTANCE_ROLE_NAME" --query "PolicyNames[?contains(@, 'kagent-workshop-permissions')]" --output text 2>/dev/null || true)
+        # Always update the policy (put-role-policy is idempotent)
+        echo "Adding/updating IAM permissions for kagent..."
 
-        if [ -z "$POLICY_EXISTS" ]; then
-            echo "Adding IAM permissions for kagent..."
-
-            aws iam put-role-policy \
+        aws iam put-role-policy \
                 --role-name "$INSTANCE_ROLE_NAME" \
                 --policy-name "kagent-workshop-permissions" \
                 --policy-document "{
@@ -93,10 +90,7 @@ if [ "$IS_EC2" = true ]; then
                     ]
                 }"
 
-            echo "IAM permissions added successfully"
-        else
-            echo "IAM permissions already configured"
-        fi
+        echo "IAM permissions added/updated successfully"
     else
         echo "Warning: Could not determine instance role name"
     fi
