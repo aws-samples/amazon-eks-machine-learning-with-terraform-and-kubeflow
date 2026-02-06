@@ -1,0 +1,6 @@
+{
+  "name": "eks-ops-agent",
+  "description": "EKS Operations Agent - manages and troubleshoots Amazon EKS clusters",
+  "url": "localhost:8080",
+  "version": "0.1.0"
+}
