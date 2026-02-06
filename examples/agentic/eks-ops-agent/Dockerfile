@@ -13,7 +13,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy dependency files first (for layer caching)
 COPY pyproject.toml .
-COPY requirements.txt .
 
 # Install Python dependencies using uv
 RUN uv sync --no-dev
