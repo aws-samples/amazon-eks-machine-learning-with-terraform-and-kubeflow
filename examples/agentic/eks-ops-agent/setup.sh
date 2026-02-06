@@ -61,7 +61,7 @@ if [ "$IS_EC2" = true ]; then
             echo "Instance Role: ${INSTANCE_ROLE_NAME}"
 
             # Check if policy already exists
-            POLICY_EXISTS=$(aws iam list-role-policies --role-name "$INSTANCE_ROLE_NAME" --query "PolicyNames[?contains(@, 'kagent-workshop-permissions')]" --output text 2>/dev/null)
+            POLICY_EXISTS=$(aws iam list-role-policies --role-name "$INSTANCE_ROLE_NAME" --query "PolicyNames[?contains(@, 'kagent-workshop-permissions')]" --output text 2>/dev/null || true)
 
             if [ -z "$POLICY_EXISTS" ]; then
                 echo "Adding IAM permissions for kagent..."
