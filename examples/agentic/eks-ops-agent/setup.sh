@@ -38,8 +38,9 @@ if [ "$IS_EC2" = true ]; then
     # Get metadata token
     TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
 
-    # Get instance profile ARN
-    INSTANCE_ROLE_ARN=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/iam/info | grep -o '"InstanceProfileArn"[^,]*' | cut -d'"' -f4)
+    # Get instance profile ARN (using simple text extraction for portability)
+    IAM_INFO=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/iam/info)
+    INSTANCE_ROLE_ARN=$(echo "$IAM_INFO" | grep "InstanceProfileArn" | sed 's/.*"InstanceProfileArn" *: *"\([^"]*\)".*/\1/')
 
     if [ -n "$INSTANCE_ROLE_ARN" ]; then
         # Extract instance profile name from ARN
