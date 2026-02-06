@@ -1,25 +1,12 @@
 # EKS Ops Agent - BYO Agent CRD
 #
 # This deploys the LangGraph-based EKS Operations Agent via kagent.
-# kagent will create a Deployment, Service, and ServiceAccount for this agent.
-#
-# Prerequisites:
-#   1. Build and push the container image:
-#      ./build.sh
-#
-#   2. Create the Bedrock credentials secret:
-#      ./manifests/create-bedrock-secret.sh
-#
-#   3. Apply the ModelConfig:
-#      kubectl apply -f manifests/model-config-bedrock.yaml
 #
 # Usage:
-#   # Update IMAGE_URI below with your ECR repository, then:
-#   kubectl apply -f manifests/eks-ops-agent.yaml
+#   ./build-and-deploy.sh
 #
-#   # Verify agent is running:
-#   kubectl get agents -n kagent
-#   kubectl get pods -n kagent -l kagent.dev/agent=eks-ops-agent
+# The script builds the container, pushes to ECR, deploys to kagent,
+# and configures IRSA for Bedrock access.
 
 apiVersion: kagent.dev/v1alpha2
 kind: Agent
@@ -36,24 +23,8 @@ spec:
       env:
         - name: AWS_REGION
           value: "us-west-2"
-        - name: AWS_ACCESS_KEY_ID
-          valueFrom:
-            secretKeyRef:
-              name: kagent-bedrock
-              key: AWS_ACCESS_KEY_ID
-        - name: AWS_SECRET_ACCESS_KEY
-          valueFrom:
-            secretKeyRef:
-              name: kagent-bedrock
-              key: AWS_SECRET_ACCESS_KEY
-        - name: AWS_SESSION_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: kagent-bedrock
-              key: AWS_SESSION_TOKEN
-              optional: true
         - name: BEDROCK_MODEL_ID
-          value: "anthropic.claude-3-5-sonnet-20241022-v2:0"
+          value: "anthropic.claude-sonnet-4-20250514-v1:0"
       resources:
         requests:
           memory: "512Mi"
