@@ -38,82 +38,63 @@ if [ "$IS_EC2" = true ]; then
     # Get metadata token
     TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
 
-    # Get instance profile ARN (using simple text extraction for portability)
-    IAM_INFO=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/iam/info)
-    INSTANCE_ROLE_ARN=$(echo "$IAM_INFO" | grep "InstanceProfileArn" | sed 's/.*"InstanceProfileArn" *: *"\([^"]*\)".*/\1/')
+    # Get the role name directly from the security-credentials endpoint
+    INSTANCE_ROLE_NAME=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/iam/security-credentials/)
 
-    if [ -n "$INSTANCE_ROLE_ARN" ]; then
-        # Extract instance profile name from ARN
-        INSTANCE_PROFILE_NAME=$(echo "$INSTANCE_ROLE_ARN" | awk -F'/' '{print $NF}')
+    if [ -n "$INSTANCE_ROLE_NAME" ] && [ "$INSTANCE_ROLE_NAME" != "None" ]; then
+        echo "Instance Role: ${INSTANCE_ROLE_NAME}"
 
-        # Get the role name from the instance profile
-        # Try the API first, fall back to deriving from profile name (replace InstanceProfile with InstanceRole)
-        INSTANCE_ROLE_NAME=$(aws iam get-instance-profile --instance-profile-name "$INSTANCE_PROFILE_NAME" --query 'InstanceProfile.Roles[0].RoleName' --output text 2>/dev/null || true)
+        # Check if policy already exists
+        POLICY_EXISTS=$(aws iam list-role-policies --role-name "$INSTANCE_ROLE_NAME" --query "PolicyNames[?contains(@, 'kagent-workshop-permissions')]" --output text 2>/dev/null || true)
 
-        # If API call failed or returned empty, try to derive role name from profile name
-        if [ -z "$INSTANCE_ROLE_NAME" ] || [ "$INSTANCE_ROLE_NAME" = "None" ]; then
-            # Common pattern: replace "InstanceProfile" with "InstanceRole" in the name
-            INSTANCE_ROLE_NAME=$(echo "$INSTANCE_PROFILE_NAME" | sed 's/InstanceProfile/InstanceRole/')
-            echo "Derived Instance Role: ${INSTANCE_ROLE_NAME}"
-        fi
+        if [ -z "$POLICY_EXISTS" ]; then
+            echo "Adding IAM permissions for kagent..."
 
-        if [ -n "$INSTANCE_ROLE_NAME" ] && [ "$INSTANCE_ROLE_NAME" != "None" ]; then
-            echo "Instance Role: ${INSTANCE_ROLE_NAME}"
+            aws iam put-role-policy \
+                --role-name "$INSTANCE_ROLE_NAME" \
+                --policy-name "kagent-workshop-permissions" \
+                --policy-document "{
+                    \"Version\": \"2012-10-17\",
+                    \"Statement\": [
+                        {
+                            \"Sid\": \"KagentIAMPermissions\",
+                            \"Effect\": \"Allow\",
+                            \"Action\": [
+                                \"iam:CreateRole\",
+                                \"iam:DeleteRole\",
+                                \"iam:GetRole\",
+                                \"iam:TagRole\",
+                                \"iam:UntagRole\",
+                                \"iam:UpdateRole\",
+                                \"iam:UpdateRoleDescription\",
+                                \"iam:CreatePolicy\",
+                                \"iam:DeletePolicy\",
+                                \"iam:GetPolicy\",
+                                \"iam:TagPolicy\",
+                                \"iam:UntagPolicy\",
+                                \"iam:CreatePolicyVersion\",
+                                \"iam:DeletePolicyVersion\",
+                                \"iam:GetPolicyVersion\",
+                                \"iam:ListPolicyVersions\",
+                                \"iam:AttachRolePolicy\",
+                                \"iam:DetachRolePolicy\",
+                                \"iam:ListAttachedRolePolicies\",
+                                \"iam:ListRolePolicies\"
+                            ],
+                            \"Resource\": [
+                                \"arn:aws:iam::${AWS_ACCOUNT_ID}:role/*-kagent-*\",
+                                \"arn:aws:iam::${AWS_ACCOUNT_ID}:policy/*-kagent-*\"
+                            ]
+                        }
+                    ]
+                }"
 
-            # Check if policy already exists
-            POLICY_EXISTS=$(aws iam list-role-policies --role-name "$INSTANCE_ROLE_NAME" --query "PolicyNames[?contains(@, 'kagent-workshop-permissions')]" --output text 2>/dev/null || true)
-
-            if [ -z "$POLICY_EXISTS" ]; then
-                echo "Adding IAM permissions for kagent..."
-
-                aws iam put-role-policy \
-                    --role-name "$INSTANCE_ROLE_NAME" \
-                    --policy-name "kagent-workshop-permissions" \
-                    --policy-document "{
-                        \"Version\": \"2012-10-17\",
-                        \"Statement\": [
-                            {
-                                \"Sid\": \"KagentIAMPermissions\",
-                                \"Effect\": \"Allow\",
-                                \"Action\": [
-                                    \"iam:CreateRole\",
-                                    \"iam:DeleteRole\",
-                                    \"iam:GetRole\",
-                                    \"iam:TagRole\",
-                                    \"iam:UntagRole\",
-                                    \"iam:UpdateRole\",
-                                    \"iam:UpdateRoleDescription\",
-                                    \"iam:CreatePolicy\",
-                                    \"iam:DeletePolicy\",
-                                    \"iam:GetPolicy\",
-                                    \"iam:TagPolicy\",
-                                    \"iam:UntagPolicy\",
-                                    \"iam:CreatePolicyVersion\",
-                                    \"iam:DeletePolicyVersion\",
-                                    \"iam:GetPolicyVersion\",
-                                    \"iam:ListPolicyVersions\",
-                                    \"iam:AttachRolePolicy\",
-                                    \"iam:DetachRolePolicy\",
-                                    \"iam:ListAttachedRolePolicies\",
-                                    \"iam:ListRolePolicies\"
-                                ],
-                                \"Resource\": [
-                                    \"arn:aws:iam::${AWS_ACCOUNT_ID}:role/*-kagent-*\",
-                                    \"arn:aws:iam::${AWS_ACCOUNT_ID}:policy/*-kagent-*\"
-                                ]
-                            }
-                        ]
-                    }"
-
-                echo "IAM permissions added successfully"
-            else
-                echo "IAM permissions already configured"
-            fi
+            echo "IAM permissions added successfully"
         else
-            echo "Warning: Could not determine instance role name"
+            echo "IAM permissions already configured"
         fi
     else
-        echo "Warning: Could not determine instance profile ARN"
+        echo "Warning: Could not determine instance role name"
     fi
 else
     echo "Detected: Not running on EC2 (local machine)"
