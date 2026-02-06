@@ -50,10 +50,14 @@ Simple LangGraph agent with Bedrock Claude that can answer Kubernetes/EKS questi
 
 ## Prerequisites
 
-- AWS account with Bedrock access (Claude models enabled)
-- EKS cluster with kagent installed
-- Docker for container builds
-- AWS CLI and kubectl configured
+- **AWS account needs to have Bedrock access**
+  - Enable model access in [AWS Bedrock Console](https://console.aws.amazon.com/bedrock/) → Model access
+  - Default model: `us.anthropic.claude-sonnet-4-20250514-v1:0` (Claude Sonnet 4)
+  - You can use any Bedrock model by setting `BEDROCK_MODEL_ID` in `manifests/eks-ops-agent.yaml`
+  - Note: Newer models (Claude 4.x) require cross-region inference profiles (prefix with `us.`)
+- **EKS cluster with kagent installed** (`kagent_enabled = true` in terraform)
+- **Docker** for container builds
+- **AWS CLI and kubectl** configured for your cluster
 
 ## Project Structure
 

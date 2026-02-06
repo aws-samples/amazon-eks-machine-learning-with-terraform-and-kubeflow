@@ -24,7 +24,7 @@ spec:
         - name: AWS_REGION
           value: "us-west-2"
         - name: BEDROCK_MODEL_ID
-          value: "anthropic.claude-sonnet-4-20250514-v1:0"
+          value: "us.anthropic.claude-sonnet-4-20250514-v1:0"
       resources:
         requests:
           memory: "512Mi"
