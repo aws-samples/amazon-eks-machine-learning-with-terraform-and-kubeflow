@@ -11,14 +11,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Copy dependency files first (for layer caching)
+# Copy all source files
 COPY pyproject.toml .
+COPY src/ ./src/
 
 # Install Python dependencies using uv
 RUN uv sync --no-dev
-
-# Copy application code
-COPY src/ ./src/
 
 # Set environment variables
 ENV PYTHONPATH=/app/src
@@ -33,4 +31,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT}/health || exit 1
 
 # Run the application
-CMD ["uv", "run", "python", "src/app.py"]
+CMD ["/app/.venv/bin/python", "src/app.py"]
