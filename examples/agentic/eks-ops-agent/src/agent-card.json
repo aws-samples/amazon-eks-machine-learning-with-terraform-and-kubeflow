@@ -4,7 +4,7 @@
   "url": "localhost:8080",
   "version": "0.1.0",
   "capabilities": {
-    "streaming": false,
+    "streaming": true,
     "pushNotifications": false,
     "stateTransitionHistory": false
   },

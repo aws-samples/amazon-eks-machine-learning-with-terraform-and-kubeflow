@@ -60,7 +60,7 @@ def main():
         graph=graph,
         agent_card=agent_card,
         config=config,
-        tracing=True,  # Enable tracing for observability
+        tracing=False,  # Disable until Phase 4 (Langfuse)
     )
 
     # Start the server
