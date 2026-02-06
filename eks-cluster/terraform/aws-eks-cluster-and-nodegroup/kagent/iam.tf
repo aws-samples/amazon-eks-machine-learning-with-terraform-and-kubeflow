@@ -20,8 +20,12 @@ resource "aws_iam_role" "kagent_bedrock" {
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
           StringEquals = {
-            "${var.eks_oidc_issuer}:sub" = "system:serviceaccount:${var.kagent_namespace}:${var.bedrock_service_account_name}"
             "${var.eks_oidc_issuer}:aud" = "sts.amazonaws.com"
+          }
+          StringLike = {
+            # Allow ServiceAccounts matching *-agent pattern in kagent namespace
+            # This enables BYO agents to access Bedrock while following naming convention
+            "${var.eks_oidc_issuer}:sub" = "system:serviceaccount:${var.kagent_namespace}:*-agent"
           }
         }
       }
