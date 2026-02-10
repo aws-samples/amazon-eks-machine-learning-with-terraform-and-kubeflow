@@ -61,13 +61,10 @@ async def load_mcp_tools() -> list:
 
     try:
         # Import here to avoid loading MCP dependencies if not needed
-        from tools import MCPToolManager
+        from tools import load_eks_tools
 
         logger.info("Loading EKS MCP Server tools...")
-        async with MCPToolManager() as manager:
-            # Return a copy of tools - the connection will close but tools remain usable
-            # for tool definitions. Actual tool calls will reconnect.
-            return list(manager.tools)
+        return await load_eks_tools()
 
     except ImportError as e:
         logger.warning(f"MCP dependencies not installed: {e}")

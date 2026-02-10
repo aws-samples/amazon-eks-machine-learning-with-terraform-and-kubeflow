@@ -16,7 +16,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     # Module 2: EKS MCP Server integration
     "mcp>=1.0.0",
-    "langchain-mcp-adapters>=0.1.0",
+    "langchain-mcp-adapters>=0.2.0",
 ]
 
 [project.optional-dependencies]

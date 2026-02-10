@@ -34,6 +34,7 @@ def get_mcp_server_config() -> dict:
 
     return {
         "eks-mcp": {
+            "transport": "stdio",
             "command": "uvx",
             "args": [
                 "mcp-proxy-for-aws@latest",
@@ -65,49 +66,16 @@ async def load_eks_tools() -> list:
         mcp_config = get_mcp_server_config()
         logger.info(f"Connecting to EKS MCP Server in {config.AWS_REGION}...")
 
-        async with MultiServerMCPClient(mcp_config) as client:
-            tools = client.get_tools()
-            logger.info(f"Loaded {len(tools)} tools from EKS MCP Server:")
-            for tool in tools:
-                logger.info(f"  - {tool.name}")
-            return tools
+        # langchain-mcp-adapters 0.2.x API - no context manager
+        client = MultiServerMCPClient(mcp_config)
+        tools = await client.get_tools()
+
+        logger.info(f"Loaded {len(tools)} tools from EKS MCP Server:")
+        for tool in tools:
+            logger.info(f"  - {tool.name}")
+        return tools
 
     except Exception as e:
         logger.error(f"Failed to load EKS MCP tools: {e}")
         logger.warning("Agent will run without EKS tools (Q&A only mode)")
         return []
-
-
-class MCPToolManager:
-    """
-    Manages MCP tool lifecycle for use with LangGraph.
-
-    The MCP connection must stay open while tools are being used.
-    This class provides a context manager for proper lifecycle management.
-
-    Usage:
-        async with MCPToolManager() as manager:
-            tools = manager.tools
-            # Use tools in your agent graph
-    """
-
-    def __init__(self):
-        self.client = None
-        self.tools = []
-
-    async def __aenter__(self):
-        mcp_config = get_mcp_server_config()
-        logger.info(f"Connecting to EKS MCP Server in {config.AWS_REGION}...")
-
-        self.client = MultiServerMCPClient(mcp_config)
-        await self.client.__aenter__()
-
-        self.tools = self.client.get_tools()
-        logger.info(f"Loaded {len(self.tools)} EKS MCP tools")
-
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.client:
-            await self.client.__aexit__(exc_type, exc_val, exc_tb)
-        return False
