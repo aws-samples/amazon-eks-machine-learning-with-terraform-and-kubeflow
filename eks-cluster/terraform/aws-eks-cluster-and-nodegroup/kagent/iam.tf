@@ -107,3 +107,37 @@ resource "aws_iam_role_policy_attachment" "kagent_bedrock" {
   role       = aws_iam_role.kagent_bedrock[0].name
   policy_arn = aws_iam_policy.kagent_bedrock[0].arn
 }
+
+#---------------------------------------------------------------
+# EKS Access Entry - Kubernetes RBAC for IRSA role
+#---------------------------------------------------------------
+
+# Grant the IRSA role access to Kubernetes API via EKS Access Entries
+# This maps the IAM role to Kubernetes RBAC permissions
+resource "aws_eks_access_entry" "kagent_bedrock" {
+  count = var.enable_bedrock_access ? 1 : 0
+
+  cluster_name  = var.cluster_name
+  principal_arn = aws_iam_role.kagent_bedrock[0].arn
+  type          = "STANDARD"
+
+  tags = {
+    Name    = "${var.cluster_name}-kagent-bedrock-access"
+    Cluster = var.cluster_name
+  }
+}
+
+# Associate cluster admin policy for EKS MCP Server operations
+resource "aws_eks_access_policy_association" "kagent_bedrock" {
+  count = var.enable_bedrock_access ? 1 : 0
+
+  cluster_name  = var.cluster_name
+  principal_arn = aws_iam_role.kagent_bedrock[0].arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.kagent_bedrock]
+}
