@@ -119,16 +119,6 @@ Simple LangGraph agent with Bedrock Claude that can answer Kubernetes/EKS questi
 ### Module 2: EKS MCP Server Integration (Current)
 Adds tools for cluster operations via [EKS MCP Server](https://docs.aws.amazon.com/eks/latest/userguide/eks-mcp.html):
 
-**Available Tools (16 total):**
-| Category | Tools |
-|----------|-------|
-| Cluster Management | `manage_eks_stacks` |
-| Kubernetes Resources | `manage_k8s_resource`, `apply_yaml`, `list_k8s_resources`, `list_api_versions` |
-| Application Support | `generate_app_manifest`, `get_pod_logs`, `get_k8s_events`, `get_eks_vpc_config` |
-| CloudWatch | `get_cloudwatch_logs`, `get_cloudwatch_metrics`, `get_eks_metrics_guidance` |
-| IAM | `get_policies_for_role`, `add_inline_policy` |
-| Troubleshooting | `search_eks_troubleshoot_guide`, `get_eks_insights` |
-
 **Configuration:**
 ```yaml
 # manifests/eks-ops-agent.yaml
@@ -142,6 +132,47 @@ env:
 2. Uses SigV4 authentication with IRSA credentials (no static keys)
 3. LangGraph ReAct pattern decides when to call tools based on user queries
 4. Tools execute cluster operations and return results to the LLM
+
+**Check Agent Logs to notice loading of the tools**
+
+```text
+2026-02-10 17:04:49,277 - root - INFO - Logging configured with level: INFO
+2026-02-10 17:04:59,513 - __main__ - INFO - Loading EKS MCP Server tools...
+2026-02-10 17:04:59,514 - tools - INFO - Connecting to EKS MCP Server in us-west-2...
+Downloading beartype (1.3MiB)
+Downloading lupa (2.0MiB)
+Downloading pygments (1.2MiB)
+Downloading awscrt (3.9MiB)
+ Downloaded lupa
+ Downloaded awscrt
+ Downloaded pygments
+ Downloaded beartype
+Installed 88 packages in 10.11s
+/usr/local/lib/python3.13/contextlib.py:109: DeprecationWarning: Use `streamable_http_client` instead.
+  self.gen = func(*args, **kwds)
+2026-02-10 17:05:30,581 - tools - INFO - Loaded 20 tools from EKS MCP Server:
+2026-02-10 17:05:30,581 - tools - INFO -   - manage_k8s_resource
+2026-02-10 17:05:30,581 - tools - INFO -   - generate_app_manifest
+2026-02-10 17:05:30,582 - tools - INFO -   - read_k8s_resource
+2026-02-10 17:05:30,582 - tools - INFO -   - get_eks_insights
+2026-02-10 17:05:30,582 - tools - INFO -   - get_eks_metrics_guidance
+2026-02-10 17:05:30,582 - tools - INFO -   - list_api_versions
+2026-02-10 17:05:30,582 - tools - INFO -   - get_policies_for_role
+2026-02-10 17:05:30,582 - tools - INFO -   - get_pod_logs
+2026-02-10 17:05:30,583 - tools - INFO -   - search_eks_documentation
+2026-02-10 17:05:30,583 - tools - INFO -   - list_k8s_resources
+2026-02-10 17:05:30,583 - tools - INFO -   - add_inline_policy
+2026-02-10 17:05:30,583 - tools - INFO -   - get_cloudwatch_metrics
+2026-02-10 17:05:30,583 - tools - INFO -   - manage_eks_stacks
+2026-02-10 17:05:30,583 - tools - INFO -   - describe_eks_resource
+2026-02-10 17:05:30,583 - tools - INFO -   - search_eks_troubleshooting_guide
+2026-02-10 17:05:30,583 - tools - INFO -   - get_cloudwatch_logs
+2026-02-10 17:05:30,584 - tools - INFO -   - list_eks_resources
+2026-02-10 17:05:30,584 - tools - INFO -   - get_eks_vpc_config
+2026-02-10 17:05:30,584 - tools - INFO -   - get_k8s_events
+2026-02-10 17:05:30,584 - tools - INFO -   - apply_yaml
+2026-02-10 17:05:30,584 - __main__ - INFO - Loaded 20 EKS MCP tools
+```
 
 **Example prompts:**
 - "List all pods in the default namespace"
