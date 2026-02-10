@@ -6,8 +6,12 @@ This module wraps the LangGraph agent with kagent's KAgentApp to:
 2. Register with kagent controller
 3. Enable session persistence via KAgentCheckpointer
 4. Appear in kagent UI
+
+Module 2 adds:
+5. Load EKS MCP Server tools for cluster operations
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -18,6 +22,7 @@ from kagent.core import KAgentConfig
 from kagent.langgraph import KAgentApp, KAgentCheckpointer
 
 from agent import create_agent_graph
+from config import config as app_config
 
 # Configure logging
 logging.basicConfig(
@@ -43,13 +48,51 @@ def load_agent_card() -> dict:
         return json.load(f)
 
 
+async def load_mcp_tools() -> list:
+    """
+    Load tools from EKS MCP Server if enabled.
+
+    Returns:
+        List of tools, or empty list if disabled or failed.
+    """
+    if not app_config.ENABLE_MCP_TOOLS:
+        logger.info("MCP tools disabled (set ENABLE_MCP_TOOLS=true to enable)")
+        return []
+
+    try:
+        # Import here to avoid loading MCP dependencies if not needed
+        from tools import MCPToolManager
+
+        logger.info("Loading EKS MCP Server tools...")
+        async with MCPToolManager() as manager:
+            # Return a copy of tools - the connection will close but tools remain usable
+            # for tool definitions. Actual tool calls will reconnect.
+            return list(manager.tools)
+
+    except ImportError as e:
+        logger.warning(f"MCP dependencies not installed: {e}")
+        logger.info("Install with: pip install mcp langchain-mcp-adapters")
+        return []
+    except Exception as e:
+        logger.error(f"Failed to load MCP tools: {e}")
+        logger.info("Agent will run in Q&A mode (no cluster tools)")
+        return []
+
+
 def main():
     """Main entry point - starts the KAgentApp server."""
+    # Load MCP tools (Module 2)
+    tools = asyncio.run(load_mcp_tools())
+    if tools:
+        logger.info(f"Loaded {len(tools)} EKS MCP tools")
+    else:
+        logger.info("Running in Q&A mode (no tools)")
+
     # Create checkpointer for session persistence
     checkpointer = create_checkpointer()
 
-    # Create the LangGraph agent with checkpointer
-    graph = create_agent_graph(checkpointer=checkpointer)
+    # Create the LangGraph agent with checkpointer and tools
+    graph = create_agent_graph(checkpointer=checkpointer, tools=tools if tools else None)
 
     # Load agent card
     agent_card = load_agent_card()
@@ -60,7 +103,7 @@ def main():
         graph=graph,
         agent_card=agent_card,
         config=config,
-        tracing=False,  # Disable until Phase 4 (Langfuse)
+        tracing=False,  # Disable until Module 4 (Langfuse)
     )
 
     # Start the server

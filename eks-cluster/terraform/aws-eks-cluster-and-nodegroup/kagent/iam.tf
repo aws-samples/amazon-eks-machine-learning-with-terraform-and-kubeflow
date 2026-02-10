@@ -68,6 +68,16 @@ resource "aws_iam_policy" "kagent_bedrock" {
         ]
         # Allow cross-region inference profiles (required for Claude 4.x models)
         Resource = "arn:aws:bedrock:*:*:inference-profile/*"
+      },
+      {
+        Sid    = "EKSMCPServer"
+        Effect = "Allow"
+        Action = [
+          "eks-mcp:InvokeMcp",
+          "eks-mcp:CallReadOnlyTool",
+          "eks-mcp:CallPrivilegedTool"
+        ]
+        Resource = "*"
       }
     ]
   })

@@ -8,9 +8,9 @@ EKS Ops Agent demonstrates building effective AI agents with:
 - **LangGraph** for agent orchestration
 - **Amazon Bedrock** (Claude) as the LLM
 - **kagent** for Kubernetes-native deployment and lifecycle management
-- **EKS MCP Server** for cluster operations (Phase 2)
-- **Memory** for context persistence (Phase 3)
-- **Langfuse** for observability (Phase 4)
+- **EKS MCP Server** for cluster operations (Module 2)
+- **Memory** for context persistence (Module 3)
+- **Langfuse** for observability (Module 4)
 
 ## Prerequisites
 
@@ -107,26 +107,55 @@ eks-ops-agent/
     ├── agent.py           # LangGraph agent definition
     ├── app.py             # KAgentApp wrapper (A2A protocol)
     ├── config.py          # Configuration
+    ├── tools.py           # Module 2: EKS MCP Server tools
     └── agent-card.json    # Agent metadata for kagent
 ```
 
 ## Modules
 
-### Phase 1: Barebone Agent (Current)
+### Module 1: Barebone Agent
 Simple LangGraph agent with Bedrock Claude that can answer Kubernetes/EKS questions.
 
-### Phase 2: EKS MCP Server Integration
-*TODO* - Add tools for cluster operations:
-- Upgrade readiness checking
-- Deployment debugging
-- Inference endpoint health monitoring
+### Module 2: EKS MCP Server Integration (Current)
+Adds tools for cluster operations via [EKS MCP Server](https://docs.aws.amazon.com/eks/latest/userguide/eks-mcp.html):
 
-### Phase 3: Memory
+**Available Tools (16 total):**
+| Category | Tools |
+|----------|-------|
+| Cluster Management | `manage_eks_stacks` |
+| Kubernetes Resources | `manage_k8s_resource`, `apply_yaml`, `list_k8s_resources`, `list_api_versions` |
+| Application Support | `generate_app_manifest`, `get_pod_logs`, `get_k8s_events`, `get_eks_vpc_config` |
+| CloudWatch | `get_cloudwatch_logs`, `get_cloudwatch_metrics`, `get_eks_metrics_guidance` |
+| IAM | `get_policies_for_role`, `add_inline_policy` |
+| Troubleshooting | `search_eks_troubleshoot_guide`, `get_eks_insights` |
+
+**Configuration:**
+```yaml
+# manifests/eks-ops-agent.yaml
+env:
+  - name: ENABLE_MCP_TOOLS
+    value: "true"  # Set to "false" for Q&A-only mode
+```
+
+**How it works:**
+1. Agent loads tools from EKS MCP Server at startup via `mcp-proxy-for-aws`
+2. Uses SigV4 authentication with IRSA credentials (no static keys)
+3. LangGraph ReAct pattern decides when to call tools based on user queries
+4. Tools execute cluster operations and return results to the LLM
+
+**Example prompts:**
+- "List all pods in the default namespace"
+- "Get the logs from pod xyz in namespace abc"
+- "What events happened in the cluster in the last hour?"
+- "Check the health of my EKS cluster"
+- "Generate a deployment manifest for an nginx application"
+
+### Module 3: Memory
 *TODO* - Add context persistence:
 - Short-term: KAgentCheckpointer (PostgreSQL)
 - Long-term: Redis key-value store
 
-### Phase 4: Observability
+### Module 4: Observability
 *TODO* - Add Langfuse integration for:
 - Trace visualization
 - Cost tracking

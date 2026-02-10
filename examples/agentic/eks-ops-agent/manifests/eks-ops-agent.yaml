@@ -25,6 +25,9 @@ spec:
           value: "us-west-2"
         - name: BEDROCK_MODEL_ID
           value: "us.anthropic.claude-sonnet-4-20250514-v1:0"
+        # Module 2: Enable EKS MCP Server tools for cluster operations
+        - name: ENABLE_MCP_TOOLS
+          value: "true"
       resources:
         requests:
           memory: "512Mi"

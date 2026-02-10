@@ -14,20 +14,17 @@ dependencies = [
     "uvicorn>=0.32.0",
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
+    # Module 2: EKS MCP Server integration
+    "mcp>=1.0.0",
+    "langchain-mcp-adapters>=0.1.0",
 ]
 
 [project.optional-dependencies]
-# Phase 2: EKS MCP Server integration
-mcp = [
-    "mcp>=1.0.0",
-    "mcp-proxy-for-aws>=1.1.0",
-    "langchain-mcp-adapters>=0.1.0",
-]
-# Phase 3: Memory
+# Module 3: Memory
 memory = [
     "redis>=5.0.0",
 ]
-# Phase 4: Observability
+# Module 4: Observability
 observability = [
     "langfuse>=2.0.0",
 ]
