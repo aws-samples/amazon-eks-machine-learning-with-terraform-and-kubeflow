@@ -10,7 +10,7 @@ Module 4: Add Langfuse observability.
 import logging
 from typing import Annotated, Literal, Optional, TypedDict
 
-from langchain_aws import ChatBedrock
+from langchain_aws import ChatBedrockConverse
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import StateGraph, START, END
@@ -34,23 +34,24 @@ class AgentState(TypedDict):
 # --- LLM Setup ---
 
 
-def get_llm(tools: list = None) -> ChatBedrock:
+def get_llm(tools: list = None) -> ChatBedrockConverse:
     """
-    Create Bedrock Claude LLM instance.
+    Create Bedrock Claude LLM instance using Converse API.
+
+    Uses ChatBedrockConverse which handles tool results differently
+    than the legacy InvokeModel API used by ChatBedrock.
 
     Args:
         tools: Optional list of tools to bind to the LLM.
 
     Returns:
-        ChatBedrock instance, optionally with tools bound.
+        ChatBedrockConverse instance, optionally with tools bound.
     """
-    llm = ChatBedrock(
-        model_id=config.BEDROCK_MODEL_ID,
+    llm = ChatBedrockConverse(
+        model=config.BEDROCK_MODEL_ID,
         region_name=config.AWS_REGION,
-        model_kwargs={
-            "temperature": 0.0,
-            "max_tokens": 4096,
-        },
+        temperature=0.0,
+        max_tokens=4096,
     )
 
     if tools:
