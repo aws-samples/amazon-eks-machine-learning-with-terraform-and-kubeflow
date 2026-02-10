@@ -30,7 +30,7 @@ observability = [
 ]
 # All features
 all = [
-    "eks-ops-agent[mcp,memory,observability]",
+    "eks-ops-agent[memory,observability]",
 ]
 
 [build-system]
