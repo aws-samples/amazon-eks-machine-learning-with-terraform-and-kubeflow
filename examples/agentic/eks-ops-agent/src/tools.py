@@ -4,9 +4,8 @@ Module 2: EKS MCP Server Tools
 This module connects to the AWS managed EKS MCP Server and loads
 tools for the LangGraph agent to perform cluster operations.
 
-Uses the recommended integration pattern from mcp-proxy-for-aws:
-- aws_iam_streamablehttp_client for SigV4 authentication
-- load_mcp_tools for LangChain-compatible tool loading
+Uses MultiServerMCPClient with stdio transport to spawn mcp-proxy-for-aws
+as a subprocess. The subprocess stays alive to handle tool execution.
 
 EKS MCP Server provides 20 tools across 6 categories:
 - Cluster Management: manage_eks_stacks
@@ -18,59 +17,72 @@ EKS MCP Server provides 20 tools across 6 categories:
 """
 
 import logging
+import os
 
-from mcp import ClientSession
-from mcp_proxy_for_aws.client import aws_iam_streamablehttp_client
-from langchain_mcp_adapters.tools import load_mcp_tools
+from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from config import config
 
 logger = logging.getLogger(__name__)
 
+# Global client to keep MCP subprocess alive for tool execution
+_mcp_client: MultiServerMCPClient = None
 
-def get_eks_mcp_endpoint() -> str:
-    """Get the EKS MCP Server endpoint URL."""
-    return f"https://eks-mcp.{config.AWS_REGION}.api.aws/mcp"
+
+def get_mcp_server_config() -> dict:
+    """
+    Build MCP server configuration for EKS MCP Server.
+
+    Uses stdio transport with mcp-proxy-for-aws to handle SigV4 authentication.
+    IRSA credentials are automatically available in the container.
+    """
+    eks_mcp_endpoint = f"https://eks-mcp.{config.AWS_REGION}.api.aws/mcp"
+
+    return {
+        "eks-mcp": {
+            "transport": "stdio",
+            "command": "uvx",
+            "args": [
+                "mcp-proxy-for-aws@latest",
+                eks_mcp_endpoint,
+                "--service", "eks-mcp",
+                "--region", config.AWS_REGION,
+            ],
+            "env": {
+                "AWS_REGION": config.AWS_REGION,
+                # Pass through IRSA credentials
+                **{k: v for k, v in os.environ.items() if k.startswith("AWS_")},
+            },
+        }
+    }
 
 
 async def load_eks_tools() -> list:
     """
     Load tools from EKS MCP Server.
 
-    Uses aws_iam_streamablehttp_client for SigV4 authentication
-    and load_mcp_tools for LangChain-compatible tool conversion.
+    Creates a MultiServerMCPClient with stdio transport that spawns
+    mcp-proxy-for-aws as a subprocess. The subprocess stays alive
+    to handle tool calls throughout the agent's lifetime.
 
     Returns:
         List of LangChain-compatible tools for EKS operations.
-
-    Example:
-        tools = await load_eks_tools()
-        llm_with_tools = llm.bind_tools(tools)
     """
-    endpoint = get_eks_mcp_endpoint()
-    logger.info(f"Connecting to EKS MCP Server: {endpoint}")
+    global _mcp_client
 
     try:
-        # Create authenticated client using mcp-proxy-for-aws
-        mcp_client = aws_iam_streamablehttp_client(
-            endpoint=endpoint,
-            aws_region=config.AWS_REGION,
-            aws_service="eks-mcp",
-        )
+        mcp_config = get_mcp_server_config()
+        logger.info(f"Connecting to EKS MCP Server in {config.AWS_REGION}...")
 
-        # Connect and load tools
-        async with mcp_client as (read, write, _):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
+        # Create client - subprocess stays alive for tool execution
+        _mcp_client = MultiServerMCPClient(mcp_config)
+        tools = await _mcp_client.get_tools()
 
-                # Load tools using langchain-mcp-adapters
-                tools = await load_mcp_tools(session)
+        logger.info(f"Loaded {len(tools)} tools from EKS MCP Server:")
+        for tool in tools:
+            logger.info(f"  - {tool.name}")
 
-                logger.info(f"Loaded {len(tools)} tools from EKS MCP Server:")
-                for tool in tools:
-                    logger.info(f"  - {tool.name}")
-
-                return tools
+        return tools
 
     except Exception as e:
         logger.error(f"Failed to load EKS MCP tools: {e}")

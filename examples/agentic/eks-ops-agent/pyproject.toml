@@ -14,9 +14,8 @@ dependencies = [
     "uvicorn>=0.32.0",
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
-    # Module 2: EKS MCP Server integration
+    # Module 2: EKS MCP Server integration (stdio transport via uvx)
     "mcp>=1.0.0",
-    "mcp-proxy-for-aws>=0.1.0",
     "langchain-mcp-adapters>=0.0.9,<0.2.0",
 ]
 
