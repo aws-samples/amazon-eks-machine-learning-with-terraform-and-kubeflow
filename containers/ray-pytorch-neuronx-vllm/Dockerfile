@@ -60,24 +60,15 @@ RUN pip install --no-cache-dir \
     --extra-index-url https://pip.repos.neuron.amazonaws.com \
     libneuronxla==2.2.14584.0+06ac23d1 \
     neuronx-cc==2.22.12471.0+b4a00d10 \
-    neuronx-distributed==0.16.25997+f431c02e \
-    neuronx-distributed-inference==0.7.14366+9adb71b8 
+    neuronx-distributed==0.16.25997+f431c02e \  
+    neuronx-distributed-inference==0.7.15063+bafa28d5
 
 
 # 6. Install required packages
 RUN pip install --no-cache-dir --extra-index-url=https://pip.repos.neuron.amazonaws.com \
-    torch-neuronx==2.9.0.2.11.19912+e48cd891 vllm==0.12.0
+    torch-neuronx==2.9.0.2.11.19912+e48cd891 vllm==0.13.0
 
-RUN pip install --no-cache-dir --no-deps git+https://github.com/vllm-project/vllm-neuron.git@0.2.0
+RUN pip install --no-cache-dir --no-deps git+https://github.com/vllm-project/vllm-neuron.git@0.3.0
 
-
-# 7. Patch vllm_neuron for vLLM 0.12.0 compatibility
-RUN VLLM_NEURON_DIR="/home/ray/anaconda3/lib/python3.12/site-packages/vllm_neuron" && \
-    sed -i 's/from vllm\.utils import make_tensor_with_pad/from vllm.utils.torch_utils import make_tensor_with_pad/g' \
-    $VLLM_NEURON_DIR/worker/neuronx_distributed_model_runner.py && \
-    sed -i '/block_sizes=\[self\.block_size\],/a\            kernel_block_sizes=[self.block_size],' \
-    $VLLM_NEURON_DIR/worker/neuronx_distributed_model_runner.py && \
-    sed -i '/default_neuron_config_args = _get_default_neuron_config(/i\    if not hasattr(scheduler_config, "max_model_len"):\n        scheduler_config.max_model_len = model_config.max_model_len\n' \
-    $VLLM_NEURON_DIR/worker/neuronx_distributed_model_loader.py
 
 CMD ["/bin/bash"]
