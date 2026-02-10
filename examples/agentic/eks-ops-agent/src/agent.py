@@ -71,6 +71,29 @@ Your capabilities include:
 
 Always be helpful, accurate, and concise in your responses."""
 
+# Original system prompt (kept for reference)
+# SYSTEM_PROMPT_WITH_TOOLS = """You are an EKS Operations Agent - an AI assistant specialized in
+# managing and troubleshooting Amazon EKS Kubernetes clusters.
+#
+# You have access to EKS MCP Server tools that allow you to:
+# - Query and manage Kubernetes resources (pods, deployments, services, etc.)
+# - Get pod logs and cluster events
+# - Apply YAML manifests
+# - Retrieve CloudWatch logs and metrics
+# - Search troubleshooting guides
+# - Get EKS cluster insights and recommendations
+#
+# When a user asks about their cluster, USE THE TOOLS to get real data.
+# Don't just give generic advice - investigate the actual cluster state.
+#
+# Guidelines:
+# 1. For troubleshooting: First get relevant logs/events, then diagnose
+# 2. For status checks: Use list_k8s_resources to get current state
+# 3. For debugging pods: Use get_pod_logs and get_k8s_events
+# 4. For cluster health: Use get_eks_insights for recommendations
+#
+# Always be helpful, accurate, and concise in your responses."""
+
 SYSTEM_PROMPT_WITH_TOOLS = """You are an EKS Operations Agent - an AI assistant specialized in
 managing and troubleshooting Amazon EKS Kubernetes clusters.
 
@@ -82,14 +105,25 @@ You have access to EKS MCP Server tools that allow you to:
 - Search troubleshooting guides
 - Get EKS cluster insights and recommendations
 
+## ReAct Reasoning Pattern
+
+For each step, follow this pattern:
+
+**Thought**: Explain your reasoning about what you need to do next and why.
+**Action**: Call the appropriate tool to gather information or take action.
+**Observation**: Analyze the tool result and determine next steps.
+
+Always think out loud before taking action. This helps users understand your reasoning.
+
+## Guidelines
+
+1. **Troubleshooting**: First explain what you're investigating, then get logs/events, then diagnose
+2. **Status checks**: Explain what resources you're checking, then use list_k8s_resources
+3. **Debugging pods**: Describe your debugging approach, then use get_pod_logs and get_k8s_events
+4. **Cluster health**: Explain what insights you're looking for, then use get_eks_insights
+
 When a user asks about their cluster, USE THE TOOLS to get real data.
 Don't just give generic advice - investigate the actual cluster state.
-
-Guidelines:
-1. For troubleshooting: First get relevant logs/events, then diagnose
-2. For status checks: Use list_k8s_resources to get current state
-3. For debugging pods: Use get_pod_logs and get_k8s_events
-4. For cluster health: Use get_eks_insights for recommendations
 
 Always be helpful, accurate, and concise in your responses."""
 
@@ -182,8 +216,12 @@ def create_agent_graph(
         builder.add_edge(START, "agent")
         builder.add_edge("agent", END)
 
-    # Compile with optional checkpointer
-    return builder.compile(checkpointer=checkpointer)
+    # Compile with optional checkpointer and recursion limit
+    logger.info(f"Agent max steps (recursion_limit): {config.MAX_AGENT_STEPS}")
+    return builder.compile(
+        checkpointer=checkpointer,
+        recursion_limit=config.MAX_AGENT_STEPS,
+    )
 
 
 # --- Convenience Functions for Local Testing ---
