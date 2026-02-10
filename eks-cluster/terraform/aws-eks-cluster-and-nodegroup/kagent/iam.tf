@@ -69,6 +69,7 @@ resource "aws_iam_policy" "kagent_bedrock" {
         # Allow cross-region inference profiles (required for Claude 4.x models)
         Resource = "arn:aws:bedrock:*:*:inference-profile/*"
       },
+      # Allow invoking EKS MCP Server tools for cluster operations
       {
         Sid    = "EKSMCPServer"
         Effect = "Allow"
@@ -76,6 +77,17 @@ resource "aws_iam_policy" "kagent_bedrock" {
           "eks-mcp:InvokeMcp",
           "eks-mcp:CallReadOnlyTool",
           "eks-mcp:CallPrivilegedTool"
+        ]
+        Resource = "*"
+      },
+      # Allow EKS MCP Server to access Kubernetes API on behalf of the agent
+      {
+        Sid    = "EKSClusterAccess"
+        Effect = "Allow"
+        Action = [
+          "eks:AccessKubernetesApi",
+          "eks:DescribeCluster",
+          "eks:ListClusters"
         ]
         Resource = "*"
       }
