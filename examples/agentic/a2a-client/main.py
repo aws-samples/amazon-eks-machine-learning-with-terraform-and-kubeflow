@@ -42,7 +42,9 @@ SAMPLE_TICKETS = [
         "id": "TICKET-003",
         "type": "eks_infrastructure",
         "description": "Customer reports their ML training jobs are failing with OOMKilled errors",
-        "namespace": "kubeflow-user-example-com",
+        # Must match the cluster where agent2 (eks-ops-agent) has EKS Access Entry configured
+        "cluster_name": "eks-1",
+        "namespace": "default",
         "symptoms": [
             "Pods restarting frequently",
             "Jobs failing after 10-15 minutes",
@@ -64,6 +66,7 @@ async def handoff_to_eks_ops_agent(ticket: dict) -> str:
     Passes context in the message so Agent2 can investigate.
     """
     # Build context message for Agent2
+    cluster_name = ticket.get("cluster_name", "eks-1")
     namespace = ticket.get("namespace", "default")
     symptoms = ticket.get("symptoms", [])
     symptoms_text = "\n".join(f"- {s}" for s in symptoms)
@@ -73,15 +76,16 @@ async def handoff_to_eks_ops_agent(ticket: dict) -> str:
 **Ticket:** {ticket['id']}
 **Issue:** {ticket['description']}
 
+**Cluster:** {cluster_name}
+**Namespace:** {namespace}
+
 **Symptoms reported:**
 {symptoms_text}
 
 **Investigation needed:**
-Please check the pods in namespace `{namespace}` for issues.
+Please check the pods in namespace `{namespace}` on cluster `{cluster_name}` for issues.
 Look at pod status, events, logs, and resource limits.
-Provide a summary of what you find and recommended actions.
-
-Note: Discover the cluster name using your tools if needed."""
+Provide a summary of what you find and recommended actions."""
 
     console.print(Panel(
         f"[yellow]Handing off to EKS Ops Agent...[/yellow]\n\n{handoff_message}",
