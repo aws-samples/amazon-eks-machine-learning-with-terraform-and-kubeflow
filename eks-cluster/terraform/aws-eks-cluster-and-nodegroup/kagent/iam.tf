@@ -80,14 +80,57 @@ resource "aws_iam_policy" "kagent_bedrock" {
         ]
         Resource = "*"
       },
-      # Allow EKS MCP Server to access Kubernetes API on behalf of the agent
+      # Allow EKS MCP Server to access EKS clusters and Kubernetes API
       {
         Sid    = "EKSClusterAccess"
         Effect = "Allow"
         Action = [
           "eks:AccessKubernetesApi",
-          "eks:DescribeCluster",
-          "eks:ListClusters"
+          "eks:Describe*",
+          "eks:List*"
+        ]
+        Resource = "*"
+      },
+      # Allow CloudWatch access for metrics and logs tools
+      {
+        Sid    = "CloudWatchAccess"
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:GetMetricData",
+          "cloudwatch:GetMetricStatistics",
+          "cloudwatch:ListMetrics",
+          "logs:GetLogEvents",
+          "logs:FilterLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = "*"
+      },
+      # Allow EC2 describe for VPC config tools
+      {
+        Sid    = "EC2DescribeAccess"
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeVpcs",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeRouteTables",
+          "ec2:DescribeNatGateways",
+          "ec2:DescribeInternetGateways"
+        ]
+        Resource = "*"
+      },
+      # Allow IAM read access for policy inspection tools
+      {
+        Sid    = "IAMReadAccess"
+        Effect = "Allow"
+        Action = [
+          "iam:GetRole",
+          "iam:GetRolePolicy",
+          "iam:ListRolePolicies",
+          "iam:ListAttachedRolePolicies",
+          "iam:GetPolicy",
+          "iam:GetPolicyVersion"
         ]
         Resource = "*"
       }
