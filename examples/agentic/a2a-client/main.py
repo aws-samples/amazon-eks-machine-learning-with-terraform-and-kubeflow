@@ -91,6 +91,7 @@ Note: Discover the cluster name using your tools if needed."""
 
     # A2A protocol request (using message/send method)
     request_id = str(uuid.uuid4())
+    message_id = str(uuid.uuid4())
 
     a2a_request = {
         "jsonrpc": "2.0",
@@ -98,6 +99,7 @@ Note: Discover the cluster name using your tools if needed."""
         "method": "message/send",
         "params": {
             "message": {
+                "messageId": message_id,
                 "role": "user",
                 "parts": [
                     {
@@ -110,38 +112,27 @@ Note: Discover the cluster name using your tools if needed."""
     }
 
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
                 EKS_OPS_AGENT_URL,
                 json=a2a_request,
                 headers={"Content-Type": "application/json"}
             )
-            response.raise_for_status()
 
-            result = response.json()
-
-            # Extract agent response from A2A result
-            if "result" in result:
-                task_result = result["result"]
-                if "history" in task_result:
-                    # Get the last assistant message
-                    for msg in reversed(task_result["history"]):
-                        if msg.get("role") == "agent":
-                            parts = msg.get("parts", [])
-                            for part in parts:
-                                if part.get("type") == "text":
-                                    return part.get("text", "No response text")
-                return json.dumps(task_result, indent=2)
-            elif "error" in result:
-                return f"Error from Agent2: {result['error']}"
+            # Fire and forget - just confirm the request was sent
+            if response.status_code == 200:
+                return "Handoff sent successfully. Agent2 is now investigating."
             else:
-                return json.dumps(result, indent=2)
+                return f"Handoff sent (status: {response.status_code})"
 
     except httpx.ConnectError:
         return (
             "Could not connect to eks-ops-agent. Make sure you have port-forwarded:\n"
             "kubectl port-forward -n kagent svc/eks-ops-agent 8081:8080"
         )
+    except httpx.TimeoutException:
+        # Timeout is fine - agent2 is processing, we don't wait
+        return "Handoff sent. Agent2 is processing (response may take time)."
     except Exception as e:
         return f"Error during A2A handoff: {str(e)}"
 
