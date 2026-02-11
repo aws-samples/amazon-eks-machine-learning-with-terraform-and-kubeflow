@@ -247,7 +247,7 @@ Installed 88 packages in 10.11s
 
 ### Step 2.5: Test MCP Tools
 
-Open the kagent UI and try these prompts (replace `<cluster-name>` with your actual cluster name, e.g., `eks-1`):
+Open the kagent UI and try these prompts (replace `<cluster-name>` with your actual cluster name, e.g., `<CLUSTER_NAME>`):
 
 1. **List resources:**
    ```
@@ -273,6 +273,26 @@ Open the kagent UI and try these prompts (replace `<cluster-name>` with your act
 5. **Get cluster insights:**
    ```
    Get insights and recommendations for cluster <cluster-name>
+   ```
+
+6. **Multi-step deployment task:**
+   ```
+   On cluster <CLUSTER_NAME>, deploy a new nginx application called "test-nginx" with 3 replicas in the default namespace. After deployment, verify all pods are running. Then scale it down to 1 replica and confirm the change.
+   ```
+
+7. **Cluster discovery** (agent discovers clusters automatically):
+   ```
+   List all pods in the default namespace
+   ```
+
+8. **NodeGroup inspection:**
+   ```
+   How many NodeGroups are in cluster <CLUSTER_NAME>?
+   ```
+
+9. **NodeGroup details:**
+   ```
+   Give me details about the NodeGroup <nodegroup-name> in cluster <CLUSTER_NAME>
    ```
 
 ---
