@@ -89,15 +89,14 @@ Note: Discover the cluster name using your tools if needed."""
         border_style="yellow"
     ))
 
-    # A2A protocol request
-    task_id = str(uuid.uuid4())
+    # A2A protocol request (using message/send method)
+    request_id = str(uuid.uuid4())
 
     a2a_request = {
         "jsonrpc": "2.0",
-        "id": task_id,
-        "method": "tasks/send",
+        "id": request_id,
+        "method": "message/send",
         "params": {
-            "id": task_id,
             "message": {
                 "role": "user",
                 "parts": [
