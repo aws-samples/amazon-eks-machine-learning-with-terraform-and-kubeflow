@@ -216,12 +216,8 @@ def create_agent_graph(
         builder.add_edge(START, "agent")
         builder.add_edge("agent", END)
 
-    # Compile with optional checkpointer and recursion limit
-    logger.info(f"Agent max steps (recursion_limit): {config.MAX_AGENT_STEPS}")
-    return builder.compile(
-        checkpointer=checkpointer,
-        recursion_limit=config.MAX_AGENT_STEPS,
-    )
+    # Compile with optional checkpointer
+    return builder.compile(checkpointer=checkpointer)
 
 
 # --- Convenience Functions for Local Testing ---

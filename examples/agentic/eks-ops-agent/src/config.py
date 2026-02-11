@@ -18,9 +18,6 @@ class Config:
     # EKS MCP Server - Module 2
     ENABLE_MCP_TOOLS: bool = os.getenv("ENABLE_MCP_TOOLS", "false").lower() == "true"
 
-    # Agent behavior
-    MAX_AGENT_STEPS: int = int(os.getenv("MAX_AGENT_STEPS", "25"))
-
     # kagent
     KAGENT_URL: str = os.getenv(
         "KAGENT_URL", "http://kagent-controller.kagent.svc.cluster.local:8083"
