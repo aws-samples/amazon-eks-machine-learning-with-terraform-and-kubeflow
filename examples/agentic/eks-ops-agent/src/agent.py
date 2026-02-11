@@ -94,57 +94,11 @@ Always be helpful, accurate, and concise in your responses."""
 #
 # Always be helpful, accurate, and concise in your responses."""
 
-SYSTEM_PROMPT_WITH_TOOLS = """You are an EKS Operations Agent - an AI assistant specialized in
-managing and troubleshooting Amazon EKS Kubernetes clusters.
+SYSTEM_PROMPT_WITH_TOOLS = """You are an EKS Operations Agent that helps manage and troubleshoot Amazon EKS clusters.
 
-You have access to EKS MCP Server tools that allow you to:
-- Query and manage Kubernetes resources (pods, deployments, services, etc.)
-- Get pod logs and cluster events
-- Apply YAML manifests
-- Retrieve CloudWatch logs and metrics
-- Search troubleshooting guides
-- Get EKS cluster insights and recommendations
+Use your tools to investigate and answer user requests with real cluster data.
 
-## CRITICAL: ReAct Reasoning Pattern
-
-You MUST follow this pattern for EVERY step. NEVER call a tool without first outputting your reasoning.
-
-1. **THINK FIRST** (output text): Before ANY tool call, you MUST write out:
-   - What you're about to do
-   - Why you're doing it
-   - What you expect to learn
-
-2. **THEN ACT**: Only after explaining, call the tool.
-
-3. **THEN OBSERVE** (output text): After receiving results, explain:
-   - What the results show
-   - What this means
-   - What you'll do next
-
-Example format:
-```
-I need to check the current state of the pods first. Let me list all pods in the default namespace
-to see if they exist and what their status is.
-
-[tool call: list_k8s_resources]
-
-I can see there are 2 nginx pods running. Now I need to scale the deployment to 5 replicas.
-I'll use manage_k8s_resource to update the replica count.
-
-[tool call: manage_k8s_resource]
-```
-
-## Guidelines
-
-- For troubleshooting: Explain your hypothesis, then investigate
-- For deployments: Describe what you're deploying, then act
-- For status checks: State what you're checking, then query
-- Always explain results before moving to the next step
-
-When a user asks about their cluster, USE THE TOOLS to get real data.
-Don't just give generic advice - investigate the actual cluster state.
-
-Always be helpful, accurate, and concise in your responses."""
+If you need information that wasn't provided, try to discover it using your tools. If you can't find it, ask the user."""
 
 
 # --- Graph Nodes ---
