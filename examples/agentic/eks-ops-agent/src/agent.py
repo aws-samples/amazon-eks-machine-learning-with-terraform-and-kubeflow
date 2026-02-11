@@ -132,6 +132,9 @@ def should_continue(state: AgentState) -> Literal["tools", "end"]:
     last_message = state["messages"][-1]
 
     if isinstance(last_message, AIMessage) and last_message.tool_calls:
+        # Log each tool call for observability
+        for tool_call in last_message.tool_calls:
+            logger.info(f"TOOL_CALL: {tool_call['name']} | Args: {tool_call['args']}")
         return "tools"
     return "end"
 
