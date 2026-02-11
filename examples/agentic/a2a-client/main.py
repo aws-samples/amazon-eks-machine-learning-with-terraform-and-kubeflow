@@ -41,14 +41,13 @@ SAMPLE_TICKETS = [
     {
         "id": "TICKET-003",
         "type": "eks_infrastructure",
-        "description": "Customer reports their ML training jobs are failing with OOMKilled errors",
+        "description": "Customer reports application pods are having issues",
         # Must match the cluster where agent2 (eks-ops-agent) has EKS Access Entry configured
         "cluster_name": "eks-1",
         "namespace": "default",
         "symptoms": [
-            "Pods restarting frequently",
-            "Jobs failing after 10-15 minutes",
-            "Error: OOMKilled in pod events"
+            "Some pods may not be running correctly",
+            "Need health check on deployments"
         ]
     }
 ]
