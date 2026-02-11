@@ -102,7 +102,11 @@ resource "aws_iam_policy" "kagent_bedrock" {
           "logs:GetLogEvents",
           "logs:FilterLogEvents",
           "logs:DescribeLogGroups",
-          "logs:DescribeLogStreams"
+          "logs:DescribeLogStreams",
+          # CloudWatch Logs Insights (for get_cloudwatch_logs tool)
+          "logs:StartQuery",
+          "logs:StopQuery",
+          "logs:GetQueryResults"
         ]
         Resource = "*"
       },
