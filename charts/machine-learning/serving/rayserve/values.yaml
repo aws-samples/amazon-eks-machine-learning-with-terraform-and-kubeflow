@@ -10,7 +10,9 @@ ray:
   serve_config_v2:
   service_unhealthy_threshold_secs: 900
   deployment_unhealthy_threshold_secs: 300
-  env: 
+  env:
+    - name: RAY_LOG_TO_STDERR
+      value: "1"
   restart_policy:
     head: OnFailure
     worker: OnFailure
