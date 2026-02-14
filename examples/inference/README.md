@@ -16,6 +16,22 @@
 | [Qwen 2.5 VL 32B Instruct](./rayserve/qwen25-vl-32B-instruct-vllm/serve.ipynb)    | [vLLM](https://github.com/vllm-project/vllm)    | Nvidia GPU | Devices=8, TP=8, PP=1, Multi-modal |
 | [Qwen 3 32B](./rayserve/qwen3-32B-vllm/serve.ipynb)    | [vLLM](https://github.com/vllm-project/vllm)    | Nvidia GPU | Devices=8, TP=8, PP=1 |
 
+#### Streaming Ray Serve Logs
+
+Access Ray Serve logs via kubectl using the `log-streamer` sidecar container:
+
+```bash
+# Controller/deployment logs (head pod)
+kubectl logs <head-pod> -c log-streamer -n <namespace>
+
+# Inference/replica logs (worker pod)
+kubectl logs <worker-pod> -c log-streamer -n <namespace>
+
+# Stream logs in real-time
+kubectl logs -f <pod> -c log-streamer -n <namespace>
+```
+
+Ray Dashboard logs also remain accessible via the Dashboard UI.
 
 ### [Triton Inference Server](https://github.com/triton-inference-server/server)
 
