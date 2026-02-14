@@ -2,26 +2,78 @@ ray:
   version: '2.52.1'
   dashboard:
     host: '0.0.0.0'
-  ports: []
+  ports:
+    - name: gcs
+      port: 6379
+    - name: client
+      port: 10001
+    - name: dashboard
+      port: 8265
+    - name: serve
+      port: 8000
   resources:
-    requests: {}
-    limits: {}
-  tolerations: []
-  serve_config_v2:
-  service_unhealthy_threshold_secs: 900
-  deployment_unhealthy_threshold_secs: 300
-  env: 
+    requests:
+      cpu: 300m 
+    limits:
+      cpu: 2
+  env:
+    - name: RAY_LOGGING_LEVEL
+      value: "ERROR"
   restart_policy:
     head: OnFailure
     worker: OnFailure
+  serve_config_v2: 
+    serveConfigV2: |
+      applications:
+        - name: app
+          import_path: openai_api:deployment
+          runtime_env:
+            env_vars:
+              LD_LIBRARY_PATH: "/home/ray/anaconda3/lib/python3.12/site-packages/nvidia/cusparselt/lib:/usr/local/cuda/lib64"
+              ENGINE_CONFIG: "/etc/engine-config/engine-config.json"
+              PYTHONPATH: "/etc/framework-scripts"
+            pip:
+              - "vllm==0.15.0"
+              - "pandas==2.3.0"
+              - "pyarrow==21.0.0"
+              - "transformers==4.57.6"
+              - "scipy==1.17.0"
+          deployments:
+          - name: VLLMDeployment
+            max_ongoing_requests: 64
+            autoscaling_config:
+              min_replicas: 1
+              max_replicas: 2
+              target_ongoing_requests: 32
+            ray_actor_options:
+              num_gpus: 8
+  service_unhealthy_threshold_secs: 900
+  deployment_unhealthy_threshold_secs: 300
+engine:
+  config:
+    served_model_name: default
+    model: 
+    tokenizer: 
+    enable_log_requests: false
+    tensor_parallel_size: 8
+    disable_log_stats: true
 image:
 image_pull_policy: IfNotPresent
 resources:
   min_replicas: 1
-  max_replicas: 1
-  node_type:
-  requests: {}
-  limits: {}
-tolerations: []
-pvc: []
-framework: vllm-0.11.0
+  max_replicas: 2
+  requests:
+    "nvidia.com/gpu": 8
+  limits:
+    "nvidia.com/gpu": 8
+  node_type: 'g6.48xlarge' 
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+framework: vllm-0.15.0
