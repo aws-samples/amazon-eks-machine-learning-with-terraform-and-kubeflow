@@ -60,8 +60,8 @@ RUN pip install --no-cache-dir \
     --extra-index-url https://pip.repos.neuron.amazonaws.com \
     libneuronxla==2.2.14584.0+06ac23d1 \
     neuronx-cc==2.22.12471.0+b4a00d10 \
-    neuronx-distributed==0.16.25997+f431c02e \
-    neuronx-distributed-inference==0.7.14366+9adb71b8 \
+    neuronx-distributed==0.16.25997+f431c02e \  
+    neuronx-distributed-inference==0.7.15063+bafa28d5 \
     torch-neuronx==2.9.0.2.11.19912+e48cd891
 
 CMD ["/bin/bash"]

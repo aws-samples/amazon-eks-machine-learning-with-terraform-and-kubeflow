@@ -27,10 +27,11 @@ ray:
               ENGINE_CONFIG: "/etc/engine-config/engine-config.json"
               PYTHONPATH: "/etc/framework-scripts"
             pip:
-              - "vllm==0.11.0"
+              - "vllm==0.15.0"
               - "pandas==2.3.0"
               - "pyarrow==21.0.0"
-              - "transformers==4.57.1"
+              - "transformers==4.57.6"
+              - "scipy==1.17.0"
           deployments:
           - name: VLLMDeployment
             max_ongoing_requests: 64
@@ -69,3 +70,4 @@ pvc:
     mount_path: /fsx
   - name: pv-efs
     mount_path: /efs
+framework: vllm-0.15.0

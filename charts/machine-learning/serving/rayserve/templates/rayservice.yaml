@@ -151,6 +151,27 @@ spec:
           - name: ray-worker
             image: {{ .Values.image }}
             imagePullPolicy: {{ .Values.image_pull_policy}}
+            command:
+              - /bin/bash
+              - -c
+              - |
+                # 1. Start background log tailer
+                (
+                  # Wait until the serve log directory specifically exists
+                  until [ -d /tmp/ray/session_latest/logs/serve ]; do 
+                    sleep 2
+                  done
+                  
+                  # Now tail. -F will wait for the specific files to appear.
+                  tail -n 100 -F /tmp/ray/session_latest/logs/worker*.out \
+                                 /tmp/ray/session_latest/logs/worker*.err \
+                                 /tmp/ray/session_latest/logs/serve/*.log
+                ) &
+                
+                # 2. Capture the KubeRay command into a variable and execute
+                # This prevents the "-c: option requires an argument" error
+                CMD="${KUBERAY_GEN_RAY_START_CMD:-ray start --address=$RAY_IP --block}"
+                eval "$CMD"
             lifecycle:
               preStop:
                 exec:
