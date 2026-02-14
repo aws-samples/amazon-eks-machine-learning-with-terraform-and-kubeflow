@@ -50,6 +50,7 @@ engine:
     tokenizer: "/fsx/pretrained-models/BAAI/bge-reranker-v2-m3"
     supported_tasks: ["embed", "score"]
     gpu_memory_utilization: 0.75
+    tensor_parallel_size: 1
 image:
 image_pull_policy: IfNotPresent
 resources:
