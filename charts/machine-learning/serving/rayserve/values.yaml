@@ -17,6 +17,13 @@ ray:
     sidecar:
       enabled: true
       image: busybox:latest
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi
   restart_policy:
     head: OnFailure
     worker: OnFailure

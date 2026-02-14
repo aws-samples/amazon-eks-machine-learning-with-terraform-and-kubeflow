@@ -91,11 +91,20 @@ spec:
             command: ["/bin/sh", "-c"]
             args:
               - |
-                while [ ! -d /tmp/ray/session_latest/logs ]; do sleep 2; done;
-                exec tail -F /tmp/ray/session_latest/logs/serve/*.log /tmp/ray/session_latest/logs/*.log 2>/dev/null
+                while [ ! -d /tmp/ray/session_latest/logs/serve ] || [ -z "$(ls /tmp/ray/session_latest/logs/serve/*.log 2>/dev/null)" ]; do sleep 1; done;
+                exec tail -F /tmp/ray/session_latest/logs/serve/*.log
             volumeMounts:
               - mountPath: /tmp/ray
                 name: ray-logs
+            resources:
+              requests:
+              {{- range $k, $v := .Values.ray.logging.sidecar.resources.requests }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
+              limits:
+              {{- range $k, $v := .Values.ray.logging.sidecar.resources.limits }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
           {{- end }}
           volumes:
             - name: shm
@@ -220,11 +229,20 @@ spec:
             command: ["/bin/sh", "-c"]
             args:
               - |
-                while [ ! -d /tmp/ray/session_latest/logs ]; do sleep 2; done;
-                exec tail -F /tmp/ray/session_latest/logs/serve/*.log /tmp/ray/session_latest/logs/*.log 2>/dev/null
+                while [ ! -d /tmp/ray/session_latest/logs/serve ] || [ -z "$(ls /tmp/ray/session_latest/logs/serve/*.log 2>/dev/null)" ]; do sleep 1; done;
+                exec tail -F /tmp/ray/session_latest/logs/serve/*.log
             volumeMounts:
               - mountPath: /tmp/ray
                 name: ray-logs
+            resources:
+              requests:
+              {{- range $k, $v := .Values.ray.logging.sidecar.resources.requests }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
+              limits:
+              {{- range $k, $v := .Values.ray.logging.sidecar.resources.limits }}
+                {{ $k }}: {{ $v }}
+              {{- end }}
           {{- end }}
           volumes:
             - name: shm
