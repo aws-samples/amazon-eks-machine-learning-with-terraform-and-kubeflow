@@ -10,9 +10,13 @@ ray:
   serve_config_v2:
   service_unhealthy_threshold_secs: 900
   deployment_unhealthy_threshold_secs: 300
-  env:
-    - name: RAY_LOG_TO_STDERR
-      value: "1"
+  env: []
+  logging:
+    # Sidecar streams Ray logs to stdout for kubectl logs access
+    # Ray Dashboard logs also work (reads from files)
+    sidecar:
+      enabled: true
+      image: busybox:latest
   restart_policy:
     head: OnFailure
     worker: OnFailure

@@ -66,6 +66,10 @@ spec:
               - mountPath: /etc/framework-scripts
                 name: framework-scripts
               {{- end }}
+              {{- if .Values.ray.logging.sidecar.enabled }}
+              - mountPath: /tmp/ray
+                name: ray-logs
+              {{- end }}
               {{- $pv_index := 1 }}
               {{- range $pv := .Values.pvc }}
               - mountPath: {{ $pv.mount_path }}
@@ -81,6 +85,18 @@ spec:
               {{- range $k, $v := .Values.ray.resources.limits }}
                 {{ $k }}: {{ $v }}
               {{- end }}
+          {{- if .Values.ray.logging.sidecar.enabled }}
+          - name: log-streamer
+            image: {{ .Values.ray.logging.sidecar.image | default "busybox:latest" }}
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                while [ ! -d /tmp/ray/session_latest/logs ]; do sleep 2; done
+                tail -F /tmp/ray/session_latest/logs/serve/*.log /tmp/ray/session_latest/logs/*.log 2>/dev/null
+            volumeMounts:
+              - mountPath: /tmp/ray
+                name: ray-logs
+          {{- end }}
           volumes:
             - name: shm
               hostPath:
@@ -101,6 +117,10 @@ spec:
               configMap:
                 defaultMode: 420
                 name: framework-scripts-{{ .Release.Name }}
+            {{- end }}
+            {{- if .Values.ray.logging.sidecar.enabled }}
+            - name: ray-logs
+              emptyDir: {}
             {{- end }}
             {{- $pv_index := 1 }}
             {{- range $pv := .Values.pvc }}
@@ -175,6 +195,10 @@ spec:
               - mountPath: /etc/framework-scripts
                 name: framework-scripts
               {{- end }}
+              {{- if .Values.ray.logging.sidecar.enabled }}
+              - mountPath: /tmp/ray
+                name: ray-logs
+              {{- end }}
               {{- $pv_index := 1 }}
               {{- range $pv := .Values.pvc }}
               - mountPath: {{ $pv.mount_path }}
@@ -190,6 +214,18 @@ spec:
               {{- range $k, $v := .Values.resources.limits }}
                 {{ $k }}: {{ $v }}
               {{- end }}
+          {{- if .Values.ray.logging.sidecar.enabled }}
+          - name: log-streamer
+            image: {{ .Values.ray.logging.sidecar.image | default "busybox:latest" }}
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                while [ ! -d /tmp/ray/session_latest/logs ]; do sleep 2; done
+                tail -F /tmp/ray/session_latest/logs/serve/*.log /tmp/ray/session_latest/logs/*.log 2>/dev/null
+            volumeMounts:
+              - mountPath: /tmp/ray
+                name: ray-logs
+          {{- end }}
           volumes:
             - name: shm
               hostPath:
@@ -210,6 +246,10 @@ spec:
               configMap:
                 defaultMode: 420
                 name: framework-scripts-{{ .Release.Name }}
+            {{- end }}
+            {{- if .Values.ray.logging.sidecar.enabled }}
+            - name: ray-logs
+              emptyDir: {}
             {{- end }}
             {{- $pv_index := 1 }}
             {{- range $pv := .Values.pvc }}
