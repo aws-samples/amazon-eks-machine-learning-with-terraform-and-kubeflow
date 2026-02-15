@@ -1,0 +1,12 @@
+[project]
+name = "a2a-client"
+version = "0.1.0"
+description = "Simple agent that hands off EKS issues to eks-ops-agent via A2A"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+a2a-client = "main:main"

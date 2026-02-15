@@ -1,0 +1,26 @@
+{
+  "name": "eks-ops-agent",
+  "description": "EKS Operations Agent - manages and troubleshoots Amazon EKS clusters",
+  "url": "localhost:8080",
+  "version": "0.1.0",
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "defaultInputModes": ["text"],
+  "defaultOutputModes": ["text"],
+  "skills": [
+    {
+      "id": "eks-troubleshooting",
+      "name": "EKS Troubleshooting",
+      "description": "Answers questions about Kubernetes and EKS, helps diagnose cluster issues",
+      "tags": ["eks", "kubernetes", "troubleshooting"],
+      "examples": [
+        "What is the status of my cluster?",
+        "How do I troubleshoot a failing pod?",
+        "What are best practices for EKS upgrades?"
+      ]
+    }
+  ]
+}

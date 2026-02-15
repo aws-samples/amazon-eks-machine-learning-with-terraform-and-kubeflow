@@ -1,0 +1,37 @@
+# EKS Ops Agent - BYO Agent CRD
+#
+# This deploys the LangGraph-based EKS Operations Agent via kagent.
+#
+# Usage:
+#   ./build-and-deploy.sh
+#
+# The script builds the container, pushes to ECR, deploys to kagent,
+# and configures IRSA for Bedrock access.
+
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: eks-ops-agent
+  namespace: kagent
+spec:
+  description: "EKS Operations Agent - manages and troubleshoots Amazon EKS clusters"
+  type: BYO
+  byo:
+    deployment:
+      # UPDATE THIS: Replace with your ECR image URI from build.sh output
+      image: <AWS_ACCOUNT_ID>.dkr.ecr.us-west-2.amazonaws.com/eks-ops-agent:0.1.0
+      env:
+        - name: AWS_REGION
+          value: "us-west-2"
+        - name: BEDROCK_MODEL_ID
+          value: "us.anthropic.claude-sonnet-4-20250514-v1:0"
+        # Module 2: Enable EKS MCP Server tools for cluster operations
+        - name: ENABLE_MCP_TOOLS
+          value: "true"
+      resources:
+        requests:
+          memory: "512Mi"
+          cpu: "250m"
+        limits:
+          memory: "1Gi"
+          cpu: "500m"

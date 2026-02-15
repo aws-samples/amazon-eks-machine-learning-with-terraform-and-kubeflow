@@ -1,0 +1,41 @@
+[project]
+name = "eks-ops-agent"
+version = "0.1.0"
+description = "EKS Operations Agent - manages and troubleshoots Amazon EKS clusters"
+requires-python = ">=3.13"
+dependencies = [
+    "langgraph>=0.2.60",
+    "langchain-aws>=0.2.10",
+    "langchain-core>=0.3.28",
+    "kagent-core>=0.1.0",
+    "kagent-langgraph>=0.1.0",
+    "openai>=1.0.0",
+    "httpx>=0.27.0",
+    "uvicorn>=0.32.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    # Module 2: EKS MCP Server integration (stdio transport via uvx)
+    "mcp>=1.0.0",
+    "langchain-mcp-adapters>=0.0.9,<0.2.0",
+]
+
+[project.optional-dependencies]
+# Module 3: Memory
+memory = [
+    "redis>=5.0.0",
+]
+# Module 4: Observability
+observability = [
+    "langfuse>=2.0.0",
+]
+# All features
+all = [
+    "eks-ops-agent[memory,observability]",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
