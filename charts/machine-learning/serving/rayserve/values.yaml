@@ -19,6 +19,8 @@ ray:
   env:
     - name: RAY_LOGGING_LEVEL
       value: "ERROR"
+    - name: RAY_enable_infeasible_task_early_exit
+      value: "false"
   restart_policy:
     head: OnFailure
     worker: OnFailure

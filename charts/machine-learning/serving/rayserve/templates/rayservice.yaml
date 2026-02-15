@@ -41,6 +41,31 @@ spec:
           - name: ray-head
             image: {{ .Values.image }}
             imagePullPolicy: {{ .Values.image_pull_policy}} 
+            command:
+              - /bin/bash
+              - -c
+              - |
+                # 1. Start background log tailer with high-signal filtering
+                (
+                  # Wait until the serve log directory specifically exists
+                  until [ -d /tmp/ray/session_latest/logs/serve ]; do 
+                    sleep 2
+                  done
+                  
+                  # This tail command captures core files but filters for critical events:
+                  # - ERROR/WARNING: Component failures
+                  # - 'ready': Signals for system/actor readiness
+                  # - 'Installing': Progress of runtime environments
+                  # - 'Serve': Status of model deployments
+                  tail -n 100 -F /tmp/ray/session_latest/logs/worker*.out \
+                                 /tmp/ray/session_latest/logs/worker*.err \
+                                 /tmp/ray/session_latest/logs/serve/*.log \
+                                 /tmp/ray/session_latest/logs/runtime_env_setup*.log
+                ) &
+                
+                # 2. Standard KubeRay execution
+                CMD="${KUBERAY_GEN_RAY_START_CMD:-ray start --head --dashboard-host=0.0.0.0 --block}"
+                eval "$CMD"
             ports:
             {{- range $v := .Values.ray.ports }}
               - name: {{ $v.name }}
