@@ -18,6 +18,9 @@ class Config:
     # EKS MCP Server - Module 2
     ENABLE_MCP_TOOLS: bool = os.getenv("ENABLE_MCP_TOOLS", "false").lower() == "true"
 
+    # Memory - Module 3
+    ENABLE_MEMORY: bool = os.getenv("ENABLE_MEMORY", "false").lower() == "true"
+
     # kagent
     KAGENT_URL: str = os.getenv(
         "KAGENT_URL", "http://kagent-controller.kagent.svc.cluster.local:8083"
