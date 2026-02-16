@@ -16,7 +16,8 @@ COPY pyproject.toml .
 COPY src/ ./src/
 
 # Install Python dependencies using uv
-RUN uv sync --no-dev
+# Include memory extras for Module 3 (Redis)
+RUN uv sync --no-dev --extra memory
 
 # Set environment variables
 ENV PYTHONPATH=/app/src
