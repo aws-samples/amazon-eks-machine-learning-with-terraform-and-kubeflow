@@ -8,7 +8,7 @@ Build an AI agent that manages and troubleshoots Amazon EKS clusters using LangG
 |--------|-------------|
 | **Module 1** | Barebone agent - Build and deploy BYO agent with Amazon Bedrock as model provider using kagent |
 | **Module 2** | EKS MCP Server integration - Connect the agent to EKS MCP Server and access tools for cluster operations |
-| **Module 3** | Memory - Short-term and long-term context persistence |
+| **Module 3** | Memory - Long-term memory with Redis for user defaults |
 | **Module 4** | Observability - Langfuse tracing and monitoring |
 
 ## Prerequisites
@@ -312,6 +312,7 @@ eks-ops-agent/
     ├── app.py             # KAgentApp wrapper (A2A protocol)
     ├── config.py          # Environment-based configuration
     ├── tools.py           # Module 2: EKS MCP Server tools
+    ├── memory.py          # Module 3: Redis memory for user defaults
     └── agent-card.json    # Agent metadata for kagent
 ```
 
@@ -326,6 +327,8 @@ eks-ops-agent/
 | `AWS_REGION` | AWS region for Bedrock and EKS MCP | `us-west-2` |
 | `BEDROCK_MODEL_ID` | Bedrock model to use | `us.anthropic.claude-sonnet-4-20250514-v1:0` |
 | `ENABLE_MCP_TOOLS` | Enable EKS MCP Server tools | `true` (in manifest) |
+| `ENABLE_MEMORY` | Enable Redis memory for user defaults | `false` |
+| `REDIS_URL` | Redis connection URL | `redis://localhost:6379` |
 
 ### Tested Bedrock Models
 
@@ -368,7 +371,169 @@ kubectl logs -n kagent -l kagent=eks-ops-agent -f
 
 ---
 
-## Module 3: Memory - Add conversation persistence with Redis
+## Module 3: Long-term Memory with Redis
 
+In this module, you'll add long-term memory that persists user defaults (cluster, namespace) across chat sessions. When a user sets their defaults, they're stored in Redis and automatically retrieved in future sessions.
 
-## Module 4: Observability** - Add Langfuse for tracing and monitoring
+### How It Works
+
+```
+Session 1:
+  User: "Set my default cluster to <CLUSTER_NAME> and namespace to default"
+  Agent: ✓ Saved defaults
+
+Session 2 (new session):
+  User: "List all pods"
+  Agent: (retrieves defaults from Redis, uses <CLUSTER_NAME>/default)
+```
+
+### Step 3.1: Code Snippet
+
+The memory implementation is in `src/memory.py`. Here's the key pattern:
+
+```python
+# src/memory.py - Key code snippet
+
+class MemoryService:
+    """Redis-backed memory service for user defaults."""
+
+    async def get_defaults(self, user_id: str) -> UserDefaults:
+        """Retrieve user's saved cluster and namespace."""
+        client = await self._get_client()
+        data = await client.get(f"user:{user_id}:defaults")
+        return UserDefaults.from_dict(json.loads(data)) if data else UserDefaults()
+
+    async def set_defaults(self, user_id: str, cluster: str, namespace: str) -> UserDefaults:
+        """Save user's default cluster and namespace."""
+        client = await self._get_client()
+        defaults = UserDefaults(cluster=cluster, namespace=namespace)
+        await client.set(f"user:{user_id}:defaults", json.dumps(defaults.to_dict()))
+        return defaults
+```
+
+Memory tools are exposed to the agent so it can get/set defaults:
+
+```python
+# src/memory.py - Memory tools
+
+@tool
+async def set_user_defaults(cluster: str = None, namespace: str = None) -> str:
+    """Save the user's default cluster and/or namespace for future requests."""
+    defaults = await _memory_service.set_defaults(user_id, cluster, namespace)
+    return f"Saved defaults: {defaults}"
+
+@tool
+async def get_user_defaults() -> str:
+    """Retrieve the user's saved default cluster and namespace."""
+    defaults = await _memory_service.get_defaults(user_id)
+    return f"User defaults: {defaults}"
+```
+
+### Step 3.2: Deploy Redis
+
+Deploy Redis to your cluster:
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: kagent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: kagent
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+EOF
+```
+
+### Step 3.3: Enable Memory
+
+Update the agent manifest to enable memory. Edit `manifests/eks-ops-agent.yaml`:
+
+```yaml
+env:
+  - name: ENABLE_MCP_TOOLS
+    value: "true"
+  - name: ENABLE_MEMORY
+    value: "true"
+  - name: REDIS_URL
+    value: "redis://redis.kagent.svc.cluster.local:6379"
+```
+
+### Step 3.4: Rebuild and Deploy
+
+```bash
+cd examples/agentic/eks-ops-agent
+./build-and-deploy.sh
+```
+
+### Step 3.5: Verify Memory Loaded
+
+Check the agent logs:
+
+```bash
+kubectl logs -n kagent -l kagent=eks-ops-agent -f
+```
+
+You should see:
+
+```text
+INFO - Memory enabled (Redis: redis://redis.kagent.svc.cluster.local:6379)
+INFO - Loaded 3 memory tools
+INFO - Loaded 20 EKS MCP tools
+```
+
+### Step 3.6: Test Memory
+
+Open the kagent UI and try these prompts (replace `<CLUSTER_NAME>` with your actual cluster name):
+
+1. **Set defaults:**
+   ```
+   Set my default cluster to <CLUSTER_NAME> and namespace to default
+   ```
+
+2. **Verify defaults saved:**
+   ```
+   What are my defaults?
+   ```
+
+3. **Start a new chat session** (click "New Chat" in kagent UI)
+
+4. **Use defaults implicitly:**
+   ```
+   List all pods
+   ```
+   The agent should use your saved cluster and namespace without asking.
+
+5. **Clear defaults:**
+   ```
+   Clear my defaults
+   ```
+
+---
+
+## Module 4: Observability - Add Langfuse for tracing and monitoring

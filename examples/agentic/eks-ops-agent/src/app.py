@@ -9,6 +9,9 @@ This module wraps the LangGraph agent with kagent's KAgentApp to:
 
 Module 2 adds:
 5. Load EKS MCP Server tools for cluster operations
+
+Module 3 adds:
+6. Long-term memory via Redis for user defaults (cluster, namespace)
 """
 
 import asyncio
@@ -76,13 +79,51 @@ async def load_mcp_tools() -> list:
         return []
 
 
+def load_memory_tools() -> list:
+    """
+    Load memory tools if enabled.
+
+    Returns:
+        List of memory tools, or empty list if disabled.
+    """
+    if not app_config.ENABLE_MEMORY:
+        logger.info("Memory disabled (set ENABLE_MEMORY=true to enable)")
+        return []
+
+    try:
+        from memory import MemoryService, get_memory_tools, set_memory_service
+
+        # Initialize memory service
+        memory_service = MemoryService(redis_url=app_config.REDIS_URL)
+        set_memory_service(memory_service)
+
+        logger.info(f"Memory enabled (Redis: {app_config.REDIS_URL})")
+        return get_memory_tools()
+
+    except ImportError as e:
+        logger.warning(f"Memory dependencies not installed: {e}")
+        logger.info("Install with: pip install 'eks-ops-agent[memory]'")
+        return []
+    except Exception as e:
+        logger.error(f"Failed to initialize memory: {e}")
+        return []
+
+
 def main():
     """Main entry point - starts the KAgentApp server."""
     # Load MCP tools (Module 2)
-    tools = asyncio.run(load_mcp_tools())
-    if tools:
-        logger.info(f"Loaded {len(tools)} EKS MCP tools")
-    else:
+    mcp_tools = asyncio.run(load_mcp_tools())
+    if mcp_tools:
+        logger.info(f"Loaded {len(mcp_tools)} EKS MCP tools")
+
+    # Load memory tools (Module 3)
+    memory_tools = load_memory_tools()
+    if memory_tools:
+        logger.info(f"Loaded {len(memory_tools)} memory tools")
+
+    # Combine all tools
+    tools = mcp_tools + memory_tools
+    if not tools:
         logger.info("Running in Q&A mode (no tools)")
 
     # Create checkpointer for session persistence
