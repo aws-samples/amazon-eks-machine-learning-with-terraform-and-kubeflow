@@ -25,9 +25,14 @@ spec:
           value: "us-west-2"
         - name: BEDROCK_MODEL_ID
           value: "us.anthropic.claude-sonnet-4-20250514-v1:0"
-        # Module 2: Enable EKS MCP Server tools for cluster operations
+        # Module 2: Set to "true" to enable EKS MCP Server tools
         - name: ENABLE_MCP_TOOLS
-          value: "true"
+          value: "false"
+        # Module 3: Set to "true" to enable Redis memory for user defaults
+        - name: ENABLE_MEMORY
+          value: "false"
+        - name: REDIS_URL
+          value: "redis://redis.kagent.svc.cluster.local:6379"
       resources:
         requests:
           memory: "512Mi"
