@@ -9,20 +9,94 @@ Build an AI agent that manages and troubleshoots Amazon EKS clusters using LangG
 | **Module 1** | Barebone agent - Build and deploy BYO agent with Amazon Bedrock as model provider using kagent |
 | **Module 2** | EKS MCP Server integration - Connect the agent to EKS MCP Server and access tools for cluster operations |
 | **Module 3** | Memory - Long-term memory with Redis for user defaults |
-| **Module 4** | Observability - Langfuse tracing and monitoring |
 
 ## Prerequisites
+
+> **⚠️ Before You Begin:** This workshop assumes you have completed the [main repository setup](../../../README.md) through **Step 4** to provision your EC2 cloud desktop with Docker, AWS CLI, and kubectl installed.
 
 - **AWS account with Bedrock access**
   - Enable model access in [AWS Bedrock Console](https://console.aws.amazon.com/bedrock/) → Model access
   - Default model: `us.anthropic.claude-sonnet-4-20250514-v1:0` (Claude Sonnet 4)
   - You can use any Bedrock model by setting `BEDROCK_MODEL_ID` in `manifests/eks-ops-agent.yaml`
   - Note: Claude 4.x models require cross-region inference profiles (prefix with `us.`)
-- **EKS cluster with kagent installed**
-- **Docker** for container builds
-- **AWS CLI and kubectl** configured for your cluster
+- **EC2 cloud desktop** from main repository setup (has Docker, AWS CLI, kubectl, terraform, VSCode and Kiro pre-installed)
+- **EKS cluster** - will be created in Module 1 with kagent enabled
 
-> **Note:** Before starting this workshop, complete the [main repository setup](../../../README.md) to provision your cloud desktop (EC2 instance) and EKS cluster via Terraform.
+---
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              EKS Cluster                                     │
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                         kagent namespace                               │  │
+│  │                                                                        │  │
+│  │   ┌─────────────┐     ┌───────────────────┐     ┌───────────────────┐  │  │
+│  │   │  kagent-ui  │◄───►│ kagent-controller │◄───►│   eks-ops-agent   │  │  │
+│  │   │    (Pod)    │     │       (Pod)       │     │       (Pod)       │  │  │
+│  │   └─────────────┘     └─────────┬─────────┘     └─────────┬─────────┘  │  │
+│  │                                 │                         │            │  │
+│  │                       ┌─────────▼─────────┐               │            │  │
+│  │                       │   PostgreSQL /    │               │            │  │
+│  │                       │   SQLite (DB)     │               │            │  │
+│  │                       └───────────────────┘               │            │  │
+│  │                                                           │            │  │
+│  │                       ┌───────────────────┐               │            │  │
+│  │                       │  Redis (Module 3) │◄──────────────┘            │  │
+│  │                       │  (User Defaults)  │                            │  │
+│  │                       └───────────────────┘                            │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                      │
+          ┌───────────────────────────┼───────────────────────────┐
+          │                           │                           │
+          ▼                           ▼                           ▼
+ ┌─────────────────┐        ┌─────────────────┐        ┌─────────────────┐
+ │  Amazon Bedrock │        │   EKS MCP       │        │  Kubernetes     │
+ │    (Claude)     │        │   Server        │        │     API         │
+ └─────────────────┘        └─────────────────┘        └─────────────────┘
+```
+
+### Components
+
+| Component | Role |
+|-----------|------|
+| **kagent-ui** | Web interface for chatting with agents |
+| **kagent-controller** | Manages agent lifecycle, routes messages, stores sessions |
+| **eks-ops-agent** | Your LangGraph agent (BYO agent pattern) |
+| **PostgreSQL/SQLite** | Stores chat sessions, agent state (short-term memory) |
+| **Redis** | Stores user defaults across sessions (long-term memory - Module 3) |
+| **Amazon Bedrock** | LLM provider (Claude) for agent reasoning |
+| **EKS MCP Server** | AWS-managed API providing 20+ EKS tools |
+
+### Request Flow
+
+```
+User Question
+     │
+     ▼
+┌─────────────┐    A2A Protocol     ┌───────────────────┐
+│  kagent-ui  │ ───────────────────►│ kagent-controller │
+└─────────────┘     (JSON-RPC)      └─────────┬─────────┘
+                                              │
+                                              │ Routes to agent
+                                              ▼
+                                    ┌───────────────────┐
+                                    │   eks-ops-agent   │
+                                    │    (LangGraph)    │
+                                    └─────────┬─────────┘
+                                              │
+                  ┌───────────────────────────┼───────────────────────────┐
+                  │                           │                           │
+                  ▼                           ▼                           ▼
+         ┌───────────────┐          ┌───────────────┐          ┌───────────────┐
+         │    Bedrock    │          │   EKS MCP     │          │     Redis     │
+         │    (LLM)      │          │   (Tools)     │          │  (Defaults)   │
+         └───────────────┘          └───────────────┘          └───────────────┘
+```
 
 ---
 
@@ -38,20 +112,41 @@ Edit your `terraform.tfvars` file:
 cd eks-cluster/terraform/aws-eks-cluster-and-nodegroup
 ```
 
-Add these variables:
+Your `terraform.tfvars` should include these kagent variables:
+
 ```hcl
+# Required variables (update with your values)
+profile      = "default"
+region       = "us-west-2"
+cluster_name = "my-cluster"    # Choose your cluster name
+azs          = ["us-west-2a", "us-west-2b", "us-west-2c"]
+import_path  = "s3://<your_bucket>"
+
+# kagent - AI Agent Framework
 kagent_enabled               = true
-kagent_enable_bedrock_access = true
+kagent_database_type         = "sqlite"
 kagent_enable_ui             = true
+kagent_enable_bedrock_access = true
 ```
 
 ### Step 1.2: Run Setup Script (EC2 only)
 
-If running from an EC2 instance, the setup script adds required IAM permissions for Terraform to create the Bedrock access role:
+**Run this BEFORE terraform apply.** The setup script adds IAM permissions to your EC2 instance role that Terraform needs to create the kagent Bedrock access role:
 
 ```bash
 cd examples/agentic/eks-ops-agent
 ./setup.sh
+```
+
+You should see output like:
+```
+EKS Ops Agent - Workshop Setup
+AWS Account: 123456789012
+AWS Region:  us-west-2
+Detected: Running on EC2 instance
+Instance Role: eks-dcv-stack-InstanceRole-XXXX
+Adding/updating IAM permissions for kagent...
+IAM permissions added/updated successfully
 ```
 
 ### Step 1.3: Apply Terraform
@@ -62,9 +157,31 @@ terraform apply
 ```
 
 This creates:
-- kagent controller and UI
+- EKS cluster with kagent controller and UI
 - IAM role for Bedrock access (with `*-agent` ServiceAccount pattern)
 - EKS Access Entry for Kubernetes API access
+
+**Verify kagent is running:**
+
+```bash
+# Update kubeconfig
+aws eks update-kubeconfig --name <cluster-name> --region us-west-2
+
+# Check kagent pods
+kubectl get pods -n kagent
+```
+
+Expected output (you'll see 15+ pods):
+```
+NAME                                  READY   STATUS    RESTARTS   AGE
+kagent-controller-xxxxxxxxxx-xxxxx    1/1     Running   0          2m
+kagent-ui-xxxxxxxxxx-xxxxx            1/1     Running   0          2m
+k8s-agent-xxxxxxxxxx-xxxxx            1/1     Running   0          2m
+helm-agent-xxxxxxxxxx-xxxxx           1/1     Running   0          2m
+... (and more built-in agents)
+```
+
+> **Note:** kagent comes with several built-in agents (k8s-agent, helm-agent, istio-agent, etc.). These are pre-configured agents for common operations. In this workshop, you'll build and deploy your own **eks-ops-agent** alongside them.
 
 ### Step 1.4: Build and Deploy the Agent
 
@@ -74,11 +191,20 @@ cd examples/agentic/eks-ops-agent
 ```
 
 The script will:
-1. Build the container image
-2. Push to Amazon ECR
-3. Deploy the agent CRD to kagent
-4. Configure IRSA (IAM Roles for Service Accounts)
-5. Restart the deployment to pick up credentials
+1. Build the container image (`docker build`)
+2. Create ECR repository and push the image
+3. Apply the Agent CRD manifest to kagent
+4. Annotate ServiceAccount for IRSA (IAM Roles for Service Accounts)
+5. Wait until agent pods are ready
+
+You should see output ending with:
+```
+deployment "eks-ops-agent" successfully rolled out
+
+========================================
+Build and deploy complete!
+========================================
+```
 
 ### Step 1.5: Access the Agent
 
@@ -114,12 +240,13 @@ INFO - Starting EKS Ops Agent on 0.0.0.0:8080
 
 ## Module 2: EKS MCP Server Integration
 
-In this module, you'll add 20 tools from the [AWS managed EKS MCP Server](https://docs.aws.amazon.com/eks/latest/userguide/eks-mcp.html) that allow the agent to query and manage your actual EKS cluster.
+In this module, you'll enable 20+ tools from the [AWS managed EKS MCP Server](https://docs.aws.amazon.com/eks/latest/userguide/eks-mcp.html) that allow the agent to query and manage your actual EKS cluster.
 
+**How this works:** The MCP integration code is already in `src/tools.py`. Setting `ENABLE_MCP_TOOLS=true` tells the agent to load these tools at startup. This pattern keeps the codebase modular - features are added incrementally and enabled via configuration.
 
-### Step 2.1: Code Snippet
+### Step 2.1: Understand the Code
 
-The MCP integration is in `src/tools.py`. Here's how it works:
+The MCP integration is in `src/tools.py`. Here's how it connects to the EKS MCP Server:
 
 ```python
 # src/tools.py - Key code snippet
@@ -181,15 +308,15 @@ def get_llm(tools: list = None) -> ChatBedrockConverse:
 
 ### Step 2.2: Enable MCP Tools
 
-The manifest already has MCP tools enabled. Verify in `manifests/eks-ops-agent.yaml`:
+Edit `manifests/eks-ops-agent.yaml` and change `ENABLE_MCP_TOOLS` from `"false"` to `"true"`:
 
 ```yaml
 env:
   - name: ENABLE_MCP_TOOLS
-    value: "true"
+    value: "true"    # Changed from "false"
 ```
 
-### Step 2.3: Rebuild and Deploy
+### Step 2.3: Redeploy the Agent
 
 ```bash
 cd examples/agentic/eks-ops-agent
@@ -201,49 +328,18 @@ cd examples/agentic/eks-ops-agent
 Check the agent logs:
 
 ```bash
-kubectl logs -n kagent -l kagent=eks-ops-agent -f
+kubectl logs -n kagent -l kagent=eks-ops-agent
 ```
 
-You should see tools getting loaded:
+You should see 20 tools loaded:
 
 ```text
-2026-02-10 17:04:49,277 - root - INFO - Logging configured with level: INFO
-2026-02-10 17:04:59,513 - __main__ - INFO - Loading EKS MCP Server tools...
-2026-02-10 17:04:59,514 - tools - INFO - Connecting to EKS MCP Server in us-west-2...
-Downloading beartype (1.3MiB)
-Downloading lupa (2.0MiB)
-Downloading pygments (1.2MiB)
-Downloading awscrt (3.9MiB)
- Downloaded lupa
- Downloaded awscrt
- Downloaded pygments
- Downloaded beartype
-Installed 88 packages in 10.11s
-/usr/local/lib/python3.13/contextlib.py:109: DeprecationWarning: Use `streamable_http_client` instead.
-  self.gen = func(*args, **kwds)
-2026-02-10 17:05:30,581 - tools - INFO - Loaded 20 tools from EKS MCP Server:
-2026-02-10 17:05:30,581 - tools - INFO -   - manage_k8s_resource
-2026-02-10 17:05:30,581 - tools - INFO -   - generate_app_manifest
-2026-02-10 17:05:30,582 - tools - INFO -   - read_k8s_resource
-2026-02-10 17:05:30,582 - tools - INFO -   - get_eks_insights
-2026-02-10 17:05:30,582 - tools - INFO -   - get_eks_metrics_guidance
-2026-02-10 17:05:30,582 - tools - INFO -   - list_api_versions
-2026-02-10 17:05:30,582 - tools - INFO -   - get_policies_for_role
-2026-02-10 17:05:30,582 - tools - INFO -   - get_pod_logs
-2026-02-10 17:05:30,583 - tools - INFO -   - search_eks_documentation
-2026-02-10 17:05:30,583 - tools - INFO -   - list_k8s_resources
-2026-02-10 17:05:30,583 - tools - INFO -   - add_inline_policy
-2026-02-10 17:05:30,583 - tools - INFO -   - get_cloudwatch_metrics
-2026-02-10 17:05:30,583 - tools - INFO -   - manage_eks_stacks
-2026-02-10 17:05:30,583 - tools - INFO -   - describe_eks_resource
-2026-02-10 17:05:30,583 - tools - INFO -   - search_eks_troubleshooting_guide
-2026-02-10 17:05:30,583 - tools - INFO -   - get_cloudwatch_logs
-2026-02-10 17:05:30,584 - tools - INFO -   - list_eks_resources
-2026-02-10 17:05:30,584 - tools - INFO -   - get_eks_vpc_config
-2026-02-10 17:05:30,584 - tools - INFO -   - get_k8s_events
-2026-02-10 17:05:30,584 - tools - INFO -   - apply_yaml
-2026-02-10 17:05:30,584 - __main__ - INFO - Loaded 20 EKS MCP tools
+INFO - Memory disabled (set ENABLE_MEMORY=true to enable)
+INFO - Creating agent with 20 tools
+INFO - Starting EKS Ops Agent on 0.0.0.0:8080
 ```
+
+The key confirmation is **"Creating agent with 20 tools"** - this means EKS MCP Server tools are loaded.
 
 ### Step 2.5: Test MCP Tools
 
@@ -297,83 +393,13 @@ Open the kagent UI and try these prompts (replace `<cluster-name>` with your act
 
 ---
 
-## Project Structure
+## Module 3: Memory with Redis
 
-```
-eks-ops-agent/
-├── build-and-deploy.sh    # Build container and deploy to kagent
-├── setup.sh               # EC2 IAM setup (run before terraform)
-├── Dockerfile
-├── pyproject.toml         # Python dependencies
-├── manifests/
-│   └── eks-ops-agent.yaml # Agent CRD (BYO agent)
-└── src/
-    ├── agent.py           # LangGraph agent with ReAct pattern
-    ├── app.py             # KAgentApp wrapper (A2A protocol)
-    ├── config.py          # Environment-based configuration
-    ├── tools.py           # Module 2: EKS MCP Server tools
-    ├── memory.py          # Module 3: Redis memory for user defaults
-    └── agent-card.json    # Agent metadata for kagent
-```
+In this module, you'll enable memory that persists user defaults (cluster, namespace) across chat sessions. When a user sets their defaults, they're stored in Redis and automatically retrieved in future sessions.
 
----
+**How this works:** The memory code is already in `src/memory.py`. Setting `ENABLE_MEMORY=true` and deploying Redis enables this feature. Like Module 2, this follows the modular pattern - features are enabled via configuration.
 
-## Configuration Reference
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `AWS_REGION` | AWS region for Bedrock and EKS MCP | `us-west-2` |
-| `BEDROCK_MODEL_ID` | Bedrock model to use | `us.anthropic.claude-sonnet-4-20250514-v1:0` |
-| `ENABLE_MCP_TOOLS` | Enable EKS MCP Server tools | `true` (in manifest) |
-| `ENABLE_MEMORY` | Enable Redis memory for user defaults | `false` |
-| `REDIS_URL` | Redis connection URL | `redis://localhost:6379` |
-
-### Tested Bedrock Models
-
-| Model | BEDROCK_MODEL_ID |
-|-------|------------------|
-| Claude Sonnet 4 | `us.anthropic.claude-sonnet-4-20250514-v1:0` |
-| Claude 3.5 Sonnet | `anthropic.claude-3-5-sonnet-20241022-v2:0` |
-
-> **Note:** Other Bedrock models that support tool calling should also work. Claude 4.x models require cross-region inference profiles (prefix with `us.`).
-
-### Agent Naming Convention
-
-Agents must have names ending in `-agent` (e.g., `eks-ops-agent`, `my-custom-agent`). This is enforced by the IAM trust policy for security.
-
----
-
-## Troubleshooting
-
-### Check agent status
-```bash
-kubectl get agents -n kagent
-kubectl get pods -n kagent -l kagent=eks-ops-agent
-```
-
-### View agent logs
-```bash
-kubectl logs -n kagent -l kagent=eks-ops-agent -f
-```
-
-### Common Errors
-
-| Error | Cause | Solution |
-|-------|-------|----------|
-| `AccessDenied on InvokeModel` | Bedrock model not enabled | Enable model access in [Bedrock console](https://console.aws.amazon.com/bedrock/) |
-| `AccessDenied on InvokeModel` (Claude 4.x) | Missing inference profile prefix | Use `us.` prefix (e.g., `us.anthropic.claude-sonnet-4-...`) |
-| `MCP tools not loading` | Environment variable not set | Verify `ENABLE_MCP_TOOLS=true` in manifest |
-| `MCP tools not loading` | Missing IAM permissions | Check IAM role has `eks-mcp:*` permissions |
-| `Tool calls failing with Unauthorized` | Missing EKS Access Entry | Run `aws eks list-access-entries --cluster-name <cluster>` to verify |
-| `IRSA not working` | ServiceAccount not annotated | Check: `kubectl get sa eks-ops-agent -n kagent -o yaml \| grep eks.amazonaws.com` |
-
----
-
-## Module 3: Long-term Memory with Redis
-
-In this module, you'll add long-term memory that persists user defaults (cluster, namespace) across chat sessions. When a user sets their defaults, they're stored in Redis and automatically retrieved in future sessions.
+> **Note:** This module uses an in-cluster Redis deployment for simplicity. For production use cases requiring durable long-term memory, consider managed services like Amazon ElastiCache, Amazon MemoryDB, Amazon OpenSearch (with vector search for semantic memory), or Amazon DynamoDB.
 
 ### How It Works
 
@@ -387,7 +413,7 @@ Session 2 (new session):
   Agent: (retrieves defaults from Redis, uses <CLUSTER_NAME>/default)
 ```
 
-### Step 3.1: Code Snippet
+### Step 3.1: Understand the Code
 
 The memory implementation is in `src/memory.py`. Here's the key pattern:
 
@@ -470,19 +496,34 @@ spec:
 EOF
 ```
 
+Expected output:
+```
+deployment.apps/redis created
+service/redis created
+```
+
+Verify Redis is running:
+```bash
+kubectl get pods -n kagent -l app=redis
+```
+```
+NAME                     READY   STATUS    RESTARTS   AGE
+redis-xxxxxxxxxx-xxxxx   1/1     Running   0          10s
+```
+
 ### Step 3.3: Enable Memory
 
-Update the agent manifest to enable memory. Edit `manifests/eks-ops-agent.yaml`:
+Edit `manifests/eks-ops-agent.yaml` and change `ENABLE_MEMORY` from `"false"` to `"true"`:
 
 ```yaml
-env:
-  - name: ENABLE_MCP_TOOLS
-    value: "true"
-  - name: ENABLE_MEMORY
-    value: "true"
-  - name: REDIS_URL
-    value: "redis://redis.kagent.svc.cluster.local:6379"
+        # Module 3: Set to "true" to enable Redis memory for user defaults
+        - name: ENABLE_MEMORY
+          value: "true"    # Changed from "false"
 ```
+
+> **Note:** `REDIS_URL` is already set to `redis://redis.kagent.svc.cluster.local:6379` in the manifest.
+>
+> **Tip:** To find any service URL, run `kubectl get svc <name> -n <namespace>`. The URL pattern is: `redis://<service>.<namespace>.svc.cluster.local:<port>`
 
 ### Step 3.4: Rebuild and Deploy
 
@@ -502,10 +543,13 @@ kubectl logs -n kagent -l kagent=eks-ops-agent -f
 You should see:
 
 ```text
+INFO - Loaded 20 EKS MCP tools
 INFO - Memory enabled (Redis: redis://redis.kagent.svc.cluster.local:6379)
 INFO - Loaded 3 memory tools
-INFO - Loaded 20 EKS MCP tools
+INFO - Creating agent with 23 tools
 ```
+
+The agent now has 23 tools (20 MCP + 3 memory).
 
 ### Step 3.6: Test Memory
 
@@ -536,4 +580,76 @@ Open the kagent UI and try these prompts (replace `<CLUSTER_NAME>` with your act
 
 ---
 
-## Module 4: Observability - Add Langfuse for tracing and monitoring
+## Project Structure
+
+```
+eks-ops-agent/
+├── build-and-deploy.sh    # Build container and deploy to kagent
+├── setup.sh               # EC2 IAM setup (run before terraform)
+├── Dockerfile
+├── pyproject.toml         # Python dependencies
+├── manifests/
+│   └── eks-ops-agent.yaml # Agent CRD (BYO agent)
+└── src/
+    ├── agent.py           # LangGraph agent with ReAct pattern
+    ├── app.py             # KAgentApp wrapper (A2A protocol)
+    ├── config.py          # Environment-based configuration
+    ├── tools.py           # Module 2: EKS MCP Server tools
+    ├── memory.py          # Module 3: Redis memory for user defaults
+    └── agent-card.json    # Agent metadata for kagent
+```
+
+---
+
+## Configuration Reference
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AWS_REGION` | AWS region for Bedrock and EKS MCP | `us-west-2` |
+| `BEDROCK_MODEL_ID` | Bedrock model to use | `us.anthropic.claude-sonnet-4-20250514-v1:0` |
+| `ENABLE_MCP_TOOLS` | Enable EKS MCP Server tools | `true` (in manifest) |
+| `ENABLE_MEMORY` | Enable Redis memory for user defaults | `false` |
+| `REDIS_URL` | Redis connection URL | `redis://localhost:6379` |
+
+### Tested Bedrock Models
+
+| Model | BEDROCK_MODEL_ID |
+|-------|------------------|
+| Claude Sonnet 4 (default) | `us.anthropic.claude-sonnet-4-20250514-v1:0` |
+| Claude 3.5 Sonnet | `anthropic.claude-3-5-sonnet-20241022-v2:0` |
+
+> **Note:** Other Bedrock models that support tool calling should also work. Claude 4.x models require cross-region inference profiles (prefix with `us.`).
+
+### Agent Naming Convention
+
+Agents must have names ending in `-agent` (e.g., `eks-ops-agent`, `my-custom-agent`). This is enforced by the IAM trust policy for security.
+
+---
+
+## Troubleshooting
+
+### Check agent status
+```bash
+kubectl get agents -n kagent
+kubectl get pods -n kagent -l kagent=eks-ops-agent
+```
+
+### View agent logs
+```bash
+kubectl logs -n kagent -l kagent=eks-ops-agent -f
+```
+
+### Common Errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `AccessDenied on InvokeModel` | Bedrock model not enabled | Enable model access in [Bedrock console](https://console.aws.amazon.com/bedrock/) |
+| `AccessDenied on InvokeModel` (Claude 4.x) | Missing inference profile prefix | Use `us.` prefix (e.g., `us.anthropic.claude-sonnet-4-...`) |
+| `MCP tools not loading` | Environment variable not set | Verify `ENABLE_MCP_TOOLS=true` in manifest |
+| `MCP tools not loading` | Missing IAM permissions | Check IAM role has `eks-mcp:*` permissions |
+| `Tool calls failing with Unauthorized` | Missing EKS Access Entry | Run `aws eks list-access-entries --cluster-name <cluster>` to verify |
+| `IRSA not working` | ServiceAccount not annotated | Check: `kubectl get sa eks-ops-agent -n kagent -o yaml \| grep eks.amazonaws.com` |
+
+---
