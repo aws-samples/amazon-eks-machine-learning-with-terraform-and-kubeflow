@@ -391,6 +391,70 @@ Open the kagent UI and try these prompts (replace `<cluster-name>` with your act
    Give me details about the NodeGroup <nodegroup-name> in cluster <CLUSTER_NAME>
    ```
 
+### Additional Prompts to Explore
+
+These prompts demonstrate advanced EKS MCP Server capabilities:
+
+**Cluster Health & Insights:**
+```
+Get EKS insights for cluster <CLUSTER_NAME>. Are there any misconfigurations?
+```
+```
+Is my cluster ready for upgrade? Check upgrade readiness.
+```
+
+**Troubleshooting:**
+```
+Search the troubleshooting guide for how to fix ImagePullBackOff errors
+```
+```
+Get recent events in the kagent namespace and summarize any warnings or errors
+```
+
+**IAM Analysis:**
+```
+What policies are attached to the node role for this cluster?
+```
+
+**CloudWatch Metrics:**
+```
+What CloudWatch metrics are available for monitoring pods?
+```
+
+**VPC & Networking:**
+```
+Show me the VPC configuration for cluster <CLUSTER_NAME> including subnets and security groups
+```
+
+**Application Deployment:**
+```
+Generate a deployment manifest for an nginx web app called "hello-eks" with 3 replicas and expose it via a LoadBalancer service on port 80. Deploy it to the default namespace on cluster <CLUSTER_NAME> and verify the pods are running.
+```
+
+### Sample Troubleshooting
+
+This scenario demonstrates the agent's ability to diagnose issues in real-time.
+
+**Step 1: Deploy a broken application**
+```
+Deploy an nginx app called "broken-app" using image "nginx:doesnotexist" with 2 replicas to the default namespace on cluster <CLUSTER_NAME>
+```
+
+This creates pods that will fail with `ImagePullBackOff` error.
+
+**Step 2: Ask the agent to diagnose**
+```
+The broken-app pods are not running. Investigate why and tell me how to fix it.
+```
+
+The agent will use multiple tools to diagnose:
+- `list_k8s_resources` - check pod status
+- `get_k8s_events` - find error events
+- `search_eks_troubleshooting_guide` - look up the error
+- Provide actionable fix recommendations
+
+> **Note:** Replace `<CLUSTER_NAME>` with your actual cluster name when testing these prompts.
+
 ---
 
 ## Module 3: Memory with Redis
