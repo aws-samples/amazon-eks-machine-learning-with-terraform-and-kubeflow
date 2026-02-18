@@ -154,8 +154,8 @@ spec:
       - key: karpenter.sh/capacity-type
         operator: In
         values:
-          {{- if and .Values.odcr.enabled .Values.odcr.cudaefa.capacity_types }}
-          {{- range .Values.odcr.cudaefa.capacity_types }}
+          {{- if and .Values.cr.enabled .Values.cr.cudaefa.capacity_types }}
+          {{- range .Values.cr.cudaefa.capacity_types }}
           - {{ . | quote }}
           {{- end }}
           {{- else }}

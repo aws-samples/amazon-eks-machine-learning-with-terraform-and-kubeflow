@@ -5,8 +5,8 @@ consolidate_after: "600s"
 capacity_type: "on-demand"
 max_pods: 20
 
-# ODCR Configuration (cudaefa only)
-odcr:
+# Capacity Reservation Configuration (ODCR and Capacity Blocks for ML, cudaefa only)
+cr:
   enabled: false
   cudaefa:
     capacity_types:
