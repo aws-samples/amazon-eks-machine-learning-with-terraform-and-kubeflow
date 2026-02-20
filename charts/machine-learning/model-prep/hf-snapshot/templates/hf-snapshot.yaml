@@ -82,75 +82,92 @@ data:
     python /tmp/hf_snapshot.py 2>&1 | tee $OUTPUT_LOG
     chown -R {{ .Values.snapshot.user | default "root" }}:{{ .Values.snapshot.group | default "root" }} $SNAPSHOT_ROOT
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: batch/v1
+kind: Job
 metadata:
   name: hf-snapshot-{{ .Release.Name }}
   annotations:
-    karpenter.sh/do-not-disrupt: "true"
-    sidecar.istio.io/inject: 'false'
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
-  restartPolicy: Never
-  volumes:
-  {{- $pv_index := 1 }}
-  {{- range $pv := .Values.pvc }}
-  - name: pv-{{ $pv_index }}
-    persistentVolumeClaim:
-      claimName: {{ $pv.name }}
-  {{- $pv_index = add $pv_index 1 }}
-  {{- end }}
-  {{- if .Values.ebs }}
-  - name: ebs
-    persistentVolumeClaim:
-      claimName: ebs-{{ .Release.Name }}
-  {{- end }}
-  - name: config
-    configMap:
-      defaultMode: 420
-      items:
-      - key: hf-snapshot.sh
-        mode: 365
-        path: hf-snapshot.sh
-      name: hf-snapshot-{{ .Release.Name }}
-  containers:
-  - name: hf-snapshot
-    env:
-    - name: XDG_CACHE_HOME
-      value: /tmp/.cache
-    - name: LOG_ROOT
-      value: /efs/home/{{ .Release.Name }}/logs
-    - name: SNAPSHOT_ROOT
-      value: {{ .Values.snapshot.dir | default "/fsx/pretrained-models" }}
-    {{- range $v := .Values.env }}
-    - name: {{ $v.name }}
-      value: "{{ tpl $v.value $ }}"
-    {{- end }}
-    command:
-    -  sh 
-    - /etc/config/hf-snapshot.sh
-    image: public.ecr.aws/docker/library/python:slim-bullseye
-    imagePullPolicy: IfNotPresent
-    volumeMounts:
-    - mountPath: /etc/config
-      name: config
-    {{- $pv_index := 1 }}
-    {{- range $pv := .Values.pvc }}
-    - mountPath: {{ $pv.mount_path }}
-      name: pv-{{ $pv_index }}
-    {{- $pv_index = add $pv_index 1 }}
-    {{- end }}
-    {{- if .Values.ebs }}
-    - name: ebs
-      mountPath: {{ .Values.ebs.mount_path | default "/tmp" }}
-    {{- end }}
-    resources:
-      requests:
-      {{- range $k, $v := .Values.resources.requests }}
-        {{ $k }}: {{ $v }}
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+        karpenter.sh/do-not-disrupt: "true"
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+    spec:
+      restartPolicy: Never
+      volumes:
+      {{- $pv_index := 1 }}
+      {{- range $pv := .Values.pvc }}
+      - name: pv-{{ $pv_index }}
+        persistentVolumeClaim:
+          claimName: {{ $pv.name }}
+      {{- $pv_index = add $pv_index 1 }}
       {{- end }}
-      limits:
-      {{- range $k, $v := .Values.resources.limits }}
-        {{ $k }}: {{ $v }}
+      {{- if .Values.ebs }}
+      - name: ebs
+        persistentVolumeClaim:
+          claimName: ebs-{{ .Release.Name }}
       {{- end }}
+      - name: config
+        configMap:
+          defaultMode: 420
+          items:
+          - key: hf-snapshot.sh
+            mode: 365
+            path: hf-snapshot.sh
+          name: hf-snapshot-{{ .Release.Name }}
+      containers:
+      - name: hf-snapshot
+        env:
+        - name: XDG_CACHE_HOME
+          value: /tmp/.cache
+        - name: LOG_ROOT
+          value: /efs/home/{{ .Release.Name }}/logs
+        - name: SNAPSHOT_ROOT
+          value: {{ .Values.snapshot.dir | default "/fsx/pretrained-models" }}
+        {{- if .Values.hf_model_id }}
+        - name: HF_MODEL_ID
+          value: {{ .Values.hf_model_id }}
+        {{- end }}
+        {{- if .Values.hf_secret_name }}
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.hf_secret_name  }} 
+              key:  {{ .Values.hf_secret_key | default "token" }}
+        {{- end }}
+        {{- range $v := .Values.env }}
+        - name: {{ $v.name }}
+          value: "{{ tpl $v.value $ }}"
+        {{- end }}
+        command:
+        -  sh 
+        - /etc/config/hf-snapshot.sh
+        image: public.ecr.aws/docker/library/python:slim-bullseye
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - mountPath: /etc/config
+          name: config
+        {{- $pv_index := 1 }}
+        {{- range $pv := .Values.pvc }}
+        - mountPath: {{ $pv.mount_path }}
+          name: pv-{{ $pv_index }}
+        {{- $pv_index = add $pv_index 1 }}
+        {{- end }}
+        {{- if .Values.ebs }}
+        - name: ebs
+          mountPath: {{ .Values.ebs.mount_path | default "/tmp" }}
+        {{- end }}
+        resources:
+          requests:
+          {{- range $k, $v := .Values.resources.requests }}
+            {{ $k }}: {{ $v }}
+          {{- end }}
+          limits:
+          {{- range $k, $v := .Values.resources.limits }}
+            {{ $k }}: {{ $v }}
+          {{- end }}

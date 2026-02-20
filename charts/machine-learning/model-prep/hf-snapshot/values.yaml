@@ -14,11 +14,6 @@ pvc:
     mount_path: /fsx
   - name: pv-efs
     mount_path: /efs
-env: 
-  - name: "HF_MODEL_ID"
-    value: "YourHuggingFaceModelId"
-  - name: "HF_TOKEN"
-    value: "YourHuggingFaceToken"
 snapshot: 
   user: "root"
   group: "root"
