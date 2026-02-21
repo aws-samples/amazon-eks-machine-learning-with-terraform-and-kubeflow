@@ -18,16 +18,17 @@ git:
   branch: main
 pre_script: 
   - pip3 install --upgrade pip
-  - ./build.sh && pip3 install --extra-index-url=https://pip.repos.neuron.amazonaws.com --force-reinstall  torch-neuronx==2.5.* torchvision ./build/*.whl
+  - ./build.sh && pip3 install --extra-index-url=https://pip.repos.neuron.amazonaws.com --force-reinstall torch-neuronx==2.5.1.2.4.0 torchvision ./build/*.whl
   - pip3 install -r requirements.txt
   - 'python3 -c "from nemo.collections.nlp.data.language_modeling.megatron.dataset_utils import compile_helper; compile_helper()"'
-  - 'if [ -d $DATA_ROOT ] && [ ! -z "$(ls -A $DATA_ROOT)" ]; then echo "$DATA_ROOT exists and is not empty" && exit 0; fi'
+  - 'if [ -d "$DATA_ROOT/datasets" ] && [ ! -z "$(ls -A "$DATA_ROOT/datasets")" ]; then echo ""$DATA_ROOT/datasets" exists and is not empty" && exit 0; fi'
   - mkdir -p $DATA_ROOT
   - SCRIPT_DIR=$GIT_CLONE_DIR/nemo/scripts/nlp_language_modeling/
   - cd $SCRIPT_DIR
   - mkdir -p $LOG_ROOT
   - OUTPUT_LOG=$LOG_ROOT/preprocess.log
   - mkdir /tmp/datasets
+  - wget -O /tmp/data.jsonl https://data.together.xyz/redpajama-data-1T/v1.0.0/wikipedia/wiki.jsonl
 post_script:
   - cp -r /tmp/datasets $DATA_ROOT/
 process:
@@ -38,15 +39,13 @@ process:
       value: /efs/home/{{ .Release.Name }}/logs
     - name: DATA_ROOT
       value: /fsx/home/{{ .Release.Name }}
-    - name: INPUT_DATA_PATH
-      value: /fsx/data/redpajama/data.jsonl
     - name: MODEL_PATH
       value: /fsx/pretrained-models/meta-llama/Llama-2-70b-hf
   command:
     - python3
   args:
     - preprocess_data_for_megatron.py
-    - --input=$INPUT_DATA_PATH
+    - --input=/tmp/data.jsonl
     - --json-keys=text
     - --tokenizer-library=huggingface
     - --tokenizer-type=$MODEL_PATH

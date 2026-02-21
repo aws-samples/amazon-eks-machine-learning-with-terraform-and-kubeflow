@@ -35,18 +35,6 @@ Uninstall the Helm chart at completion:
 
     helm uninstall nx-nemo-megatron-llama2-7b -n kubeflow-user-example-com
 
-## Download Redpajama dataset 
-
-We need to download the Redpajama dataset to the FSx for Lustre file-system, using commands shown below:
-
-    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm install --debug nx-nemo-megatron-llama2-7b \
-        charts/machine-learning/data-prep/redpajama-data  -n kubeflow-user-example-com
-
-Uninstall the Helm chart at completion:
-
-    helm uninstall nx-nemo-megatron-llama2-7b -n kubeflow-user-example-com
-
 ## Pre-process Redpajama dataset
 
 We define the runtime for pre-processing the dataset in [preprocess.yaml](./preprocess.yaml) values file. 
