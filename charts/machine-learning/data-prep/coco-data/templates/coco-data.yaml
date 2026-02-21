@@ -40,48 +40,54 @@ data:
 
     rm -rf $DOWNLOAD_DIR
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: batch/v1
+kind: Job
 metadata:
-  name: coco-data-{{ .Release.Name }}
+  name:  coco-data-{{ .Release.Name }}
   annotations:
-    karpenter.sh/do-not-disrupt: "true"
-    sidecar.istio.io/inject: 'false'
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
-  restartPolicy: Never
-  volumes:
-  - name: pv
-    persistentVolumeClaim:
-      claimName: {{ .Values.pvc.name }} 
-  - name: config
-    configMap:
-      defaultMode: 420
-      items:
-      - key: coco-data.sh
-        mode: 365
-        path: coco-data.sh
-      name: coco-data-{{ .Release.Name }}
-  containers:
-  - name: coco-data
-    env:
-    - name: DATA_DIR 
-      value: {{ .Values.pvc.mount_path }}/{{ .Values.pvc.data_path }}
-    command:
-    -  sh 
-    - /etc/config/coco-data.sh
-    image: amazonlinux
-    imagePullPolicy: IfNotPresent
-    volumeMounts:
-    - mountPath: /etc/config
-      name: config
-    - mountPath: {{ .Values.pvc.mount_path }}
-      name: pv
-    resources:
-      requests:
-        cpu: "300m"
-        memory: "64Mi"
-      limits:
-        cpu: "1000m"
-        memory: "256Mi"
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+        karpenter.sh/do-not-disrupt: "true"
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+    spec:
+      restartPolicy: Never
+      volumes:
+      - name: pv
+        persistentVolumeClaim:
+          claimName: {{ .Values.pvc.name }} 
+      - name: config
+        configMap:
+          defaultMode: 420
+          items:
+          - key: coco-data.sh
+            mode: 365
+            path: coco-data.sh
+          name: coco-data-{{ .Release.Name }}
+      containers:
+      - name: coco-data
+        env:
+        - name: DATA_DIR 
+          value: {{ .Values.pvc.mount_path }}/{{ .Values.pvc.data_path }}
+        command:
+        -  sh 
+        - /etc/config/coco-data.sh
+        image: amazonlinux
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+        - mountPath: /etc/config
+          name: config
+        - mountPath: {{ .Values.pvc.mount_path }}
+          name: pv
+        resources:
+          requests:
+            cpu: "1000m"
+            memory: "1Gi"
+          limits:
+            cpu: "2000m"
+            memory: "2Gi"
