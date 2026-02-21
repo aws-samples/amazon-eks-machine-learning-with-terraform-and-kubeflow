@@ -1,4 +1,0 @@
-pvc:
-  name: pv-fsx
-  mount_path: /fsx
-  data_path: data/redpajama # relative to mount_path

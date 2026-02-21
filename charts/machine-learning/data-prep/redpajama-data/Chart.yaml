@@ -1,6 +1,0 @@
-apiVersion: v2
-name: redpajama-data
-description: A Helm chart for downloading redpajama data
-type: application
-version: 1.0.0
-appVersion: "v2017"
