@@ -66,88 +66,94 @@ data:
     {{- end }}
 
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: batch/v1
+kind: Job
 metadata:
   name: data-process-{{ .Release.Name }}
   annotations:
-    karpenter.sh/do-not-disrupt: "true"
-    sidecar.istio.io/inject: 'false'
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
-  restartPolicy: Never
-  volumes:
-  - name: config
-    configMap:
-      defaultMode: 420
-      items:
-      - key: data-process.sh
-        mode: 365
-        path: data-process.sh
-      name: data-process-{{ .Release.Name }}
-  - name: shm
-    hostPath:
-      path: /dev/shm
-      type: Directory
-  {{- $pv_index := 1 }}
-  {{- range $pv := .Values.pvc }}
-  - name: pv-{{ $pv_index }}
-    persistentVolumeClaim:
-      claimName: {{ $pv.name }}
-  {{- $pv_index = add $pv_index 1 }}
-  {{- end }}
-  {{- if .Values.ebs }}
-  - name: ebs
-    persistentVolumeClaim:
-      claimName: ebs-{{ .Release.Name }}
-  {{- end }}
-  tolerations:
-    {{- range $v := .Values.tolerations }}
-      - key: {{ tpl $v.key  $ }}
-        {{- if $v.operator }}
-        operator: "{{ $v.operator }}"
-        {{- end }}
-        {{- if $v.effect }}
-        effect: "{{ $v.effect }}"
-        {{- end }}
-    {{- end }} 
-  {{- if.Values.resources.node_type }}
-  nodeSelector:
-    node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
-  {{- end}}
-  containers:
-  - name: data-process
-    env:
-    {{- range $v := .Values.process.env }}
-    - name: {{ $v.name }}
-      value: "{{ tpl $v.value $ }}"
-    {{- end }}
-    command:
-    -  sh 
-    - /etc/config/data-process.sh
-    image: {{ .Values.image }}
-    volumeMounts:
-    - mountPath: /etc/config
-      name: config
-    - mountPath: /dev/shm
-      name: shm
-    {{- $pv_index := 1 }}
-    {{- range $pv := .Values.pvc }}
-    - mountPath: {{ $pv.mount_path }}
-      name: pv-{{ $pv_index }}
-    {{- $pv_index = add $pv_index 1 }}
-    {{- end }}
-    {{- if .Values.ebs }}
-    - name: ebs
-      mountPath: {{ .Values.ebs.mount_path | default "/tmp" }}
-    {{- end }}
-    resources:
-      requests:
-      {{- range $k, $v := .Values.resources.requests }}
-        {{ $k }}: {{ $v }}
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+        karpenter.sh/do-not-disrupt: "true"
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+    spec:
+      restartPolicy: Never
+      volumes:
+      - name: config
+        configMap:
+          defaultMode: 420
+          items:
+          - key: data-process.sh
+            mode: 365
+            path: data-process.sh
+          name: data-process-{{ .Release.Name }}
+      - name: shm
+        hostPath:
+          path: /dev/shm
+          type: Directory
+      {{- $pv_index := 1 }}
+      {{- range $pv := .Values.pvc }}
+      - name: pv-{{ $pv_index }}
+        persistentVolumeClaim:
+          claimName: {{ $pv.name }}
+      {{- $pv_index = add $pv_index 1 }}
       {{- end }}
-      limits:
-      {{- range $k, $v := .Values.resources.limits }}
-        {{ $k }}: {{ $v }}
+      {{- if .Values.ebs }}
+      - name: ebs
+        persistentVolumeClaim:
+          claimName: ebs-{{ .Release.Name }}
       {{- end }}
+      tolerations:
+        {{- range $v := .Values.tolerations }}
+          - key: {{ tpl $v.key  $ }}
+            {{- if $v.operator }}
+            operator: "{{ $v.operator }}"
+            {{- end }}
+            {{- if $v.effect }}
+            effect: "{{ $v.effect }}"
+            {{- end }}
+        {{- end }} 
+      {{- if.Values.resources.node_type }}
+      nodeSelector:
+        node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
+      {{- end}}
+      containers:
+      - name: data-process
+        env:
+        {{- range $v := .Values.process.env }}
+        - name: {{ $v.name }}
+          value: "{{ tpl $v.value $ }}"
+        {{- end }}
+        command:
+        -  sh 
+        - /etc/config/data-process.sh
+        image: {{ .Values.image }}
+        volumeMounts:
+        - mountPath: /etc/config
+          name: config
+        - mountPath: /dev/shm
+          name: shm
+        {{- $pv_index := 1 }}
+        {{- range $pv := .Values.pvc }}
+        - mountPath: {{ $pv.mount_path }}
+          name: pv-{{ $pv_index }}
+        {{- $pv_index = add $pv_index 1 }}
+        {{- end }}
+        {{- if .Values.ebs }}
+        - name: ebs
+          mountPath: {{ .Values.ebs.mount_path | default "/tmp" }}
+        {{- end }}
+        resources:
+          requests:
+          {{- range $k, $v := .Values.resources.requests }}
+            {{ $k }}: {{ $v }}
+          {{- end }}
+          limits:
+          {{- range $k, $v := .Values.resources.limits }}
+            {{ $k }}: {{ $v }}
+          {{- end }}
