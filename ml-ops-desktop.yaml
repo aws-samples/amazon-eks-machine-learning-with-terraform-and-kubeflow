@@ -83,25 +83,25 @@ Parameters:
 Mappings:
   UbuntuPro2404LTS:
     us-east-1:
-      AMI: ami-0a7620d611d3ceae4
+      AMI: ami-0b6c6ebed2801a5cb
     us-east-2:
-      AMI: ami-0cbf25dcbfefddd8b
+      AMI: ami-06e3c045d79fd65d9
     us-west-2:
-      AMI: ami-0026a04369a3093cc
+      AMI: ami-0786adace1541ca80
     eu-west-1:
-      AMI: ami-0286d0aea4d6c7a34
+      AMI: ami-03446a3af42c5e74e
     eu-central-1:
-      AMI: ami-0ccb7fb77fc31decd
+      AMI: ami-01f79b1e4a5c64257
     ap-southeast-1:
-      AMI: ami-07945fd9edc6f05f4
+      AMI: ami-08d59269edddde222
     ap-southeast-2:
-      AMI: ami-08b7eb416c0794df3
+      AMI: ami-0ba8d27d35e9915fb
     ap-south-1:
-      AMI: ami-0cd173613e262de82
+      AMI: ami-019715e0d74f695be
     ap-northeast-1:
-      AMI: ami-0ce9ed7bc1a296fe7
+      AMI: ami-0f65fc8c24ec8d2a1
     ap-northeast-2:
-      AMI: ami-02501420b6298dfc3
+      AMI: ami-0130d8d35bcd2d433
 Conditions:
   OverrideAMI: !Not 
     - !Equals 
