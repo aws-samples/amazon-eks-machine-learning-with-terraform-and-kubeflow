@@ -17,11 +17,12 @@ This tutorial uses custom Docker containers. Build and push the containers using
 
 ## Download COCO 2017 dataset to FSx for Lustre file-system
 
-To download COCO 2017 dataset to FSx for Lustre file-system folder `/fsx/data/coco2017`, execute:
+To download COCO 2017 dataset, execute:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-    helm install --debug coco-2017 \
-        ./charts/machine-learning/data-prep/coco-data/  -n kubeflow-user-example-com
+    helm install --debug coco-data-coco-2017  \
+        charts/machine-learning/data-prep/data-process \
+        -f examples/legacy/maskrcnn/coco-2017.yaml -n kubeflow-user-example-com
 
 You can tail the logs using following command:
 

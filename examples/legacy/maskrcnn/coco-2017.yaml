@@ -1,0 +1,39 @@
+image: ubuntu:24.04
+resources:
+  requests:
+    cpu: "1000m"
+    memory: "1Gi"
+  limits:
+    cpu: "2000m"
+    memory: "2Gi"
+ebs:
+  storage: 400Gi
+  mount_path: /tmp
+pre_script: 
+  - chmod 1777 /tmp
+  - '[ -d $DATA_DIR ] && [ ! -z "$(ls -A $DATA_DIR)" ] && echo "$DATA_DIR exists and is not empty" && exit 0'
+  - mkdir -p $DATA_DIR
+  - apt-get update
+  - apt-get install -y wget unzip
+  - DOWNLOAD_DIR=/tmp/download
+  - mkdir -p $DOWNLOAD_DIR
+  - echo "Download dir $DOWNLOAD_DIR"
+  - wget -O $DOWNLOAD_DIR/train2017.zip http://images.cocodataset.org/zips/train2017.zip
+  - unzip $DOWNLOAD_DIR/train2017.zip  -d $DATA_DIR
+  - rm -rf $DOWNLOAD_DIR/train2017.zip
+  - wget -O $DOWNLOAD_DIR/val2017.zip http://images.cocodataset.org/zips/val2017.zip
+  - unzip $DOWNLOAD_DIR/val2017.zip -d $DATA_DIR
+  - rm -rf $DOWNLOAD_DIR/val2017.zip
+  - wget -O $DOWNLOAD_DIR/test2017.zip http://images.cocodataset.org/zips/test2017.zip
+  - unzip $DOWNLOAD_DIR/test2017.zip -d $DATA_DIR
+  - rm -rf $DOWNLOAD_DIR/test2017.zip
+  - wget -O $DOWNLOAD_DIR/annotations_trainval2017.zip http://images.cocodataset.org/annotations/annotations_trainval2017.zip
+  - unzip $DOWNLOAD_DIR/annotations_trainval2017.zip -d $DATA_DIR
+  - rm -rf $DOWNLOAD_DIR/annotations_trainval2017.zip
+  - mkdir $DATA_DIR/pretrained-models
+  - wget -O $DATA_DIR/pretrained-models/ImageNet-R50-AlignPadding.npz http://models.tensorpack.com/FasterRCNN/ImageNet-R50-AlignPadding.npz
+  - wget -O $DATA_DIR/pretrained-models/ImageNet-R101-AlignPadding.npz http://models.tensorpack.com/FasterRCNN/ImageNet-R101-AlignPadding.npz
+process:
+  env:
+    - name: DATA_DIR
+      value: /fsx/data/coco2017
