@@ -1,6 +1,0 @@
-apiVersion: v2
-name: coco-data
-description: A Helm chart for downloading and extracting COCO data to a persistent volume
-type: application
-version: 1.0.0
-appVersion: "v2017"
