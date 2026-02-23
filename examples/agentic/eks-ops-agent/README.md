@@ -8,18 +8,22 @@ Build an AI agent that manages and troubleshoots Amazon EKS clusters using LangG
 |--------|-------------|
 | **Module 1** | Barebone agent - Build and deploy BYO agent with Amazon Bedrock as model provider using kagent |
 | **Module 2** | EKS MCP Server integration - Connect the agent to EKS MCP Server and access tools for cluster operations |
-| **Module 3** | Memory - Long-term memory with Redis for user defaults |
+| **Module 3** | Memory - Persistent memory with Redis for user defaults |
 
 ## Prerequisites
 
-> **⚠️ Before You Begin:** This workshop assumes you have completed the [main repository setup](../../../README.md) through **Step 4** to provision your EC2 cloud desktop with Docker, AWS CLI, and kubectl installed.
+> **Assumption:** Your EC2 cloud desktop is already set up and you can log in using the DCV Viewer. The desktop has Docker, AWS CLI, kubectl, terraform, VSCode and Kiro pre-installed.
+>
+> **Note:** This workshop does not require any GPU instances. Standard CPU instances are sufficient for all modules.
 
+- **AWS Region** — This workshop defaults to `us-west-2`. To use a different region:
+  1. Set the environment variable: `export AWS_REGION=<your-region>` (the shell scripts `setup.sh` and `build-and-deploy.sh` will pick this up)
+  2. Update `AWS_REGION` in `manifests/eks-ops-agent.yaml` to match your region
 - **AWS account with Bedrock access**
   - Enable model access in [AWS Bedrock Console](https://console.aws.amazon.com/bedrock/) → Model access
   - Default model: `us.anthropic.claude-sonnet-4-20250514-v1:0` (Claude Sonnet 4)
   - You can use any Bedrock model by setting `BEDROCK_MODEL_ID` in `manifests/eks-ops-agent.yaml`
   - Note: Claude 4.x models require cross-region inference profiles (prefix with `us.`)
-- **EC2 cloud desktop** from main repository setup (has Docker, AWS CLI, kubectl, terraform, VSCode and Kiro pre-installed)
 - **EKS cluster** - will be created in Module 1 with kagent enabled
 
 ---
@@ -115,9 +119,9 @@ cd eks-cluster/terraform/aws-eks-cluster-and-nodegroup
 Your `terraform.tfvars` should include these kagent variables:
 
 ```hcl
-# Required variables (update with your values)
+# Required variables (update with values according to your environment)
 profile      = "default"
-region       = "us-west-2"
+region       = "us-west-2".
 cluster_name = "my-cluster"    # Choose your cluster name
 azs          = ["us-west-2a", "us-west-2b", "us-west-2c"]
 import_path  = "s3://<your_bucket>"
