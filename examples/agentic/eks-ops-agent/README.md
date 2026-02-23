@@ -119,9 +119,9 @@ cd eks-cluster/terraform/aws-eks-cluster-and-nodegroup
 Your `terraform.tfvars` should include these kagent variables:
 
 ```hcl
-# Required variables (update with values according to your environment)
+# Required variables (update with values according to your AWS region and environement)
 profile      = "default"
-region       = "us-west-2".
+region       = "us-west-2"
 cluster_name = "my-cluster"    # Choose your cluster name
 azs          = ["us-west-2a", "us-west-2b", "us-west-2c"]
 import_path  = "s3://<your_bucket>"
