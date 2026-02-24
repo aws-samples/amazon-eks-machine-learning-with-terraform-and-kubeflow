@@ -12,7 +12,7 @@ Build an AI agent that manages and troubleshoots Amazon EKS clusters using LangG
 
 ## Prerequisites
 
-> **Assumption:** Your EC2 cloud desktop is already set up and you can log in using the DCV Viewer. The desktop has Docker, AWS CLI, kubectl, terraform, VSCode and Kiro pre-installed.
+> **Assumption:** Your EC2 cloud desktop is already set up and you can log in using the DCV Viewer.
 >
 > **Note:** This workshop does not require any GPU instances. Standard CPU instances are sufficient for all modules.
 
@@ -106,14 +106,49 @@ User Question
 
 ## Module 1: Barebone Agent
 
-In this module, you'll deploy a simple Q&A agent that can answer Kubernetes and EKS questions using Amazon Bedrock Claude.
+In this module, you'll deploy a simple Q&A agent that can answer Kubernetes and EKS questions.
 
-### Step 1.1: Configure Terraform for kagent
+### Step 1.1: Create S3 Bucket
 
-Edit your `terraform.tfvars` file:
+Create an S3 bucket for Terraform state storage. The bucket name must be globally unique.
+
+```bash
+# Replace <YOUR_S3_BUCKET> with a unique name (e.g., my-eks-agent-bucket-12345)
+aws s3 mb s3://<YOUR_S3_BUCKET> --region $AWS_REGION
+```
+
+### Step 1.2: Clone Repository
+
+```bash
+cd ~
+git clone https://github.com/aws-samples/amazon-eks-machine-learning-with-terraform-and-kubeflow.git
+cd amazon-eks-machine-learning-with-terraform-and-kubeflow
+```
+
+### Step 1.3: Install kubectl
+
+```bash
+./eks-cluster/utils/install-kubectl-linux.sh
+```
+
+### Step 1.4: Configure Terraform Backend
+
+Configure S3 backend for Terraform state. Replace `<YOUR_S3_BUCKET>` with the bucket you created in Step 1.1. The `<S3_PREFIX>` is a folder path in your bucket (e.g., `eks-agent`) — it will be created automatically.
+
+```bash
+./eks-cluster/utils/s3-backend.sh <YOUR_S3_BUCKET> <S3_PREFIX>
+```
+
+### Step 1.5: Configure Terraform for kagent
 
 ```bash
 cd eks-cluster/terraform/aws-eks-cluster-and-nodegroup
+```
+
+Edit your `terraform.tfvars` file
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
 ```
 
 Your `terraform.tfvars` should include these kagent variables:
@@ -133,12 +168,12 @@ kagent_enable_ui             = true
 kagent_enable_bedrock_access = true
 ```
 
-### Step 1.2: Run Setup Script (EC2 only)
+### Step 1.6: Run Setup Script (EC2 only)
 
 **Run this BEFORE terraform apply.** The setup script adds IAM permissions to your EC2 instance role that Terraform needs to create the kagent Bedrock access role:
 
 ```bash
-cd examples/agentic/eks-ops-agent
+cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/examples/agentic/eks-ops-agent
 ./setup.sh
 ```
 
@@ -153,10 +188,12 @@ Adding/updating IAM permissions for kagent...
 IAM permissions added/updated successfully
 ```
 
-### Step 1.3: Apply Terraform
+### Step 1.7: Initialize and Apply Terraform
 
 ```bash
-cd eks-cluster/terraform/aws-eks-cluster-and-nodegroup
+docker logout public.ecr.aws
+cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/terraform/aws-eks-cluster-and-nodegroup
+terraform init
 terraform apply
 ```
 
@@ -187,10 +224,10 @@ helm-agent-xxxxxxxxxx-xxxxx           1/1     Running   0          2m
 
 > **Note:** kagent comes with several built-in agents (k8s-agent, helm-agent, istio-agent, etc.). These are pre-configured agents for common operations. In this workshop, you'll build and deploy your own **eks-ops-agent** alongside them.
 
-### Step 1.4: Build and Deploy the Agent
+### Step 1.8: Build and Deploy the Agent
 
 ```bash
-cd examples/agentic/eks-ops-agent
+cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/examples/agentic/eks-ops-agent
 ./build-and-deploy.sh
 ```
 
@@ -210,7 +247,7 @@ Build and deploy complete!
 ========================================
 ```
 
-### Step 1.5: Access the Agent
+### Step 1.9: Access the Agent
 
 Port-forward the kagent UI:
 ```bash
@@ -219,7 +256,7 @@ kubectl port-forward -n kagent svc/kagent-ui 8080:8080
 
 Open http://localhost:8080 and select **eks-ops-agent** to start chatting.
 
-### Step 1.6: Test Module 1
+### Step 1.10: Test Module 1
 
 Try these prompts to verify the agent works:
 - "What is a Kubernetes Pod?"
@@ -645,27 +682,6 @@ Open the kagent UI and try these prompts (replace `<CLUSTER_NAME>` with your act
    ```
    Clear my defaults
    ```
-
----
-
-## Project Structure
-
-```
-eks-ops-agent/
-├── build-and-deploy.sh    # Build container and deploy to kagent
-├── setup.sh               # EC2 IAM setup (run before terraform)
-├── Dockerfile
-├── pyproject.toml         # Python dependencies
-├── manifests/
-│   └── eks-ops-agent.yaml # Agent CRD (BYO agent)
-└── src/
-    ├── agent.py           # LangGraph agent with ReAct pattern
-    ├── app.py             # KAgentApp wrapper (A2A protocol)
-    ├── config.py          # Environment-based configuration
-    ├── tools.py           # Module 2: EKS MCP Server tools
-    ├── memory.py          # Module 3: Redis memory for user defaults
-    └── agent-card.json    # Agent metadata for kagent
-```
 
 ---
 
