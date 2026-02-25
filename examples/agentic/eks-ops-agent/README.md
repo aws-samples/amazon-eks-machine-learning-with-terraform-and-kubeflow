@@ -206,7 +206,7 @@ This creates:
 
 ```bash
 # Update kubeconfig
-aws eks update-kubeconfig --name <cluster-name> --region us-west-2
+aws eks update-kubeconfig --name <cluster-name> --region $AWS_REGION
 
 # Check kagent pods
 kubectl get pods -n kagent
@@ -360,7 +360,7 @@ env:
 ### Step 2.3: Redeploy the Agent
 
 ```bash
-cd examples/agentic/eks-ops-agent
+cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/examples/agentic/eks-ops-agent
 ./build-and-deploy.sh
 ```
 
@@ -633,7 +633,7 @@ Edit `manifests/eks-ops-agent.yaml` and change `ENABLE_MEMORY` from `"false"` to
 ### Step 3.4: Rebuild and Deploy
 
 ```bash
-cd examples/agentic/eks-ops-agent
+cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/examples/agentic/eks-ops-agent
 ./build-and-deploy.sh
 ```
 
