@@ -154,7 +154,7 @@ cp terraform.tfvars.example terraform.tfvars
 Your `terraform.tfvars` should include these kagent variables:
 
 ```hcl
-# Required variables (update with values according to your AWS region and environement)
+# Required variables (update with values according to your AWS region and environment)
 profile      = "default"
 region       = "us-west-2"
 cluster_name = "my-cluster"    # Choose your cluster name
@@ -388,7 +388,7 @@ Open the kagent UI and try these prompts (replace `<cluster-name>` with your act
 
 1. **List resources:**
    ```
-   List all pods in the default namespace on cluster <cluster-name>
+   List all pods in the kagent namespace on cluster <cluster-name>
    ```
 
 2. **Get pod logs:**
