@@ -131,11 +131,19 @@ resource "kubernetes_manifest" "kmcp_service_monitor" {
         }
       }
       endpoints = [
-        {
-          port     = "metrics"
-          interval = "30s"
-          path     = "/metrics"
-        }
+        merge(
+          {
+            port     = "metrics"
+            interval = "30s"
+            path     = "/metrics"
+          },
+          var.metrics_secure_serving ? {
+            scheme = "https"
+            tlsConfig = {
+              insecureSkipVerify = true
+            }
+          } : {}
+        )
       ]
     }
   }

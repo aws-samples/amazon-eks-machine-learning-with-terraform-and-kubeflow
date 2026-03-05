@@ -567,6 +567,8 @@ kubectl port-forward -n kmcp-system svc/kmcp-controller-metrics 8443:8443
 $(terraform output -raw kmcp_metrics_access_command)
 ```
 
+**Prometheus ServiceMonitor:** Set `enable_service_monitor=true` in the module to create a ServiceMonitor for automatic Prometheus scraping. When `metrics_secure_serving` is enabled, the ServiceMonitor automatically uses `scheme: https` with `insecureSkipVerify: true`. For production, replace `insecureSkipVerify` with proper CA configuration via `additional_helm_values`.
+
 **Istio sidecar injection:**
 
 When `kmcp_enable_istio_injection=true`, the namespace is labeled with `istio-injection=enabled`. If the controller readiness probe fails after enabling Istio, ensure `holdApplicationUntilProxyStarts` is set in your Istio mesh config, or add a `postStart` hook to wait for the sidecar.
