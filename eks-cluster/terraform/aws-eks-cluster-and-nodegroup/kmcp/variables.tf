@@ -12,16 +12,6 @@ variable "kmcp_version" {
   type        = string
 }
 
-variable "cluster_name" {
-  description = "EKS cluster name"
-  type        = string
-}
-
-variable "region" {
-  description = "AWS region"
-  type        = string
-}
-
 #---------------------------------------------------------------
 # Controller Configuration
 #---------------------------------------------------------------

@@ -10,8 +10,6 @@ module "kmcp" {
   # Basic configuration
   kmcp_namespace = var.kmcp_namespace
   kmcp_version   = var.kmcp_version
-  cluster_name   = var.cluster_name
-  region         = var.region
 
   # Controller configuration
   controller_replicas = var.kmcp_controller_replicas
