@@ -447,6 +447,41 @@ Resources:
               # install code
               snap install code --classic
 
+              # install Kiro
+              URL=$(curl -s https://prod.download.desktop.kiro.dev/stable/metadata-linux-x64-stable.json | jq -r '.releases[] | select(.updateTo.url | endswith(".tar.gz")) | .updateTo.url')
+              mkdir -p /opt/kiro
+              curl -L "$URL" | tar -xz -C /opt/kiro --strip-components=1
+              chown -R root:root /opt/kiro
+              chmod 4755 /opt/kiro/chrome-sandbox
+              ln -sf /opt/kiro/bin/kiro /usr/local/bin/kiro
+              cat <<EOF > /usr/share/applications/kiro.desktop
+              [Desktop Entry]
+              Name=Kiro
+              Exec=/opt/kiro/bin/kiro %F
+              Icon=/opt/kiro/resources/app/resources/linux/code.png
+              Type=Application
+              Categories=Development;IDE;
+              EOF
+
+              if [ ! -x "$(command -v claude)" ]; then
+                echo "Installing Claude Code CLI..."
+                sudo -u ubuntu bash -c "curl -fsSL https://claude.ai/install.sh | bash"
+                ln -s /home/ubuntu/.local/bin/claude /usr/local/bin/claude
+
+                # Verify installation
+                if [ -x "$(command -v claude)" ]; then
+                  echo "Claude Code CLI installed successfully"
+                  claude --version
+
+                  echo "export CLAUDE_CODE_USE_BEDROCK=1" >> /home/ubuntu/.bashrc
+                  echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/ubuntu/.bashrc
+                else
+                  echo "Warning: Claude Code CLI installation may have failed"
+                fi
+              else
+                echo "Claude Code CLI already installed"
+              fi
+
               # install miniconda3 if anaconda3, or miniconda3 are not installed
               if [[ ! -d "/home/ubuntu/anaconda3" ]] && [[ ! -d "/home/ubuntu/miniconda3" ]]
               then
