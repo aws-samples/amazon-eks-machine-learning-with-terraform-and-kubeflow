@@ -51,7 +51,7 @@ resource "helm_release" "kmcp" {
   # Controller replicas
   set {
     name  = "controller.replicas"
-    value = var.controller_replicas
+    value = tostring(var.controller_replicas)
   }
 
   # Resource requests
@@ -79,20 +79,20 @@ resource "helm_release" "kmcp" {
   # Leader election
   set {
     name  = "controller.leaderElection.enabled"
-    value = var.enable_leader_election
+    value = tostring(var.enable_leader_election)
   }
 
   # Metrics
   set {
     name  = "controller.metrics.enabled"
-    value = var.enable_metrics
+    value = tostring(var.enable_metrics)
   }
 
   dynamic "set" {
     for_each = var.enable_metrics ? [1] : []
     content {
       name  = "controller.metrics.secure"
-      value = var.metrics_secure_serving
+      value = tostring(var.metrics_secure_serving)
     }
   }
 
