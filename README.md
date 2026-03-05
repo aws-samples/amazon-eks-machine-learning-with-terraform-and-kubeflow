@@ -358,6 +358,7 @@ Enable optional components via Terraform variables:
 |-----------|----------|---------|
 | [Airflow](https://airflow.apache.org/) | airflow_enabled | false |
 | [kagent](https://github.com/kagent-dev/kagent) | kagent_enabled | false |
+| [kmcp](https://github.com/kagent-dev/kmcp) | kmcp_enabled | false |
 | [Capacity Reservations](https://karpenter.sh/docs/tasks/odcrs/) (ODCR / Capacity Blocks, cudaefa only) | karpenter_cr_enabled | false |
 | [Kubeflow](https://www.kubeflow.org/) | kubeflow_platform_enabled | false |
 | [KServe](https://kserve.github.io/website/latest/) | kserve_enabled | false |
@@ -517,6 +518,76 @@ terraform apply \
   -var="kagent_database_type=postgresql" \
   -var="kagent_controller_replicas=3"
 ```
+
+### kmcp - Kubernetes MCP Server Controller
+
+[kmcp](https://github.com/kagent-dev/kmcp) is a Kubernetes-native controller for deploying and managing [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers as Kubernetes resources.
+
+**Enable kmcp:**
+```bash
+terraform apply \
+  -var="kmcp_enabled=true"
+```
+
+**Configuration options:**
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `kmcp_version` | Helm chart version | `"1.0.0"` |
+| `kmcp_namespace` | Kubernetes namespace | `"kmcp-system"` |
+| `kmcp_controller_replicas` | Number of controller replicas | `1` |
+| `kmcp_enable_istio_injection` | Enable Istio sidecar injection | `false` |
+
+**Helm Charts (OCI):**
+
+kmcp is installed from two OCI Helm charts:
+- **CRDs:** `oci://ghcr.io/kagent-dev/kmcp/helm/kmcp-crds`
+- **Controller:** `oci://ghcr.io/kagent-dev/kmcp/helm/kmcp`
+
+CRDs are installed by a separate Helm release and must be upgraded first when updating versions. To pin a specific version, set `kmcp_version`. To override the controller image (e.g., for private registries), use `additional_helm_values`:
+
+```hcl
+# In your tfvars or -var flags:
+kmcp_version = "1.0.0"
+
+# Override image registry/tag via additional_helm_values:
+# kmcp_additional_helm_values = <<-EOT
+#   controller:
+#     image:
+#       registry: my-registry.example.com
+#       repository: kmcp/controller
+#       tag: "1.0.0-custom"
+# EOT
+```
+
+**Access controller metrics:**
+```bash
+kubectl port-forward -n kmcp-system svc/kmcp-controller-metrics 8443:8443
+# or use the Terraform output:
+$(terraform output -raw kmcp_metrics_access_command)
+```
+
+**Istio sidecar injection:**
+
+When `kmcp_enable_istio_injection=true`, the namespace is labeled with `istio-injection=enabled`. If the controller readiness probe fails after enabling Istio, ensure `holdApplicationUntilProxyStarts` is set in your Istio mesh config, or add a `postStart` hook to wait for the sidecar.
+
+**Example: Deploy an MCP server**
+
+Once kmcp is installed, create `MCPServer` custom resources to deploy MCP servers:
+
+```yaml
+apiVersion: kagent.dev/v1alpha1
+kind: MCPServer
+metadata:
+  name: my-mcp-server
+  namespace: kmcp-system
+spec:
+  transport: sse
+  image: my-mcp-server-image:latest
+  port: 8080
+```
+
+For full documentation, see the [kmcp repository](https://github.com/kagent-dev/kmcp).
 
 ## Legacy Examples
 
