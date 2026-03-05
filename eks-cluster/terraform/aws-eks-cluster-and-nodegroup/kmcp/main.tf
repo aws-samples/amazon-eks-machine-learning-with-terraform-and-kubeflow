@@ -28,6 +28,8 @@ resource "helm_release" "kmcp_crds" {
 
   skip_crds = false
   wait      = true
+  timeout   = 300
+  atomic    = true
 
   depends_on = [
     kubernetes_namespace.kmcp
@@ -44,6 +46,7 @@ resource "helm_release" "kmcp" {
   repository = "oci://ghcr.io/kagent-dev/kmcp/helm"
   version    = var.kmcp_version
   namespace  = kubernetes_namespace.kmcp.metadata[0].name
+  timeout    = 600
 
   # Controller replicas
   set {
