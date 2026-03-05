@@ -8,10 +8,10 @@
 resource "kubernetes_namespace" "kmcp" {
   metadata {
     name = var.kmcp_namespace
-    labels = {
-      name            = var.kmcp_namespace
-      istio-injection = var.enable_istio_injection ? "enabled" : "disabled"
-    }
+    labels = merge(
+      { name = var.kmcp_namespace },
+      var.enable_istio_injection ? { "istio-injection" = "enabled" } : {}
+    )
   }
 }
 
