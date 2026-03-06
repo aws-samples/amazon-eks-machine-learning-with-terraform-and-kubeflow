@@ -533,7 +533,7 @@ terraform apply \
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `kmcp_version` | Helm chart version | `"1.0.0"` |
+| `kmcp_version` | Helm chart version | `"0.1.4"` |
 | `kmcp_namespace` | Kubernetes namespace | `"kmcp-system"` |
 | `kmcp_controller_replicas` | Number of controller replicas | `1` |
 | `kmcp_enable_istio_injection` | Enable Istio sidecar injection | `false` |
@@ -548,7 +548,7 @@ CRDs are installed by a separate Helm release and must be upgraded first when up
 
 ```hcl
 # In your tfvars or -var flags:
-kmcp_version = "1.0.0"
+kmcp_version = "0.1.4"
 
 # Override image registry/tag via additional_helm_values:
 # kmcp_additional_helm_values = <<-EOT

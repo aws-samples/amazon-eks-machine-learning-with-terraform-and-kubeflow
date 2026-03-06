@@ -706,7 +706,7 @@ variable "kmcp_namespace" {
 variable "kmcp_version" {
   description = "kmcp Helm chart version"
   type        = string
-  default     = "1.0.0"
+  default     = "0.1.4"
 }
 
 variable "kmcp_controller_replicas" {
