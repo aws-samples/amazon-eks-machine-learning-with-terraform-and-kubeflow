@@ -52,6 +52,17 @@ Use CloudFormation template [ml-ops-desktop.yaml](./ml-ops-desktop.yaml) to crea
 * If you see the message ```ML Ops desktop is enabled!```, run the command ```sudo passwd ubuntu``` to set a new password for user ```ubuntu```. Now you are ready to connect to the desktop using the [Amazon DCV client](https://docs.aws.amazon.com/dcv/latest/userguide/client.html)
 * The build machine desktop uses EC2 [user-data](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html) to initialize the desktop. Most *transient* failures in the desktop initialization can be fixed by rebooting the desktop.
 
+#### Preinstalled Development Tools
+
+The desktop comes with several development tools pre-configured:
+
+* **Visual Studio Code** - Full-featured code editor with extensions
+* **Kiro** - AI-powered IDE for assisted development
+* **Claude Code CLI** - Command-line interface for Claude AI
+* **Miniconda3** - Python environment manager at `/home/ubuntu/miniconda3`
+* **Docker** - Container runtime for inference and training workloads
+* **AWS CLI** - Pre-configured with IAM role credentials
+* **JupyterLab** - Interactive notebook environment
 
 ### 2. Clone Repository
 
