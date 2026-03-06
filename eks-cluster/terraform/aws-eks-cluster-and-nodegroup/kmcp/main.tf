@@ -145,7 +145,10 @@ resource "kubernetes_manifest" "kmcp_service_monitor" {
             tlsConfig = {
               insecureSkipVerify = true
             }
-          } : {}
+          } : {
+            scheme    = null
+            tlsConfig = null
+          }
         )
       ]
     }
