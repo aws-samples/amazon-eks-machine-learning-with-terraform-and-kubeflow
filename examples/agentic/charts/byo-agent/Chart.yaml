@@ -1,0 +1,6 @@
+apiVersion: v2
+name: byo-agent
+description: Helm chart for deploying BYO (Bring Your Own) agents on kagent
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

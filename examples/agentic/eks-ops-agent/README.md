@@ -712,6 +712,62 @@ Agents must have names ending in `-agent` (e.g., `eks-ops-agent`, `my-custom-age
 
 ---
 
+## Deploying Additional BYO Agents
+
+> **Note:** This section is for deploying additional agents beyond the workshop. The workshop modules above use `build-and-deploy.sh` which handles the full lifecycle (build, push, deploy, IRSA). The Helm chart below is for teams that want a standardized way to deploy multiple BYO agents.
+
+A generic Helm chart is available at [`examples/agentic/charts/byo-agent/`](../charts/byo-agent/) for deploying any BYO agent on kagent. It templatizes the Agent CRD so you can deploy different agents by providing a `values.yaml` file.
+
+### Usage
+
+```bash
+# Deploy using a values file
+helm install my-agent ./examples/agentic/charts/byo-agent -f my-agent-values.yaml
+
+# Upgrade (e.g., new image tag)
+helm upgrade my-agent ./examples/agentic/charts/byo-agent -f my-agent-values.yaml --set image.tag=0.2.0
+
+# Uninstall
+helm uninstall my-agent
+```
+
+### Example values file
+
+See [`charts/byo-agent/examples/eks-ops-agent-values.yaml`](../charts/byo-agent/examples/eks-ops-agent-values.yaml) for a complete example. A minimal values file looks like:
+
+```yaml
+name: my-custom-agent          # Must end in "-agent"
+description: "My Custom Agent"
+image:
+  repository: 123456789.dkr.ecr.us-west-2.amazonaws.com/my-custom-agent
+  tag: "0.1.0"
+env:
+  - name: AWS_REGION
+    value: "us-west-2"
+  - name: BEDROCK_MODEL_ID
+    value: "us.anthropic.claude-sonnet-4-20250514-v1:0"
+```
+
+### What the Helm chart does and does not do
+
+| Handled by Helm chart | Handled separately |
+|------------------------|--------------------|
+| Agent CRD deployment | Container build and ECR push |
+| Environment variables | IRSA annotation (`build-and-deploy.sh`) |
+| Resource limits | Redis or other dependencies |
+| Agent name validation | kagent controller (deployed via Terraform) |
+
+After `helm install`, you still need to annotate the ServiceAccount for IRSA:
+
+```bash
+AGENT_NAME=my-custom-agent
+BEDROCK_ROLE_ARN=arn:aws:iam::<ACCOUNT_ID>:role/<CLUSTER_NAME>-kagent-bedrock-role
+kubectl annotate sa $AGENT_NAME -n kagent eks.amazonaws.com/role-arn=$BEDROCK_ROLE_ARN
+kubectl rollout restart deployment $AGENT_NAME -n kagent
+```
+
+---
+
 ## Troubleshooting
 
 ### Check agent status

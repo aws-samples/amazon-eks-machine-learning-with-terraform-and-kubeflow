@@ -1,0 +1,24 @@
+{{- include "byo-agent.validateRequired" . -}}
+{{- include "byo-agent.validateName" . -}}
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "byo-agent.labels" . | nindent 4 }}
+spec:
+  description: {{ .Values.description | quote }}
+  type: BYO
+  byo:
+    deployment:
+      image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+      {{- if .Values.env }}
+      env:
+        {{- range .Values.env }}
+        - name: {{ .name }}
+          value: {{ .value | quote }}
+        {{- end }}
+      {{- end }}
+      resources:
+        {{- toYaml .Values.resources | nindent 8 }}

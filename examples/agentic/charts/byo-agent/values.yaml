@@ -1,0 +1,30 @@
+# BYO Agent - Default Values
+#
+# Required fields:
+#   name        - Agent name (must end in "-agent")
+#   description - Agent description (shown in kagent UI)
+#   image.repository - Container image URI (without tag)
+
+# Agent identity
+name: ""
+namespace: kagent
+description: ""
+
+# Container image
+image:
+  repository: ""
+  tag: "0.1.0"
+
+# Environment variables passed to the agent container
+env:
+  - name: AWS_REGION
+    value: "us-west-2"
+
+# Resource requests and limits
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "500m"
