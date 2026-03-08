@@ -13,7 +13,7 @@ description: ""
 # Container image
 image:
   repository: ""
-  tag: "0.1.0"
+  tag: "0.1.1"
 
 # Environment variables passed to the agent container
 env:
@@ -28,3 +28,12 @@ resources:
   limits:
     memory: "1Gi"
     cpu: "500m"
+
+# ServiceAccount for IRSA:
+# The kagent controller creates a ServiceAccount for each agent automatically.
+# Annotate it post-deploy with the IRSA role (see build-and-deploy.sh).
+
+# Optional in-cluster Redis (for development/workshop use)
+redis:
+  enabled: false
+  image: redis:7-alpine

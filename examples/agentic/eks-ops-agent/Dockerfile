@@ -19,6 +19,9 @@ COPY src/ ./src/
 # Include memory extras for Module 3 (Redis)
 RUN uv sync --no-dev --extra memory
 
+# Verify kagent packages installed correctly
+RUN uv run python -c "from kagent.langgraph import KAgentApp, KAgentCheckpointer; print('kagent OK')"
+
 # Set environment variables
 ENV PYTHONPATH=/app/src
 ENV PYTHONUNBUFFERED=1

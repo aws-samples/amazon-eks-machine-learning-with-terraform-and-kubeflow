@@ -1,7 +1,7 @@
 {{/*
 Validate that the agent name ends in "-agent" (required by IRSA trust policy).
 */}}
-{{- define "byo-agent.validateName" -}}
+{{- define "kagent-agent.validateName" -}}
 {{- if not (hasSuffix "-agent" .Values.name) -}}
 {{- fail "agent name must end in '-agent' (required by IRSA trust policy)" -}}
 {{- end -}}
@@ -10,7 +10,7 @@ Validate that the agent name ends in "-agent" (required by IRSA trust policy).
 {{/*
 Validate required fields.
 */}}
-{{- define "byo-agent.validateRequired" -}}
+{{- define "kagent-agent.validateRequired" -}}
 {{- if not .Values.name -}}
 {{- fail "name is required" -}}
 {{- end -}}
@@ -25,7 +25,7 @@ Validate required fields.
 {{/*
 Common labels.
 */}}
-{{- define "byo-agent.labels" -}}
+{{- define "kagent-agent.labels" -}}
 app.kubernetes.io/name: {{ .Values.name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
