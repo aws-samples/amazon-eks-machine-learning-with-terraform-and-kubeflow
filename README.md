@@ -16,7 +16,129 @@ The solution deploys a complete MLOps platform using Terraform on Amazon EKS wit
 - **Auto-Scaling**: Karpenter for GPU/AI chips, Cluster Autoscaler for CPU
 - **Service Mesh & Security**: Istio ingress gateway, cert-manager, OAuth2 authentication
 
-## Prerequisites
+### In This Guide
+
+- [System Architecture](#system-architecture) — Detailed infrastructure components and deployment flow
+- [Training Examples](./examples/training/README.md) — Multi-framework distributed training
+- [Inference Examples](./examples/inference/README.md) — Model serving across platforms
+- [Agentic AI Examples](./examples/agentic/README.md) — Kubernetes-native AI agents with kagent
+
+**Deployment Options:**
+* [Quick Start (Basic)](#quick-start-basic) — Minimal configuration. Automatically uses the default VPC and public subnets, creates S3 bucket, and deploys a basic EKS cluster. No EC2 key pair required. This repository is automatically cloned at `/home/ubuntu/amazon-eks-machine-learning-with-terraform-and-kubeflow`. Recommended for most users.
+
+* [Advanced Setup](#advanced-setup) — Full control over VPC, subnets, security groups, EKS cluster configuration with EFA support, and SSH key pair. Recommended for advanced users.
+
+## Getting Started
+
+### Prerequisites
+
+**Requirements:**
+* [AWS Account](https://aws.amazon.com/account/) with [Administrator job function](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html) access
+
+**Supported AWS Regions:**
+us-east-1, us-east-2, us-west-2, eu-west-1, eu-central-1, ap-southeast-1, ap-southeast-2, ap-northeast-1, ap-northeast-2, ap-south-1
+
+## Quick Start (Basic)
+
+
+
+The basic template automatically discovers the default VPC and its public subnets, creates an S3 bucket for Terraform state and FSx data, deploys a complete EKS cluster, and uses AWS Systems Manager (SSM) Session Manager instead of SSH key pairs.
+
+### Setup Steps
+
+1. **Select your [AWS Region](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html)** from the supported regions above
+
+2. **Get Your Public IP:** Use [AWS check ip](http://checkip.amazonaws.com/) to find your public IP address (needed for `DesktopAccessCIDR` parameter, append `/32` to your IP)
+
+3. **Clone Repository:** Clone this repository to your laptop:
+   ```bash
+   git clone https://github.com/aws-samples/amazon-eks-machine-learning-with-terraform-and-kubeflow.git
+   cd amazon-eks-machine-learning-with-terraform-and-kubeflow
+   ```
+
+### Launch the Stack
+
+Create a CloudFormation stack using the [ml-ops-desktop-basic.yaml](./ml-ops-desktop-basic.yaml) template via:
+* [AWS Management Console](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-console-create-stack.html), or
+* [AWS CLI](https://docs.aws.amazon.com/cli/latest/reference/cloudformation/create-stack.html)
+
+See [Basic Template Parameters](#basic-template-parameters) for template inputs.
+
+**Important:** The template creates [IAM](https://aws.amazon.com/iam/) resources:
+* **Console:** Check "I acknowledge that AWS CloudFormation might create IAM resources" during review
+* **CLI:** Use `--capabilities CAPABILITY_NAMED_IAM` flag
+
+**Note:** The stack waits for UserData to complete, including EFS cluster, Fsx Cluster and EKS cluster deployment via Terraform. This takes approximately 45 minutes. **Do not proceed until the stack status shows `CREATE_COMPLETE`.**
+
+### What Gets Created
+
+The stack automatically creates:
+* ML Ops desktop with DCV server
+* S3 bucket for Terraform state and FSx data
+* Basic EKS cluster with:
+  * CPU nodes (Cluster Autoscaler managed)
+  * GPU nodes via Karpenter (Nvidia CUDA)
+  * Neuron nodes via Karpenter (Trainium/Inferentia)
+  * EFS and FSx for Lustre shared storage
+  * Note: EFA-based multi-node inference or training is not available in Quick Start setup.
+
+### Connect via SSM Session Manager
+
+1. Wait for stack status to show `CREATE_COMPLETE` in CloudFormation console
+2. Find your desktop instance in EC2 console (tagged with your stack name)
+3. Select the instance and click **Connect** → **Session Manager** → **Start session**
+4. Set a password for the `ubuntu` user:
+   ```bash
+   sudo passwd ubuntu
+   ```
+
+### Connect via Amazon DCV Client
+
+1. Download and install the [Amazon DCV client](https://docs.aws.amazon.com/dcv/latest/userguide/client.html) on your laptop
+2. Find the public IP of your instance in the EC2 console
+3. Connect to `https://<public-ip>:8443` using the DCV client
+4. Login as user `ubuntu` with the password you set via SSM
+
+### Basic Template Parameters
+
+| Parameter Name | Description |
+| --- | ----------- |
+| AWSUbuntuAMIType | **Required**. Selects the AMI type (default: UbuntuPro2404LTS). |
+| DesktopAccessCIDR | **Required**. Public IP CIDR range for DCV desktop access. Use [AWS check ip](http://checkip.amazonaws.com/) to find your public IP address, append `/32`. |
+| DesktopInstanceType | **Required**. Amazon EC2 instance type (default: m7i.xlarge). |
+| EBSOptimized | **Required**. Enable [network optimization for EBS](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-optimized.html) (default: true). |
+| EbsVolumeSize | **Required**. Size of EBS volume in GB (default: 1000 GB). |
+| EbsVolumeType | **Required**. [EBS volume type](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-volume-types.html) (default: gp3). |
+
+### Basic Template Stack Outputs
+
+| Output | Description |
+| --- | ----------- |
+| VpcId | Default VPC ID discovered by the template |
+| SubnetIds | Public subnet IDs used by the Auto Scaling Group |
+| SecurityGroupId | Desktop security group ID |
+| AutoScalingGroupName | Auto Scaling Group name |
+
+### Next Steps After Deployment
+
+After the stack shows `CREATE_COMPLETE`:
+
+```bash
+# Verify cluster access
+kubectl get nodes
+
+# Create home folders on shared storage
+cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+kubectl apply -f eks-cluster/utils/attach-pvc.yaml -n kubeflow
+kubectl wait --for=condition=ready pod/attach-pvc -n kubeflow --timeout=300s
+kubectl exec -it -n kubeflow attach-pvc -- bash -c "cd /efs && mkdir -p home && chown 1000:100 home && cd /fsx && mkdir -p home && chown 1000:100 home"
+```
+
+## Advanced Setup
+
+For advanced users requiring full control over networking, GPU/Neuron configurations, and EFA-based distributed inference and training, use the advanced template [ml-ops-desktop.yaml](./ml-ops-desktop.yaml). This template does not automatically create an EKS cluster—you must manually run Terraform commands after the desktop is ready.
+
+### Prerequisites (Advanced Setup)
 
 - AWS Account with [Administrator access](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_job-functions.html)
 - AWS Region selection (examples use `us-west-2`)
@@ -37,8 +159,6 @@ Create an S3 bucket before proceeding. This bucket stores Terraform state and FS
 aws s3 mb s3://<YOUR_S3_BUCKET> --region us-west-2
 ```
 
-## Getting Started
-
 ### 1. Launch Build Machine
 
 Use CloudFormation template [ml-ops-desktop.yaml](./ml-ops-desktop.yaml) to create build machine:
@@ -51,18 +171,6 @@ Use CloudFormation template [ml-ops-desktop.yaml](./ml-ops-desktop.yaml) to crea
 * When you connect using SSH, and you see the message ```"Cloud init in progress! Logs: /var/log/cloud-init-output.log"```, disconnect and try later after about 15 minutes. The desktop installs the Amazon DCV server on first-time startup, and reboots after the install is complete.
 * If you see the message ```ML Ops desktop is enabled!```, run the command ```sudo passwd ubuntu``` to set a new password for user ```ubuntu```. Now you are ready to connect to the desktop using the [Amazon DCV client](https://docs.aws.amazon.com/dcv/latest/userguide/client.html)
 * The build machine desktop uses EC2 [user-data](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html) to initialize the desktop. Most *transient* failures in the desktop initialization can be fixed by rebooting the desktop.
-
-#### Preinstalled Development Tools
-
-The desktop comes with several development tools pre-configured:
-
-* **Visual Studio Code** - Full-featured code editor with extensions
-* **Kiro** - AI-powered IDE for assisted development
-* **Claude Code CLI** - Command-line interface for Claude AI
-* **Miniconda3** - Python environment manager at `/home/ubuntu/miniconda3`
-* **Docker** - Container runtime for inference and training workloads
-* **AWS CLI** - Pre-configured with IAM role credentials
-* **JupyterLab** - Interactive notebook environment
 
 ### 2. Clone Repository
 
@@ -194,6 +302,36 @@ cd /efs && mkdir home && chown 1000:100 home
 cd /fsx && mkdir home && chown 1000:100 home
 exit
 ```
+
+## Modular Components
+
+User can enable or disable optional modular components via Terraform variables:
+
+| Component | Variable | Default |
+|-----------|----------|---------|
+| [Airflow](https://airflow.apache.org/) | airflow_enabled | false |
+| [kagent](https://github.com/kagent-dev/kagent) | kagent_enabled | false |
+| [Capacity Reservations](https://karpenter.sh/docs/tasks/odcrs/) (ODCR / Capacity Blocks, cudaefa only) | karpenter_cr_enabled | false |
+| [Kubeflow](https://www.kubeflow.org/) | kubeflow_platform_enabled | false |
+| [KServe](https://kserve.github.io/website/latest/) | kserve_enabled | false |
+| [Kueue](https://kueue.sigs.k8s.io/) | kueue_enabled | false |
+| [MLFlow](https://mlflow.org/) | mlflow_enabled | false |
+| [Nvidia DCGM Exporter](https://github.com/NVIDIA/dcgm-exporter) | dcgm_exporter_enabled | false |
+| [SageMaker Controller](https://github.com/aws-controllers-k8s/sagemaker-controller) | ack_sagemaker_enabled | false |
+| [SageMaker HyperPod](https://aws.amazon.com/sagemaker/ai/hyperpod/) | hyperpod_enabled | false |
+| [Slinky Slurm](https://github.com/slinkyproject) | slurm_enabled | false |
+
+## Preinstalled Development Tools
+
+The ML Ops desktop in this project is pre-configured with several development tools:
+
+* **AWS CLI** - Pre-configured with IAM role credentials
+* **Claude Code CLI** - Command-line interface for Claude AI
+* **Docker** - Container runtime for inference and training workloads
+* **JupyterLab** - Interactive notebook environment
+* **Kiro** - AI-powered IDE for assisted development
+* **Miniconda3** - Python environment manager at `/home/ubuntu/miniconda3`
+* **Visual Studio Code** - Full-featured code editor with extensions
 
 ## System Architecture
 
@@ -361,24 +499,6 @@ All infrastructure is defined in Terraform with modular components:
 4. **User Namespaces**: Create user profiles with IRSA and PVCs
 5. **ML Workloads**: Deploy training/inference jobs via Helm charts
 
-## Modular Components
-
-Enable optional components via Terraform variables:
-
-| Component | Variable | Default |
-|-----------|----------|---------|
-| [Airflow](https://airflow.apache.org/) | airflow_enabled | false |
-| [kagent](https://github.com/kagent-dev/kagent) | kagent_enabled | false |
-| [Capacity Reservations](https://karpenter.sh/docs/tasks/odcrs/) (ODCR / Capacity Blocks, cudaefa only) | karpenter_cr_enabled | false |
-| [Kubeflow](https://www.kubeflow.org/) | kubeflow_platform_enabled | false |
-| [KServe](https://kserve.github.io/website/latest/) | kserve_enabled | false |
-| [Kueue](https://kueue.sigs.k8s.io/) | kueue_enabled | false |
-| [MLFlow](https://mlflow.org/) | mlflow_enabled | false |
-| [Nvidia DCGM Exporter](https://github.com/NVIDIA/dcgm-exporter) | dcgm_exporter_enabled | false |
-| [SageMaker Controller](https://github.com/aws-controllers-k8s/sagemaker-controller) | ack_sagemaker_enabled | false |
-| [SageMaker HyperPod](https://aws.amazon.com/sagemaker/ai/hyperpod/) | hyperpod_enabled | false |
-| [Slinky Slurm](https://github.com/slinkyproject) | slurm_enabled | false |
-
 ## Inference Examples
 
 For comprehensive inference examples across multiple serving platforms and accelerators, see [Inference Examples README](./examples/inference/README.md).
@@ -400,176 +520,9 @@ Supported frameworks:
 - Megatron-DeepSpeed
 - RayTrain
 
-### MCP Gateway Registry
+## Agentic AI Examples
 
-Deploy [Model Context Protocol (MCP) Gateway Registry](https://github.com/agentic-community/mcp-gateway-registry) for agentic AI applications:
-
-- **[Single Service Deployment](./examples/agentic/mcp-gateway-registry/)**: Monolithic deployment with self-signed SSL
-- **[Microservices Deployment](./examples/agentic/mcp-gateway-microservices/)**: 6-service architecture with authentication, registry, and multiple MCP servers
-
-Features:
-- OAuth authentication (GitHub, AWS Cognito)
-- MCP server registry and gateway
-- Financial information, time, and custom tool servers
-- Shared EFS storage for persistent state
-
-### kagent - Kubernetes Native AI Agents
-
-[kagent](https://github.com/kagent-dev/kagent) is a Kubernetes-native framework for building AI agents with tool capabilities and LLM integration.
-
-**Enable kagent:**
-```bash
-terraform apply \
-  -var="kagent_enabled=true"
-```
-
-**Configuration Options:**
-- `kagent_version`: Helm chart version (default: `"0.7.11"`, pinned for stability - override to upgrade)
-- `kagent_database_type`: Choose `"sqlite"` (default, single replica) or `"postgresql"` (HA, multi-replica)
-- `kagent_enable_ui`: Enable web UI (default: `true`)
-- `kagent_enable_istio_ingress`: Expose UI via Istio ingress (default: `false`)
-- `kagent_enable_bedrock_access`: Enable IRSA for Amazon Bedrock access (default: `false`)
-
-**Access kagent UI:**
-```bash
-# Port-forward (default)
-kubectl port-forward -n kagent svc/kagent-ui 8080:8080
-
-# Or via Terraform output
-$(terraform output -raw kagent_ui_access_command)
-```
-
-**LLM Integration Options:**
-
-kagent supports multiple LLM providers. You can use self-hosted models in EKS or cloud-based services.
-
-**Option 1: Self-Hosted Models in EKS (Recommended)**
-
-Deploy LLM serving solutions within the same EKS cluster:
-
-```yaml
-# Example: Using vLLM for self-hosted models
-apiVersion: kagent.dev/v1alpha2
-kind: ModelConfig
-metadata:
-  name: llama-3-8b
-  namespace: kagent
-spec:
-  provider: OpenAI  # vLLM provides OpenAI-compatible API
-  model: meta-llama3-8b-instruct
-  apiKeySecret: kagent-openai
-  apiKeySecretKey: OPENAI_API_KEY
-  openAI:
-    baseUrl: http://vllm-service.inference.svc.cluster.local:8000/v1
-```
-
-See the `examples/inference/` directory for deploying vLLM, Ray Serve, or Triton in EKS.
-
-**Option 2: OpenAI or Compatible APIs**
-
-A placeholder `kagent-openai` secret is automatically created. Update it with your OpenAI API key:
-
-```bash
-kubectl create secret generic kagent-openai \
-  --from-literal=OPENAI_API_KEY=<your-openai-api-key> \
-  -n kagent \
-  --dry-run=client -o yaml | kubectl apply -f -
-```
-
-Then create a ModelConfig:
-
-```yaml
-apiVersion: kagent.dev/v1alpha2
-kind: ModelConfig
-metadata:
-  name: gpt-4
-  namespace: kagent
-spec:
-  provider: OpenAI
-  model: gpt-4
-  apiKeySecret: kagent-openai
-  apiKeySecretKey: OPENAI_API_KEY
-  openAI:
-    baseUrl: https://api.openai.com/v1
-```
-
-**Option 3: Amazon Bedrock (Optional)**
-
-For AWS Bedrock integration, enable IRSA:
-
-```bash
-terraform apply \
-  -var="kagent_enabled=true" \
-  -var="kagent_enable_bedrock_access=true"
-```
-
-When enabled, an IAM role with Bedrock permissions is automatically created and attached to the kagent controller via IRSA.
-
-```yaml
-apiVersion: kagent.dev/v1alpha2
-kind: ModelConfig
-metadata:
-  name: claude-sonnet
-  namespace: kagent
-spec:
-  provider: Bedrock
-  model: anthropic.claude-3-5-sonnet-20241022-v2:0
-  region: us-west-2
-```
-
-**Note**: The module automatically configures `controller.serviceAccount.name=kagent-sa` and `controller.serviceAccount.create=false` in the Helm values when Bedrock access is enabled.
-
-**High Availability:**
-
-For production deployments with multiple controller replicas:
-```bash
-terraform apply \
-  -var="kagent_enabled=true" \
-  -var="kagent_database_type=postgresql" \
-  -var="kagent_controller_replicas=3"
-```
-
-## Legacy Examples
-
-See [README.md](./examples/legacy/README.md)
-
-## Architecture Concepts
-
-### Helm-Based Pipeline Execution
-
-The solution uses Helm charts to execute discrete MLOps pipeline steps:
-
-1. Each pipeline step is a Helm chart installation with a YAML recipe (Helm values file)
-2. Steps execute within a single Helm Release for atomicity
-3. Charts are installed, executed, then uninstalled before the next step
-4. Can be orchestrated manually (Helm CLI), via Kubeflow Pipelines, or Apache Airflow
-
-### YAML Recipes
-
-Common fields in Helm values files:
-
-- `image`: Docker container image
-- `resources`: Infrastructure requirements (CPU, memory, GPUs)
-- `git`: Code repository to clone (available in `$GIT_CLONE_DIR`)
-- `inline_script`: Arbitrary script definitions
-- `pre_script`: Executed after git clone, before job launch
-- `train`/`process`: Launch commands and arguments
-- `post_script`: Optional post-execution script
-- `pvc`: Persistent volume mounts (EFS at `/efs`, FSx at `/fsx`)
-- `ebs`: Optional EBS volume configuration
-
-### Storage Architecture
-
-- **EFS**: Code, configs, logs, training checkpoints
-- **FSx for Lustre**: Data, pre-trained models (auto-syncs with S3)
-- **S3**: Automatic backup of FSx content under `ml-platform/` prefix
-- **Eventual Consistency**: FSx maintains eventual consistency with S3
-
-### Infrastructure Management
-
-- **Karpenter**: Auto-scales GPU and AI chip nodes (Nvidia, Trainium, Inferentia)
-- **Cluster Autoscaler**: Auto-scales CPU-only nodes
-- **EKS Managed Node Groups**: Automatic scaling from zero to required capacity
+For Kubernetes-native AI agents with kagent, see [Agentic AI Examples README](./examples/agentic/README.md).
 
 ## Kubeflow Platform (Optional)
 
@@ -597,24 +550,10 @@ Login: `user@example.com` with static password from Terraform output
 ### Before Destroying Infrastructure
 
 1. Verify S3 backup of important data
-2. Uninstall all Helm releases:
+2. Run cleanup script:
 ```bash
-for x in $(helm list -q -n kubeflow-user-example-com); do 
-  helm uninstall $x -n kubeflow-user-example-com
-done
+./eks-cluster/utils/cleanup-before-destroy.sh
 ```
-
-3. Wait 5 minutes, then delete remaining pods:
-```bash
-kubectl delete --all pods -n kubeflow-user-example-com
-```
-
-4. Delete attach-pvc pod:
-```bash
-kubectl delete -f eks-cluster/utils/attach-pvc.yaml -n kubeflow
-```
-
-5. Wait 15 minutes for auto-scaling to zero
 
 ### Destroy Infrastructure
 
@@ -628,30 +567,6 @@ terraform destroy -var="profile=default" -var="region=us-west-2" \
   -var='azs=["us-west-2a","us-west-2b","us-west-2c"]' \
   -var="import_path=s3://<YOUR_S3_BUCKET>/ml-platform/"
 ```
-
-## Supported Technologies
-
-### ML Frameworks
-- Hugging Face Accelerate
-- PyTorch Lightning
-- Nemo Megatron-LM
-- Megatron-DeepSpeed
-- Neuronx Distributed
-- Ray Train
-- TensorFlow
-
-### Inference Engines
-- vLLM (GPU & Neuron)
-- Ray Serve
-- Triton Inference Server
-- TensorRT-LLM
-- DJL Serving
-
-### Accelerators
-- Nvidia GPUs (P4d, G6, etc.)
-- AWS Trainium (Trn1)
-- AWS Inferentia (Inf2)
-- AWS EFA for distributed training
 
 ## Utilities
 
@@ -669,6 +584,9 @@ terraform destroy -var="profile=default" -var="region=us-west-2" \
 
 # Create EKS cluster with logging
 ./eks-cluster/terraform/aws-eks-cluster-and-nodegroup/create_eks.sh
+
+# Cleanup before destroy
+./eks-cluster/utils/cleanup-before-destroy.sh
 
 # Destroy with retries
 ./eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform_destroy_retry.sh

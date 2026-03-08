@@ -1,0 +1,634 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  ML Ops Desktop Basic - Auto-discovers default VPC and deploys in ASG.
+  Creates default S3 Bucket, and EKS cluster using Terraform.
+  Expected time to create COMPLETE is 45 minutes.
+
+Parameters:
+  AWSUbuntuAMIType:
+    Description: Ubuntu AMI Type
+    Type: String
+    Default: "UbuntuPro2404LTS"
+    AllowedValues:
+      - "UbuntuPro2404LTS"
+  
+  DesktopInstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: m7i.xlarge
+    AllowedValues:
+      - m7a.xlarge
+      - m7a.2xlarge
+      - m7i.xlarge
+      - m7i.2xlarge
+  
+  DesktopAccessCIDR:
+    Description: CIDR range for DCV access
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: Must be a valid CIDR range
+  
+  EbsVolumeSize:
+    Default: 1000
+    Description: EBS volume size (GB)
+    Type: Number
+    MinValue: 1000
+  
+  EbsVolumeType:
+    Default: 'gp3'
+    Description: EBS volume type
+    Type: String
+    AllowedValues:
+      - 'gp3'
+  
+  EBSOptimized:
+    Description: Is the instance EBS optimized?
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'false'
+      - 'true'
+
+Mappings:
+  UbuntuPro2404LTS:
+    us-east-1:
+      AMI: ami-0b6c6ebed2801a5cb
+    us-east-2:
+      AMI: ami-06e3c045d79fd65d9
+    us-west-2:
+      AMI: ami-0786adace1541ca80
+    eu-west-1:
+      AMI: ami-03446a3af42c5e74e
+    eu-central-1:
+      AMI: ami-01f79b1e4a5c64257
+    ap-southeast-1:
+      AMI: ami-08d59269edddde222
+    ap-southeast-2:
+      AMI: ami-0ba8d27d35e9915fb
+    ap-south-1:
+      AMI: ami-019715e0d74f695be
+    ap-northeast-1:
+      AMI: ami-0f65fc8c24ec8d2a1
+    ap-northeast-2:
+      AMI: ami-0130d8d35bcd2d433
+
+Resources:
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}'
+
+  # Lambda execution role for VPC/Subnet lookup
+  VpcLookupLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: vpc-subnet-lookup
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:DescribeVpcs'
+                  - 'ec2:DescribeSubnets'
+                  - 'ec2:DescribeRouteTables'
+                Resource: '*'
+
+  VpcLookupFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 60
+      Role: !GetAtt VpcLookupLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+
+          def handler(event, context):
+            if event['RequestType'] in ('Delete',):
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              return
+
+            try:
+              ec2 = boto3.client('ec2')
+
+              # Find default VPC
+              vpcs = ec2.describe_vpcs(Filters=[{'Name': 'isDefault', 'Values': ['true']}])
+              if not vpcs['Vpcs']:
+                raise Exception('No default VPC found in this region')
+              vpc_id = vpcs['Vpcs'][0]['VpcId']
+
+              # Find default subnets in the default VPC
+              subnets = ec2.describe_subnets(Filters=[
+                {'Name': 'vpc-id', 'Values': [vpc_id]},
+                {'Name': 'default-for-az', 'Values': ['true']}
+              ])
+              if not subnets['Subnets']:
+                raise Exception('No default subnets found in default VPC')
+
+              # Get all route tables for the VPC
+              route_tables = ec2.describe_route_tables(Filters=[
+                {'Name': 'vpc-id', 'Values': [vpc_id]}
+              ])
+
+              # Build a map of subnet -> route table
+              subnet_to_rt = {}
+              main_rt_id = None
+              
+              for rt in route_tables['RouteTables']:
+                for assoc in rt.get('Associations', []):
+                  if assoc.get('Main', False):
+                    main_rt_id = rt['RouteTableId']
+                  if 'SubnetId' in assoc:
+                    subnet_to_rt[assoc['SubnetId']] = rt['RouteTableId']
+
+              # Check which route tables have IGW routes
+              rt_has_igw = {}
+              for rt in route_tables['RouteTables']:
+                rt_id = rt['RouteTableId']
+                has_igw = any(route.get('GatewayId', '').startswith('igw-') for route in rt.get('Routes', []))
+                rt_has_igw[rt_id] = has_igw
+
+              # Determine public subnets
+              public_subnet_ids = []
+              for subnet in subnets['Subnets']:
+                subnet_id = subnet['SubnetId']
+                # Get the route table for this subnet (explicit or main)
+                rt_id = subnet_to_rt.get(subnet_id, main_rt_id)
+                if rt_id and rt_has_igw.get(rt_id, False):
+                  public_subnet_ids.append(subnet_id)
+
+              if not public_subnet_ids:
+                raise Exception('No subnets with internet gateway route found in default VPC')
+
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                'VpcId': vpc_id,
+                'SubnetIds': ','.join(public_subnet_ids)
+              })
+            except Exception as e:
+              cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  VpcLookup:
+    Type: 'Custom::VpcLookup'
+    Properties:
+      ServiceToken: !GetAtt VpcLookupFunction.Arn
+
+  DesktopSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: ML Ops Desktop security group
+      VpcId: !GetAtt VpcLookup.VpcId
+      SecurityGroupIngress:
+        - Description: DCV access
+          IpProtocol: tcp
+          FromPort: 8443
+          ToPort: 8443
+          CidrIp: !Ref DesktopAccessCIDR
+      SecurityGroupEgress:
+        - Description: Allow all outbound
+          IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: '0.0.0.0/0'
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+
+  DesktopSecurityGroupSelfIngress:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref DesktopSecurityGroup
+      IpProtocol: '-1'
+      SourceSecurityGroupId: !Ref DesktopSecurityGroup
+
+  InstanceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/PowerUserAccess'
+        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      Policies:
+        - PolicyName: iam-policies
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'iam:GetRole'
+                  - 'iam:CreateRole'
+                  - 'iam:PassRole'
+                  - 'iam:AttachRolePolicy'
+                  - 'iam:PutRolePolicy'
+                  - 'iam:DeleteRolePolicy'
+                  - 'iam:DetachRolePolicy'
+                  - 'iam:DeleteRole'
+                  - 'iam:ListRolePolicies'
+                  - 'iam:ListAttachedRolePolicies'
+                  - 'iam:ListInstanceProfilesForRole'
+                  - 'iam:GetPolicy'
+                  - 'iam:CreatePolicy'
+                  - 'iam:DeletePolicy'
+                  - 'iam:GetRolePolicy'
+                  - 'iam:GetPolicyVersion'
+                  - 'iam:CreateOpenIDConnectProvider'
+                  - 'iam:ListPolicyVersions'
+                  - 'iam:CreatePolicyVersion'
+                  - 'iam:DeletePolicyVersion'
+                  - 'iam:GetOpenIDConnectProvider'
+                  - 'iam:DeleteOpenIDConnectProvider'
+                Resource:
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/*'
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:policy/*'
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:oidc-provider/oidc.eks.${AWS::Region}.amazonaws.com/id/*'
+
+  InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles:
+        - !Ref InstanceRole
+
+  LaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
+    Properties:
+      LaunchTemplateData:
+        ImageId: !FindInMap
+          - !Ref AWSUbuntuAMIType
+          - !Ref 'AWS::Region'
+          - AMI
+        InstanceType: !Ref DesktopInstanceType
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        EbsOptimized: !Ref EBSOptimized
+        MetadataOptions:
+          HttpTokens: required
+          HttpEndpoint: enabled
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: !Ref EbsVolumeSize
+              VolumeType: !Ref EbsVolumeType
+              Encrypted: true
+              DeleteOnTermination: true
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: true
+            Groups:
+              - !Ref DesktopSecurityGroup
+        UserData:
+          Fn::Base64:
+            Fn::Join:
+              - ''
+              - - |
+                  Content-Type: multipart/mixed; boundary="//"
+                  MIME-Version: 1.0
+
+                  --//
+                  Content-Type: text/cloud-config; charset="us-ascii"
+                  MIME-Version: 1.0
+                  Content-Transfer-Encoding: 7bit
+                  Content-Disposition: attachment; filename="cloud-config.txt"
+
+                  #cloud-config
+                  cloud_final_modules:
+                  - [scripts-user, always]
+
+                  --//
+                  Content-Type: text/x-shellscript; charset="us-ascii"
+                  MIME-Version: 1.0
+                  Content-Transfer-Encoding: 7bit
+                  Content-Disposition: attachment; filename="userdata.txt"
+                  #!/bin/bash -xe
+                  echo "Cloud init in progress! Logs: /var/log/cloud-init-output.log" > /etc/motd
+                  . /etc/os-release
+
+                  distro=ubuntu${VERSION_ID//[.]/""}
+                  arch="x86_64"
+                  echo "Ubuntu  $distro/$arch"
+
+                  # setup graphics desktop
+                  export DEBIAN_FRONTEND=noninteractive
+                  export DEBCONF_NONINTERACTIVE_SEEN=true
+
+                  # setup software repo for docker
+                  wget -qO - https://download.docker.com/linux/ubuntu/gpg > ./GPG_DOCKER.PUB
+                  gpg --no-default-keyring --keyring ./docker_keyring.gpg --import  ./GPG_DOCKER.PUB
+                  gpg --no-default-keyring --keyring ./docker_keyring.gpg  --export > ./docker.gpg
+                  mv ./docker.gpg /etc/apt/trusted.gpg.d/
+                  rm ./GPG_DOCKER.PUB
+                  
+                  add-apt-repository -y  "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+
+                  # add key for NICE-DCV
+                  wget -qO - https://d1uj6qtbmh3dt5.cloudfront.net/NICE-GPG-KEY > ./NICE-GPG-KEY
+                  gpg --no-default-keyring --keyring ./nice_dcv_keyring.gpg --import  ./NICE-GPG-KEY
+                  gpg --no-default-keyring --keyring ./nice_dcv_keyring.gpg  --export > ./nice_dcv.gpg
+                  mv ./nice_dcv.gpg /etc/apt/trusted.gpg.d/
+                  rm ./NICE-GPG-KEY
+
+                  # update and install required packages
+                  apt-get update
+
+                  apt-get -y install git tar
+                  apt-get -y install software-properties-common
+                  
+                  # install docker if it is not installed
+                  if [ ! -x "$(command -v docker)" ]; then
+                    apt-get -y install docker-ce docker-ce-cli containerd.io      
+                    usermod -aG docker ubuntu
+                  fi
+                  
+                  apt-get -y install tzdata
+                  apt-get -y install keyboard-configuration
+                  apt-get -y install gnupg2
+                  apt-get -y install openmpi-bin libopenmpi-dev 
+                  apt-get -y install protobuf-compiler
+
+                  apt-get -y install ubuntu-desktop
+
+                  if [[ ! -x "$(command -v dcv)" ]]
+                  then
+                  sleep 60
+                  apt-get -y install gdm3
+                  echo "/usr/sbin/gdm3" > /etc/X11/default-display-manager
+                  dpkg-reconfigure gdm3
+                  sed -i -e "s/#WaylandEnable=false/WaylandEnable=false/g" /etc/gdm3/custom.conf
+                  (systemctl stop gdm3 && systemctl start gdm3 && apt-get -y install mesa-utils) || (sync &&  reboot)
+                  
+                  apt-get -y install xserver-xorg-video-dummy
+                  cat >/etc/X11/xorg.conf <<EOL
+                  Section "Device"
+                    Identifier "DummyDevice"
+                    Driver "dummy"
+                    Option "UseEDID" "false"
+                    VideoRam 512000
+                  EndSection
+                  Section "Monitor"
+                    Identifier "DummyMonitor"
+                    HorizSync 5.0 - 1000.0
+                    VertRefresh 5.0 - 200.0
+                    Option "ReducedBlanking"
+                  EndSection
+                  Section "Screen"
+                    Identifier "DummyScreen"
+                    Device "DummyDevice"
+                    Monitor "DummyMonitor"
+                    DefaultDepth 24
+                    SubSection "Display"
+                      Viewport 0 0
+                      Depth 24
+                      Virtual 4096 2160
+                    EndSubSection
+                  EndSection
+                  EOL
+
+                  #restart X server
+                  echo "restart X-server"
+                  systemctl set-default graphical.target
+                  systemctl isolate graphical.target
+                 
+                  wget https://d1uj6qtbmh3dt5.cloudfront.net/2024.0/Servers/nice-dcv-2024.0-19030-ubuntu2404-x86_64.tgz && \
+                  tar -xvzf nice-dcv-2024.0-19030-ubuntu2404-x86_64.tgz && \
+                  cd nice-dcv-2024.0-19030-ubuntu2404-x86_64 && \
+                  apt-get -y install ./nice-dcv-server_2024.0.19030-1_amd64.ubuntu2404.deb
+                  reboot
+                  fi
+
+                  #restart X server
+                  systemctl set-default graphical.target
+                  systemctl isolate graphical.target
+      
+                  # Create DCV server configuration file
+                  [[ -d /opt/dcv-session-store ]] || mkdir /opt/dcv-session-store
+                  echo "[license]" >> dcv.conf
+                  echo "[log]" >> dcv.conf
+                  echo "[session-management]" >> dcv.conf
+                  echo "create-session = true" >> dcv.conf
+                  echo "[session-management/defaults]" >> dcv.conf
+                  echo "[session-management/automatic-console-session]" >> dcv.conf
+                  echo "owner=ubuntu" >> dcv.conf
+                  echo "storage-root=\"/opt/dcv-session-store/\"" >> dcv.conf
+                  echo "[display]" >> dcv.conf
+                  echo "[connectivity]" >> dcv.conf
+                  echo "[security]" >> dcv.conf
+                  echo "authentication=\"system\"" >> dcv.conf
+                  echo "[clipboard]" >> dcv.conf
+                  echo "primary-selection-copy=true" >> dcv.conf
+                  echo "primary-selection-paste=true" >> dcv.conf
+                  mv dcv.conf /etc/dcv/dcv.conf
+
+                  # Create DCV session permissions files
+                  rm -f /home/ubuntu/dcv.perms
+                  echo "[permissions]" >> /home/ubuntu/dcv.perms
+                  echo "%owner% allow builtin" >> /home/ubuntu/dcv.perms
+
+                  # Enable DCV server
+                  systemctl enable dcvserver
+                  systemctl restart dcvserver
+                  
+                  echo "install DCV server complete"
+
+                  # install nfs-common
+                  apt-get -y install nfs-common
+                
+                  # install aws cli
+                  snap install aws-cli --classic
+
+                  # Install terraform
+                  snap install terraform --classic
+                  
+                  # install helm
+                  snap install helm --classic
+
+                  # install code
+                  snap install code --classic
+
+                  # install Kiro
+                  URL=$(curl -s https://prod.download.desktop.kiro.dev/stable/metadata-linux-x64-stable.json | jq -r '.releases[] | select(.updateTo.url | endswith(".tar.gz")) | .updateTo.url')
+                  mkdir -p /opt/kiro
+                  curl -L "$URL" | tar -xz -C /opt/kiro --strip-components=1
+                  chown -R root:root /opt/kiro
+                  chmod 4755 /opt/kiro/chrome-sandbox
+                  ln -sf /opt/kiro/bin/kiro /usr/local/bin/kiro
+                  cat <<EOF > /usr/share/applications/kiro.desktop
+                  [Desktop Entry]
+                  Name=Kiro
+                  Exec=/opt/kiro/bin/kiro %F
+                  Icon=/opt/kiro/resources/app/resources/linux/code.png
+                  Type=Application
+                  Categories=Development;IDE;
+                  EOF
+
+                  if [ ! -x "$(command -v claude)" ]; then
+                    echo "Installing Claude Code CLI..."
+                    sudo -u ubuntu bash -c "curl -fsSL https://claude.ai/install.sh | bash"
+                    ln -s /home/ubuntu/.local/bin/claude /usr/local/bin/claude
+
+                    # Verify installation
+                    if [ -x "$(command -v claude)" ]; then
+                      echo "Claude Code CLI installed successfully"
+                      claude --version
+
+                      echo "export CLAUDE_CODE_USE_BEDROCK=1" >> /home/ubuntu/.bashrc
+                      echo 'export PATH="$HOME/.local/bin:$PATH"' >> /home/ubuntu/.bashrc
+                    else
+                      echo "Warning: Claude Code CLI installation may have failed"
+                    fi
+                  else
+                    echo "Claude Code CLI already installed"
+                  fi
+
+                  # install miniconda3 if anaconda3, or miniconda3 are not installed
+                  if [[ ! -d "/home/ubuntu/anaconda3" ]] && [[ ! -d "/home/ubuntu/miniconda3" ]]
+                  then
+                    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /home/ubuntu/miniconda3.sh
+                    HOME=/home/ubuntu bash /home/ubuntu/miniconda3.sh -b -p /home/ubuntu/miniconda3
+                    echo "source /home/ubuntu/miniconda3/etc/profile.d/conda.sh" >> /home/ubuntu/.bashrc
+                    rm /home/ubuntu/miniconda3.sh
+
+                    source /home/ubuntu/miniconda3/etc/profile.d/conda.sh
+                    conda tos accept --override-channels --channel  https://repo.anaconda.com/pkgs/main
+                    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+                    conda update -y --name base -c defaults conda
+
+                    # install jupyterlab and boto3 in base env
+                    conda activate && \
+                    conda install -y -c conda-forge jupyterlab && \
+                    conda install -y ipykernel && \
+                    conda install -y boto3 && \
+                    conda install -y nb_conda_kernels && \
+                    conda deactivate
+
+                    chown -R ubuntu:ubuntu /home/ubuntu/miniconda3
+                    chown -R ubuntu:ubuntu /home/ubuntu/.conda
+                  fi
+                
+                  echo "conda activate" >> /home/ubuntu/.bashrc
+
+                - AWS_REGION=
+                - !Ref AWS::Region
+                - |+
+
+                - STACK_NAME=
+                - !Ref 'AWS::StackName'
+                - |+
+
+                - S3_BUCKET=
+                - !Ref S3Bucket
+                - |+
+
+                - |
+
+                  # Create config file
+                  [[ -d /home/ubuntu/.aws ]] || mkdir /home/ubuntu/.aws
+                  cat >/home/ubuntu/.aws/config <<EOL
+                  [default]
+                  region = ${AWS_REGION}
+                  output=json
+                  EOL
+                  
+                  chown ubuntu:ubuntu -R /home/ubuntu/.aws
+                  cd /home/ubuntu
+
+                  if [ ! -d "amazon-eks-machine-learning-with-terraform-and-kubeflow" ]; then
+                      sudo -u ubuntu bash -c "git clone https://github.com/aws-samples/amazon-eks-machine-learning-with-terraform-and-kubeflow.git"
+                      echo "Repository cloned successfully."
+                  fi
+
+                  # Create EKS cluster
+                  REPO_DIR="/home/ubuntu/amazon-eks-machine-learning-with-terraform-and-kubeflow"
+                  CLUSTER_NAME="mlops-$RANDOM"
+                  S3_PREFIX="${CLUSTER_NAME}"
+                  TF_DIR="$REPO_DIR/eks-cluster/terraform/aws-eks-cluster-and-nodegroup"
+
+                  cd "$REPO_DIR"
+                  sudo -u ubuntu bash -c "./eks-cluster/utils/s3-backend.sh $S3_BUCKET $S3_PREFIX"
+                  sudo -u ubuntu bash -c "./eks-cluster/utils/install-kubectl-linux.sh"
+
+                  sudo -u ubuntu bash -c "docker logout public.ecr.aws 2>/dev/null"
+                  sudo -u ubuntu bash -c "cd $TF_DIR && terraform init --reconfigure"
+
+                  cat <<EOF > "$TF_DIR/basic.tfvars"
+                  profile      = "default"
+                  region       = "${AWS_REGION}"
+                  cluster_name = "${CLUSTER_NAME}"
+                  azs          = ["${AWS_REGION}a","${AWS_REGION}b","${AWS_REGION}c"]
+                  import_path  = "s3://${S3_BUCKET}/${S3_PREFIX}/"
+                  EOF
+
+                  sudo -E -u ubuntu bash -c "cd ${TF_DIR} && terraform apply -auto-approve -var-file=basic.tfvars"
+
+                  echo "ML Ops desktop is enabled!" > /etc/motd
+
+                  # Install cfn-signal helper and signal completion
+                  apt-get -y install python3-pip
+                  pip3 install --break-system-packages https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
+                  /usr/local/bin/cfn-signal -e $? --stack ${STACK_NAME} --resource DesktopAutoScalingGroup --region ${AWS_REGION}
+
+  DesktopAutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      VPCZoneIdentifier: !Split [',', !GetAtt VpcLookup.SubnetIds]
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: 1
+      MaxSize: 1
+      DesiredCapacity: 1
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 3600
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ml-ops-desktop'
+          PropagateAtLaunch: true
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT60M
+
+Outputs:
+  VpcId:
+    Description: Default VPC ID
+    Value: !GetAtt VpcLookup.VpcId
+  
+  SubnetIds:
+    Description: Public subnet IDs
+    Value: !GetAtt VpcLookup.SubnetIds
+  
+  SecurityGroupId:
+    Description: Desktop security group ID
+    Value: !Ref DesktopSecurityGroup
+  
+  AutoScalingGroupName:
+    Description: Auto Scaling Group name
+    Value: !Ref DesktopAutoScalingGroup
