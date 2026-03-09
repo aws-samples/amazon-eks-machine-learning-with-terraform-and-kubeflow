@@ -1,0 +1,96 @@
+# MCP Gateway Registry Stack - Workshop Values
+#
+# Simplified values for deploying on EKS with port-forward access.
+# No external ingress, domain, or TLS required.
+#
+# Usage:
+#   helm install mcp-gateway-registry -n mcp-gateway --create-namespace \
+#     -f values.yaml .
+
+global:
+  domain: "localhost"
+
+  authProvider:
+    type: keycloak
+    keycloak:
+      adminUsername: "user"
+      realm: "mcp-gateway"
+
+  ingress:
+    className: ""
+    tls: false
+    routingMode: path
+    paths:
+      authServer: /auth-server
+      registry: /registry
+      mcpgw: /mcpgw
+      keycloak: /keycloak
+
+mongodb:
+  enabled: true
+  user: mcpgateway
+  password: "" # Generated at install time via --set
+
+keycloak:
+  create: true
+  image:
+    registry: public.ecr.aws
+  global:
+    security:
+      allowInsecureImages: true
+  httpRelativePath: /keycloak/
+  extraEnvVars:
+    - name: KC_PROXY
+      value: edge
+    - name: KC_PROXY_HEADERS
+      value: xforwarded
+  ingress:
+    enabled: false
+  nodeSelector: {}
+
+keycloak-configure:
+  enabled: true
+  keycloak:
+    realm: "mcp-gateway"
+    adminUser: "user"
+
+keycloakIngress:
+  enabled: false
+
+mongodb-configure:
+  enabled: true
+
+registry:
+  app:
+    replicas: 1
+    deploymentMode: registry-only
+    registryMode: full
+    skillSecurityScanEnabled: false
+  ingress:
+    enabled: false
+  nodeSelector: {}
+
+mcpgw:
+  enabled: true
+  app:
+    replicas: 1
+    embeddingsProvider: sentence-transformers
+    embeddingsModelName: all-MiniLM-L6-v2
+    embeddingsModelDimensions: "384"
+  ingress:
+    enabled: false
+  nodeSelector: {}
+
+auth-server:
+  app:
+    replicas: 1
+    oauthStoreTokensInSession: false
+  keycloak:
+    enabled: true
+    realm: "mcp-gateway"
+  ingress:
+    enabled: false
+  nodeSelector: {}
+
+nginxGateway:
+  enabled: true
