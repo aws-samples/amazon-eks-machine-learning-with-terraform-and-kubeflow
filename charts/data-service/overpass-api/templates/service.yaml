@@ -1,0 +1,27 @@
+---
+# Service: {{ .Release.Name }}
+#
+# ClusterIP service exposing the Overpass API on port 80.
+# DNS name inside the cluster:
+#   {{ include "overpass-api.endpointURL" . }}
+#
+# Query example (from any pod in the cluster):
+#   curl -s "{{ include "overpass-api.endpointURL" . }}" \
+#     --data '[out:json][timeout:25];way["highway"](48.74,11.40,48.76,11.44);out geom;'
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "overpass-api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: overpass-server
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "overpass-api.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

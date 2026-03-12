@@ -1,0 +1,36 @@
+---
+# ConfigMap: Overpass API endpoint for this release.
+#
+# Agents and participant notebooks reference this ConfigMap to discover
+# the Overpass endpoint URL rather than hardcoding it. Inject into agent
+# pods via envFrom:
+#
+#   envFrom:
+#     - configMapRef:
+#         name: {{ .Release.Name }}-endpoints
+#
+# This gives the agent access to OVERPASS_API_URL as an environment variable.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-endpoints
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "overpass-api.labels" . | nindent 4 }}
+  annotations:
+    overpass-api/pbf-url: {{ .Values.pbf.url | quote }}
+    overpass-api/pbf-filename: {{ include "overpass-api.pbfFilename" . | quote }}
+    overpass-api/overpass-meta: {{ .Values.overpass.meta | quote }}
+data:
+  # Primary endpoint URL for Overpass QL queries.
+  # POST your Overpass QL query body to this URL.
+  OVERPASS_API_URL: {{ include "overpass-api.endpointURL" . | quote }}
+
+  # Release name — useful for logging and agent tool configuration.
+  OVERPASS_RELEASE_NAME: {{ .Release.Name | quote }}
+
+  # PBF source URL — documents which dataset this instance was built from.
+  OVERPASS_PBF_URL: {{ .Values.pbf.url | quote }}
+
+  # PBF filename on FSx — useful for debugging.
+  OVERPASS_PBF_FILENAME: {{ include "overpass-api.pbfFilename" . | quote }}

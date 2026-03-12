@@ -1,0 +1,106 @@
+---
+# Job: {{ .Release.Name }}-download
+#
+# Downloads the OSM PBF file from pbf.url to the FSx volume.
+# Runs as a post-install/post-upgrade hook before the init job.
+#
+# Idempotent: skips download if the PBF file already exists on FSx.
+# To force re-download: delete this job and run helm upgrade.
+#
+# Istio sidecar is disabled on this pod so that outbound HTTPS traffic
+# to Geofabrik or other PBF hosts is not intercepted by the Istio proxy.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-download
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "overpass-api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: download-job
+  annotations:
+    # Hook ordering: download (weight 0) runs before init (weight 1).
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ .Values.jobTimeouts.downloadSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "overpass-api.labels" . | nindent 8 }}
+        app.kubernetes.io/component: download-job
+      annotations:
+        sidecar.istio.io/inject: "false"
+        karpenter.sh/do-not-disrupt: "true"
+    spec:
+      nodeSelector:
+        # Tells the pod to only schedule on this specific Karpenter NodePool
+        karpenter.sh/nodepool: cpu-compute
+
+      tolerations:
+      # Allows the pod to bypass the taint
+      - key: compute-tier
+        operator: Equal
+        value: heavy-cpu
+        effect: NoSchedule
+        
+      restartPolicy: Never
+      volumes:
+        - name: fsx
+          persistentVolumeClaim:
+            claimName: {{ .Values.pvc.fsx }}
+      containers:
+        - name: download
+          image: alpine:3.19
+          imagePullPolicy: IfNotPresent
+          resources:
+            {{- toYaml .Values.resources.download | nindent 12 }}
+          volumeMounts:
+            - name: fsx
+              mountPath: {{ .Values.fsx.mountPath }}
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+
+              PBF_URL="{{ .Values.pbf.url }}"
+              PBF_DIR="{{ .Values.fsx.mountPath }}/{{ .Values.fsx.dbDir }}/{{ .Release.Name }}/pbf"
+              PBF_FILE="{{ include "overpass-api.pbfPath" . }}"
+
+              echo "============================================"
+              echo "Overpass API — PBF Download Job"
+              echo "Release : {{ .Release.Name }}"
+              echo "PBF URL : ${PBF_URL}"
+              echo "Target  : ${PBF_FILE}"
+              echo "============================================"
+
+              # Idempotency check — skip if already downloaded.
+              if [ -f "${PBF_FILE}" ]; then
+                echo "PBF already present at ${PBF_FILE}"
+                echo "Size: $(du -sh ${PBF_FILE} | cut -f1)"
+                echo "Skipping download."
+                exit 0
+              fi
+
+              # Ensure target directory exists.
+              mkdir -p "${PBF_DIR}"
+
+              # Download with progress reporting.
+              # -L follows redirects (required for Geofabrik -latest URLs).
+              # -f fails on HTTP errors (4xx/5xx) rather than saving error HTML.
+              # --retry 3 retries on transient network failures.
+              # --retry-delay 10 waits 10s between retries.
+              echo "Starting download..."
+              wget \
+                -O "${PBF_FILE}.tmp" \
+                "${PBF_URL}"
+
+              # Atomic rename — ensures the init job never sees a partial file.
+              mv "${PBF_FILE}.tmp" "${PBF_FILE}"
+
+              echo ""
+              echo "Download complete."
+              echo "File : ${PBF_FILE}"
+              echo "Size : $(du -sh ${PBF_FILE} | cut -f1)"

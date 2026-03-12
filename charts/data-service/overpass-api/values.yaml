@@ -1,0 +1,157 @@
+# =============================================================================
+# overpass-api Helm chart — default values
+# =============================================================================
+# This chart deploys a single Overpass API instance. Install multiple releases
+# with different pbf.url and release names to run parallel instances.
+#
+# Minimum required override per release:
+#   pbf.url — the fully-qualified URL to the OSM PBF file to use.
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Target namespace.
+# All resources are created in this namespace.
+# -----------------------------------------------------------------------------
+namespace: kubeflow-user-example-com
+
+# -----------------------------------------------------------------------------
+# PVC configuration.
+# Both PVCs must already be Bound in the target namespace before helm install.
+# -----------------------------------------------------------------------------
+pvc:
+  # FSx for Lustre PVC — used for PBF storage and Overpass database.
+  # High-throughput sequential I/O makes FSx ideal for Overpass init.
+  fsx: pv-fsx
+  # EFS PVC — available for agent output files and notebook workspaces.
+  # Not mounted by this chart but documented here for reference.
+  efs: pv-efs
+
+# -----------------------------------------------------------------------------
+# FSx mount path inside pods.
+# Must match the mountPath used by the FSx CSI driver in this cluster.
+# -----------------------------------------------------------------------------
+fsx:
+  mountPath: /fsx
+  # Subdirectory on FSx where Overpass databases are stored.
+  # Each release gets its own subdirectory: <dbDir>/<Release.Name>/
+  dbDir: home/overpass-db
+
+efs:
+  mountPath: /efs
+  dbDir: home/overpass-db
+
+ebs:
+  mountPath: /db
+  storage: 100Gi
+
+# -----------------------------------------------------------------------------
+# PBF source configuration.
+# url: fully-qualified HTTPS URL to the OSM PBF file.
+#   - For Geofabrik regions: https://download.geofabrik.de/<region>-<date>.osm.pbf
+#   - For planet: https://planet.openstreetmap.org/pbf/planet-latest.osm.pbf
+#   - Geofabrik redirects -latest URLs to the current dated file automatically.
+#
+# filenameOverride: if set, the PBF is saved to this filename on FSx.
+#   If unset, the filename is derived from the last path segment of the URL.
+#   Useful when the URL contains a redirect or query string.
+# -----------------------------------------------------------------------------
+pbf:
+  url: "https://planet.openstreetmap.org/pbf/planet-latest.osm.pbf"
+  filenameOverride: ""
+
+# -----------------------------------------------------------------------------
+# Overpass API image.
+# wiktorn/overpass-api is the most actively maintained community image
+# for the Overpass API server.
+# -----------------------------------------------------------------------------
+image:
+  repository: wiktorn/overpass-api
+  tag: "0.7.62"
+  pullPolicy: IfNotPresent
+
+# -----------------------------------------------------------------------------
+# Overpass database initialization options.
+# Passed to the wiktorn/overpass-api entrypoint via environment variables.
+#
+# meta:
+#   "no"    — no metadata stored (smaller DB, faster init) [default]
+#   "yes"   — stores editor metadata per object (larger DB)
+#   "attic" — stores full version history (requires .osh.pbf history file)
+#
+# compression:
+#   "gz"  — gzip compression [default]
+#   "lz4" — faster reads, slightly larger files
+#   "no"  — no compression, fastest reads, largest files
+# -----------------------------------------------------------------------------
+overpass:
+  meta: "no"
+  compression: "gz"
+  # Maximum number of parallel Overpass dispatcher rules.
+  # 10 is sufficient for workshop use (single-user per instance).
+  rulesLoad: 10
+
+# -----------------------------------------------------------------------------
+# Resource profiles.
+#
+# download: the Job that fetches the PBF via curl.
+#   Mostly network-bound; minimal CPU/memory needed.
+#
+# init: the Job that builds the Overpass database from the PBF.
+#   CPU and memory intensive — scales with PBF size.
+#   Planet: needs ~32Gi RAM. Germany: ~4Gi RAM. Bayern: ~1Gi RAM.
+#
+# serve: the running Deployment that handles query traffic.
+#   Memory scales with database size. Germany: ~3Gi. Planet: ~24Gi+.
+# -----------------------------------------------------------------------------
+resources:
+  download:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  init:
+    requests:
+      memory: "4Gi"
+      cpu: "2"
+    limits:
+      memory: "14Gi"
+      cpu: "4"
+  serve:
+    requests:
+      memory: "2Gi"
+      cpu: "500m"
+    limits:
+      memory: "3Gi"
+      cpu: "2"
+
+# -----------------------------------------------------------------------------
+# Readiness and liveness probe configuration.
+# Overpass takes 30-90s to become ready after pod start depending on DB size.
+# Increase initialDelaySeconds for larger databases (planet: 300+).
+# -----------------------------------------------------------------------------
+probes:
+  readiness:
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    failureThreshold: 20
+  liveness:
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    failureThreshold: 5
+
+# -----------------------------------------------------------------------------
+# Job timeout configuration.
+# downloadTimeoutSeconds: maximum time allowed for PBF download.
+#   Planet (~85GB): allow 7200s (2h). Germany (~4.4GB): 1800s is sufficient.
+# initTimeoutSeconds: maximum time allowed for Overpass database init.
+#   Planet: allow 14400s (4h). Germany: 3600s. Bayern: 1800s.
+# pbfWaitTimeoutSeconds: how long the init job waits for the download job
+#   to write the PBF to FSx before giving up.
+# -----------------------------------------------------------------------------
+jobTimeouts:
+  downloadSeconds: 7200
+  initSeconds: 14400
+  pbfWaitSeconds: 900

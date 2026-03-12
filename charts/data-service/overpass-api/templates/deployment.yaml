@@ -1,0 +1,140 @@
+---
+# Deployment: {{ .Release.Name }}
+#
+# Serves Overpass API queries against the initialized database on FSx.
+#
+# Uses the wiktorn/overpass-api entrypoint in serve mode (no re-download,
+# no re-init). The FSx per-release subdirectory is mounted as /db, which
+# is where the entrypoint expects to find /db/db/ (the Overpass database).
+#
+# Does not start serving until the database initialization job has written
+# nodes.bin to /db/db/ on FSx (enforced by the wait-for-db initContainer).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "overpass-api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: overpass-server
+  annotations:
+    overpass-api/pbf-url: {{ .Values.pbf.url | quote }}
+    overpass-api/pbf-filename: {{ include "overpass-api.pbfFilename" . | quote }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "overpass-api.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "overpass-api.labels" . | nindent 8 }}
+        app.kubernetes.io/component: overpass-server
+      annotations:
+        karpenter.sh/do-not-disrupt: "true"
+        sidecar.istio.io/inject: 'false'
+    spec:
+      nodeSelector:
+        # Tells the pod to only schedule on this specific Karpenter NodePool
+        karpenter.sh/nodepool: cpu-compute
+
+      tolerations:
+      # Allows the pod to bypass the taint
+      - key: compute-tier
+        operator: Equal
+        value: heavy-cpu
+        effect: NoSchedule
+        
+      volumes:
+        - name: efs
+          persistentVolumeClaim:
+            claimName: {{ .Values.pvc.efs }}
+        - name: ebs
+          ephemeral:
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: {{ .Values.ebs.storage }}
+                storageClassName: ebs-sc-wait
+
+      initContainers:
+        - name: prepare-db
+          image: busybox:1.36
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          volumeMounts:
+            - name: efs
+              mountPath: /efs-db
+              subPath: {{ .Values.efs.dbDir }}/{{ .Release.Name }}
+            - name: ebs
+              mountPath: {{ .Values.ebs.mountPath }}
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for Overpass database to be ready..."
+              until [ "$(cat /efs-db/.init-status 2>/dev/null)" = "ALREADY_INITIALIZED" ]; do
+                echo "  Database not ready — retrying in 60s"
+                echo "  Hint: check init job status with:"
+                echo "    kubectl logs -n {{ .Values.namespace }} job/{{ .Release.Name }}-init -c overpass-init"
+                sleep 60
+              done
+              echo "Archive found: $(du -sh /efs-db/db.tar.gz | cut -f1)"
+              echo "Extracting to local volume..."
+              mkdir -p /db/db
+              tar -xzf /efs-db/db.tar.gz -C /db/db
+              chown -R 1000:1000 /db/db/
+              echo "Extraction complete: $(du -sh /db/db/ | cut -f1)"
+
+      containers:
+        - name: overpass
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          env:
+            - name: OVERPASS_META
+              value: {{ .Values.overpass.meta | quote }}
+            # serve mode: entrypoint skips init and download, goes straight
+            # to starting nginx + dispatcher against the existing /db/db/.
+            - name: OVERPASS_MODE
+              value: "none"
+            - name: OVERPASS_RULES_LOAD
+              value: {{ .Values.overpass.rulesLoad | quote }}
+            # Disable diff fetching — static database for workshop use.
+            # Setting OVERPASS_DIFF_URL to empty prevents the fetch_diff
+            # supervisor process from running and failing.
+            - name: OVERPASS_DIFF_URL
+              value: ""
+            - name: OVERPASS_STOP_AFTER_INIT
+              value: "false"
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: /api/status
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          resources:
+            {{- toYaml .Values.resources.serve | nindent 12 }}
+          volumeMounts:
+            - name: ebs
+              mountPath: {{ .Values.ebs.mountPath }}

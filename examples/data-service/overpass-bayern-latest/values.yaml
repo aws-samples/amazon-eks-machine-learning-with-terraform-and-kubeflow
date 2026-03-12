@@ -1,0 +1,64 @@
+# =============================================================================
+# overpass-bayern-latest — example values
+# =============================================================================
+# Deploys an Overpass API instance loaded with the bayern, Germany OSM extract
+# dated March 9, 2026 (Geofabrik snapshot: bayern-latest.osm.pbf).
+#
+# Install:
+#   helm install overpass-bayern-latest \
+#     ../../charts/data-service/overpass-api \
+#     --namespace kubeflow-user-example-com \
+#     -f values.yaml
+#
+# Endpoint after install:
+#   http://overpass-bayern-latest.kubeflow-user-example-com.svc.cluster.local/api/interpreter
+# =============================================================================
+
+namespace: kubeflow-user-example-com
+
+pbf:
+  # Geofabrik bayern extract, March 9 2026 snapshot.
+  # File size: ~600MB. Download time: ~1-2 min depending on bandwidth.
+  url: "https://download.geofabrik.de/europe/germany/bayern-latest.osm.pbf"
+
+overpass:
+  meta: "no"
+  compression: "gz"
+
+resources:
+  download:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  init:
+    requests:
+      memory: "4Gi"
+      cpu: "2"
+    limits:
+      memory: "6Gi"
+      cpu: "4"
+  serve:
+    requests:
+      memory: "2Gi"
+      cpu: "500m"
+    limits:
+      memory: "3Gi"
+      cpu: "2"
+
+jobTimeouts:
+  downloadSeconds: 1800
+  initSeconds: 3600
+  pbfWaitSeconds: 900
+
+probes:
+  readiness:
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    failureThreshold: 20
+  liveness:
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    failureThreshold: 5

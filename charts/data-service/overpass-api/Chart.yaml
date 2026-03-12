@@ -1,0 +1,28 @@
+apiVersion: v2
+name: overpass-api
+description: >
+  Deploys a single self-contained Overpass API instance backed by a
+  pre-downloaded OSM PBF file. Downloads the PBF from a configurable URL
+  at install time, initializes the Overpass database on a persistent FSx
+  volume, and exposes a ClusterIP service for in-cluster queries.
+
+  Designed for use with AWS EKS clusters where:
+    - An FSx for Lustre PVC is pre-bound in the target namespace
+    - Istio sidecar injection is active in the namespace
+    - Outbound HTTPS access is available from pods with Istio sidecar disabled
+
+  Install multiple releases of this chart (with different PBF URLs and
+  release names) to run multiple independent Overpass instances side by side.
+
+type: application
+version: 0.1.0
+appVersion: "0.7.62"
+keywords:
+  - overpass
+  - openstreetmap
+  - osm
+  - geospatial
+  - data-service
+maintainers:
+  - name: aws-samples
+    url: https://github.com/aws-samples/amazon-eks-machine-learning-with-terraform-and-kubeflow
