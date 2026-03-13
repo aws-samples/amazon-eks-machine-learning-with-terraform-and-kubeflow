@@ -313,6 +313,7 @@ User can enable or disable optional modular components via Terraform variables:
 |-----------|----------|---------|
 | [Airflow](https://airflow.apache.org/) | airflow_enabled | false |
 | [kagent](https://github.com/kagent-dev/kagent) | kagent_enabled | false |
+| [kmcp](https://github.com/kagent-dev/kmcp) | kmcp_enabled | false |
 | [Capacity Reservations](https://karpenter.sh/docs/tasks/odcrs/) (ODCR / Capacity Blocks, cudaefa only) | karpenter_cr_enabled | false |
 | [Kubeflow](https://www.kubeflow.org/) | kubeflow_platform_enabled | false |
 | [KServe](https://kserve.github.io/website/latest/) | kserve_enabled | false |

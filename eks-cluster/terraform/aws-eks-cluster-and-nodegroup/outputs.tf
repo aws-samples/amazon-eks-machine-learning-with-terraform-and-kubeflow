@@ -108,3 +108,17 @@ output "kagent_database_endpoint" {
   description = "PostgreSQL database endpoint for kagent (if using postgresql)"
   value       = var.kagent_enabled && var.kagent_database_type == "postgresql" ? module.kagent[0].database_endpoint : null
 }
+
+#---------------------------------------------------------------
+# kmcp Outputs
+#---------------------------------------------------------------
+
+output "kmcp_namespace" {
+  description = "kmcp Kubernetes namespace"
+  value       = var.kmcp_enabled ? module.kmcp[0].namespace : null
+}
+
+output "kmcp_metrics_access_command" {
+  description = "kubectl port-forward command to access kmcp metrics"
+  value       = var.kmcp_enabled ? module.kmcp[0].metrics_access_command : null
+}

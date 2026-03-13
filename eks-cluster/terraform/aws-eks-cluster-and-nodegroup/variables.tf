@@ -687,4 +687,38 @@ variable "kagent_enable_istio_injection" {
   default     = false
 }
 
+#---------------------------------------------------------------
+# kmcp - Kubernetes MCP Server Controller
+#---------------------------------------------------------------
+
+variable "kmcp_enabled" {
+  description = "Enable kmcp (Kubernetes MCP Server Controller) deployment"
+  type        = bool
+  default     = false
+}
+
+variable "kmcp_namespace" {
+  description = "Kubernetes namespace for kmcp"
+  type        = string
+  default     = "kmcp-system"
+}
+
+variable "kmcp_version" {
+  description = "kmcp Helm chart version"
+  type        = string
+  default     = "0.1.4"
+}
+
+variable "kmcp_controller_replicas" {
+  description = "Number of kmcp controller replicas"
+  type        = number
+  default     = 1
+}
+
+variable "kmcp_enable_istio_injection" {
+  description = "Enable Istio sidecar injection for kmcp namespace"
+  type        = bool
+  default     = false
+}
+
 # END variables
