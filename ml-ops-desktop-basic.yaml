@@ -493,7 +493,7 @@ Resources:
 
                   if [ ! -x "$(command -v claude)" ]; then
                     echo "Installing Claude Code CLI..."
-                    sudo -u ubuntu bash -c "curl -fsSL https://claude.ai/install.sh | bash"
+                    sudo -u ubuntu bash -c 'curl -fsSL -A "Mozilla/5.0" https://claude.ai/install.sh | bash'
                     ln -s /home/ubuntu/.local/bin/claude /usr/local/bin/claude
 
                     # Verify installation
