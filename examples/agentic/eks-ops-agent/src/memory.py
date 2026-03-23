@@ -1,26 +1,37 @@
 """
-Module 3: Long-term Memory with Redis
+Module 3: Long-term Memory with Engram
 
-This module provides persistent storage for user defaults (cluster, namespace)
-that survive across chat sessions. When a user sets defaults, they are stored
-in Redis and automatically retrieved in future sessions.
+This module provides persistent, searchable memory for the EKS Ops Agent
+using engram backed by PostgreSQL+pgvector (Aurora or in-cluster Postgres).
 
-Redis schema:
-    Key:   user:{user_id}:defaults
-    Value: JSON {"cluster": "eks-1", "namespace": "default"}
+Two categories of memory:
+1. User defaults — key-value storage for cluster/namespace preferences
+   (backward-compatible with the original Redis implementation)
+2. Semantic memory — vector-indexed knowledge that the agent can search
+   (incidents, runbooks, operational learnings)
+
+Engram schema:
+    Namespace: /users/{user_id}/defaults  — user preferences
+    Namespace: /incidents/{cluster}       — incident history
+    Namespace: /runbooks                  — operational procedures
+    Namespace: /learnings                 — agent's accumulated knowledge
 
 Usage:
-    memory = MemoryService(redis_url="redis://localhost:6379")
+    memory = MemoryService(pg_connection_string="postgresql://...")
+    await memory.initialize()
     await memory.set_defaults(user_id, cluster="eks-1", namespace="default")
     defaults = await memory.get_defaults(user_id)
+    await memory.remember("OOM kills caused by pool leak", namespace="/incidents/eks-1")
+    results = await memory.recall("memory issues", namespace="/incidents")
 """
 
-import json
 import logging
-from typing import Optional
+from typing import Any, Optional
 
-import redis.asyncio as redis
 from langchain_core.tools import tool
+
+from engram import Engram, RecordType
+from engram.models import EmbeddingConfig
 
 logger = logging.getLogger(__name__)
 
@@ -62,48 +73,56 @@ class UserDefaults:
 
 class MemoryService:
     """
-    Redis-backed memory service for user defaults.
+    Engram-backed memory service for the EKS Ops Agent.
 
-    Provides simple get/set operations for user preferences that
-    persist across chat sessions.
+    Provides:
+    - User defaults (cluster/namespace preferences) via engram records
+    - Semantic memory (searchable operational knowledge) via vector search
     """
 
-    def __init__(self, redis_url: str):
-        """
-        Initialize the memory service.
+    def __init__(
+        self,
+        pg_connection_string: str,
+        embedding_provider: str = "bedrock",
+        embedding_model: str = "amazon.titan-embed-text-v2:0",
+        embedding_dimensions: int = 1024,
+    ):
+        self._pg_connection_string = pg_connection_string
+        self._embedding_config = EmbeddingConfig(
+            provider=embedding_provider,
+            model=embedding_model,
+            dimensions=embedding_dimensions,
+        )
+        self._engram: Optional[Engram] = None
 
-        Args:
-            redis_url: Redis connection URL (e.g., "redis://localhost:6379")
-        """
-        self.redis_url = redis_url
-        self._client: Optional[redis.Redis] = None
+    async def initialize(self) -> None:
+        """Initialize the engram connection. Must be called before use."""
+        self._engram = await Engram.create(
+            backend_name="pgvector",
+            connection_string=self._pg_connection_string,
+            embedding_config=self._embedding_config,
+        )
+        logger.info("MemoryService initialized with engram (pgvector)")
 
-    async def _get_client(self) -> redis.Redis:
-        """Get or create Redis client."""
-        if self._client is None:
-            self._client = redis.from_url(self.redis_url, decode_responses=True)
-        return self._client
-
-    def _defaults_key(self, user_id: str) -> str:
-        """Generate Redis key for user defaults."""
-        return f"user:{user_id}:defaults"
+    def _defaults_ns(self, user_id: str) -> str:
+        """Namespace for user defaults."""
+        return f"/users/{user_id}/defaults"
 
     async def get_defaults(self, user_id: str) -> UserDefaults:
-        """
-        Retrieve user's default settings.
+        """Retrieve user's default settings from engram."""
+        if self._engram is None:
+            raise RuntimeError("MemoryService not initialized. Call initialize() first.")
 
-        Args:
-            user_id: User identifier from kagent session
-
-        Returns:
-            UserDefaults with cluster/namespace if set, empty otherwise
-        """
         try:
-            client = await self._get_client()
-            data = await client.get(self._defaults_key(user_id))
+            results = await self._engram.search(
+                query="user default cluster namespace",
+                namespace=self._defaults_ns(user_id),
+                top_k=1,
+            )
 
-            if data:
-                defaults = UserDefaults.from_dict(json.loads(data))
+            if results.records:
+                metadata = results.records[0].metadata
+                defaults = UserDefaults.from_dict(metadata)
                 logger.info(f"Retrieved defaults for user {user_id}: {defaults}")
                 return defaults
 
@@ -120,21 +139,12 @@ class MemoryService:
         cluster: Optional[str] = None,
         namespace: Optional[str] = None,
     ) -> UserDefaults:
-        """
-        Save user's default settings.
+        """Save user's default settings to engram."""
+        if self._engram is None:
+            raise RuntimeError("MemoryService not initialized. Call initialize() first.")
 
-        Args:
-            user_id: User identifier from kagent session
-            cluster: Default EKS cluster name
-            namespace: Default Kubernetes namespace
-
-        Returns:
-            Updated UserDefaults
-        """
         try:
-            client = await self._get_client()
-
-            # Get existing defaults and merge with new values
+            # Get existing defaults and merge
             existing = await self.get_defaults(user_id)
 
             if cluster is not None:
@@ -142,10 +152,17 @@ class MemoryService:
             if namespace is not None:
                 existing.namespace = namespace
 
-            # Save to Redis
-            await client.set(
-                self._defaults_key(user_id),
-                json.dumps(existing.to_dict()),
+            # Use a stable record ID so we overwrite rather than duplicate
+            record_id = f"defaults-{user_id}"
+            content = f"User defaults: {existing}"
+
+            await self._engram.add(
+                content=content,
+                record_type=RecordType.SEMANTIC,
+                namespace=self._defaults_ns(user_id),
+                metadata=existing.to_dict(),
+                record_id=record_id,
+                user_id=user_id,
             )
 
             logger.info(f"Saved defaults for user {user_id}: {existing}")
@@ -156,25 +173,61 @@ class MemoryService:
             raise
 
     async def clear_defaults(self, user_id: str) -> None:
-        """
-        Clear user's default settings.
+        """Clear user's default settings."""
+        if self._engram is None:
+            raise RuntimeError("MemoryService not initialized. Call initialize() first.")
 
-        Args:
-            user_id: User identifier from kagent session
-        """
         try:
-            client = await self._get_client()
-            await client.delete(self._defaults_key(user_id))
+            record_id = f"defaults-{user_id}"
+            await self._engram.delete(record_id)
             logger.info(f"Cleared defaults for user {user_id}")
 
         except Exception as e:
             logger.warning(f"Failed to clear defaults for user {user_id}: {e}")
 
+    async def remember(
+        self,
+        content: str,
+        namespace: str = "/learnings",
+        record_type: RecordType = RecordType.SEMANTIC,
+        metadata: Optional[dict[str, Any]] = None,
+        **typed_fields: Any,
+    ) -> str:
+        """Store a memory for future recall. Returns the record ID."""
+        if self._engram is None:
+            raise RuntimeError("MemoryService not initialized. Call initialize() first.")
+
+        return await self._engram.add(
+            content=content,
+            record_type=record_type,
+            namespace=namespace,
+            metadata=metadata or {},
+            **typed_fields,
+        )
+
+    async def recall(
+        self,
+        query: str,
+        namespace: Optional[str] = None,
+        top_k: int = 5,
+        record_type: Optional[RecordType] = None,
+    ):
+        """Search memories by semantic similarity."""
+        if self._engram is None:
+            raise RuntimeError("MemoryService not initialized. Call initialize() first.")
+
+        return await self._engram.search(
+            query=query,
+            namespace=namespace,
+            top_k=top_k,
+            record_type=record_type,
+        )
+
     async def close(self) -> None:
-        """Close Redis connection."""
-        if self._client:
-            await self._client.close()
-            self._client = None
+        """Close engram connection."""
+        if self._engram:
+            await self._engram.close()
+            self._engram = None
 
 
 # --- Memory Tools for the Agent ---
@@ -265,6 +318,116 @@ async def clear_user_defaults() -> str:
         return f"Failed to clear defaults: {str(e)}"
 
 
+@tool
+async def remember_knowledge(
+    content: str,
+    namespace: str = "/learnings",
+    record_type: str = "semantic",
+    metadata: Optional[dict] = None,
+) -> str:
+    """
+    Store operational knowledge in long-term memory for future recall.
+
+    Use this after resolving an incident, discovering a useful pattern, or
+    learning something about the cluster that should be remembered.
+
+    Args:
+        content: What to remember. Be specific and include context.
+            Good: "EKS cluster eks-prod OOM kills caused by HikariCP pool leak. Fix: set maxPoolSize=50"
+            Bad: "Fixed a bug"
+        namespace: Category path for organizing memories.
+            /incidents/{cluster} — incident resolutions
+            /runbooks — operational procedures
+            /learnings — general knowledge
+        record_type: Type of memory - 'semantic' (facts), 'episodic' (events), 'procedural' (how-to)
+        metadata: Optional key-value pairs (e.g. {"severity": "P1", "cluster": "eks-prod"})
+
+    Returns:
+        Confirmation with the stored memory ID
+    """
+    if _memory_service is None:
+        return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
+
+    try:
+        rt = RecordType(record_type)
+        record_id = await _memory_service.remember(
+            content=content,
+            namespace=namespace,
+            record_type=rt,
+            metadata=metadata or {},
+        )
+        return f"Stored {record_type} memory [{record_id[:8]}]: {content[:100]}"
+
+    except Exception as e:
+        logger.error(f"Failed to store memory: {e}")
+        return f"Failed to store memory: {str(e)}"
+
+
+@tool
+async def recall_knowledge(
+    query: str,
+    namespace: Optional[str] = None,
+    top_k: int = 5,
+) -> str:
+    """
+    Search long-term memory for relevant past knowledge.
+
+    Use this BEFORE starting any diagnostic or troubleshooting task to check
+    if similar issues have been seen before. Also use when the user asks
+    about past incidents or operational history.
+
+    Args:
+        query: What to search for (natural language description)
+            Examples: "OOM kills in payment service", "how to upgrade EKS version"
+        namespace: Optional scope to narrow search
+            /incidents — search all incident history
+            /incidents/eks-prod — search specific cluster incidents
+            /runbooks — search procedures
+            None — search everything
+        top_k: Number of results to return
+
+    Returns:
+        Matching memories with relevance scores, or "No relevant memories found"
+    """
+    if _memory_service is None:
+        return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
+
+    try:
+        results = await _memory_service.recall(
+            query=query,
+            namespace=namespace,
+            top_k=top_k,
+        )
+
+        if not results.records:
+            return "No relevant memories found."
+
+        lines = []
+        for i, rec in enumerate(results.records, 1):
+            score_str = f" (score: {rec.score:.3f})" if rec.score else ""
+            type_str = f" [{rec.record_type.value}]"
+            meta_str = f" | metadata: {rec.metadata}" if rec.metadata else ""
+            lines.append(
+                f"{i}. [{rec.namespace}]{type_str}{score_str}: {rec.content}{meta_str}"
+            )
+
+        return (
+            f"Found {len(results.records)} memories "
+            f"(search took {results.search_time_ms}ms):\n"
+            + "\n".join(lines)
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to recall memories: {e}")
+        return f"Failed to search memory: {str(e)}"
+
+
 def get_memory_tools() -> list:
     """Get the list of memory tools for the agent."""
-    return [set_user_defaults, get_user_defaults, clear_user_defaults]
+    return [
+        set_user_defaults,
+        get_user_defaults,
+        clear_user_defaults,
+        remember_knowledge,
+        recall_knowledge,
+    ]

@@ -11,7 +11,7 @@ Module 2 adds:
 5. Load EKS MCP Server tools for cluster operations
 
 Module 3 adds:
-6. Long-term memory via Redis for user defaults (cluster, namespace)
+6. Long-term memory via Engram (pgvector) for user defaults and semantic knowledge
 """
 
 import asyncio
@@ -83,6 +83,8 @@ def load_memory_tools() -> list:
     """
     Load memory tools if enabled.
 
+    Uses engram with pgvector for persistent, searchable memory.
+
     Returns:
         List of memory tools, or empty list if disabled.
     """
@@ -90,19 +92,31 @@ def load_memory_tools() -> list:
         logger.info("Memory disabled (set ENABLE_MEMORY=true to enable)")
         return []
 
+    if not app_config.ENGRAM_PG_URL:
+        logger.warning("Memory enabled but ENGRAM_PG_URL not set. Memory disabled.")
+        return []
+
     try:
         from memory import MemoryService, get_memory_tools, set_memory_service
 
-        # Initialize memory service
-        memory_service = MemoryService(redis_url=app_config.REDIS_URL)
+        # Initialize memory service with engram
+        memory_service = MemoryService(
+            pg_connection_string=app_config.ENGRAM_PG_URL,
+            embedding_provider=app_config.ENGRAM_EMBEDDING_PROVIDER,
+            embedding_model=app_config.ENGRAM_EMBEDDING_MODEL,
+            embedding_dimensions=app_config.ENGRAM_EMBEDDING_DIMENSIONS,
+        )
+
+        # Initialize engram connection (async)
+        asyncio.run(memory_service.initialize())
         set_memory_service(memory_service)
 
-        logger.info(f"Memory enabled (Redis: {app_config.REDIS_URL})")
+        logger.info(f"Memory enabled (engram pgvector: {app_config.ENGRAM_PG_URL.split('@')[-1] if '@' in app_config.ENGRAM_PG_URL else 'configured'})")
         return get_memory_tools()
 
     except ImportError as e:
         logger.warning(f"Memory dependencies not installed: {e}")
-        logger.info("Install with: pip install 'eks-ops-agent[memory]'")
+        logger.info("Install with: pip install engram[pgvector,bedrock]")
         return []
     except Exception as e:
         logger.error(f"Failed to initialize memory: {e}")

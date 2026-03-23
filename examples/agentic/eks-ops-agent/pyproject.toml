@@ -20,9 +20,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Module 3: Memory
+# Module 3: Memory (engram with pgvector + Bedrock embeddings)
 memory = [
-    "redis>=5.0.0",
+    "engram[pgvector,bedrock]",
 ]
 # Module 4: Observability
 observability = [

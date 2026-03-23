@@ -26,8 +26,14 @@ class Config:
         "KAGENT_URL", "http://kagent-controller.kagent.svc.cluster.local:8083"
     )
 
-    # Redis (long-term memory) - Module 3
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
+    # Engram (persistent memory) - Module 3
+    # Connection string to PostgreSQL+pgvector (Aurora or in-cluster Postgres)
+    ENGRAM_PG_URL: str = os.getenv("ENGRAM_PG_URL", "")
+
+    # Embedding config for engram
+    ENGRAM_EMBEDDING_PROVIDER: str = os.getenv("ENGRAM_EMBEDDING_PROVIDER", "bedrock")
+    ENGRAM_EMBEDDING_MODEL: str = os.getenv("ENGRAM_EMBEDDING_MODEL", "amazon.titan-embed-text-v2:0")
+    ENGRAM_EMBEDDING_DIMENSIONS: int = int(os.getenv("ENGRAM_EMBEDDING_DIMENSIONS", "1024"))
 
     # Langfuse (observability) - Module 4
     LANGFUSE_PUBLIC_KEY: str = os.getenv("LANGFUSE_PUBLIC_KEY", "")
