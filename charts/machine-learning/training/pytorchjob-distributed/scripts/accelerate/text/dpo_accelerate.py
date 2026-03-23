@@ -31,7 +31,7 @@ def find_latest_converted_checkpoint(checkpoints_dir: str) -> str:
     
     converted_ckpts = []
     for d in ckpt_dir_path.glob("checkpoint-*"):
-        if d.is_dir() and re.search(r'\.(hf_model|hf_peft)$', d.name):
+        if d.is_dir() and re.search(r'\.(hf_model|hf_peft)', d.name):
             match = re.match(r'checkpoint-(\d+)', d.name)
             if match:
                 converted_ckpts.append((int(match.group(1)), str(d)))
@@ -325,7 +325,7 @@ class DPOConfig:
     
     def __post_init__(self):
         if self.sft_model_path is None:
-            checkpoints_dir = f"results/{self.hf_model_id}"
+            checkpoints_dir = str(Path.home() / f"results/{self.hf_model_id}")
             self.sft_model_path = find_latest_converted_checkpoint(checkpoints_dir)
             print(f"Using SFT checkpoint: {self.sft_model_path}")
         
@@ -336,10 +336,10 @@ class DPOConfig:
             remaining_pct = 100 - train_pct
             val_pct = int(remaining_pct * (1 - self.rm_dataset_config.val_test_split_ratio))
             test_pct = remaining_pct - val_pct
-            self.data_dir = f"datasets/{dataset_name}/{dataset_config}/train={train_pct}%-val={val_pct}%-test={test_pct}%"
+            self.data_dir = str(Path.home() / f"datasets/{dataset_name}/{dataset_config}/train={train_pct}%-val={val_pct}%-test={test_pct}%")
         
         if self.output_dir is None:
-            self.output_dir = f"results/dpo_{self.hf_model_id}"
+            self.output_dir = str(Path.home() / f"results/dpo_{self.hf_model_id}")
 
 
 def compute_log_probs(model, input_ids, attention_mask, prompt_mask=None):
@@ -534,19 +534,18 @@ def train(config: DPOConfig):
         
         peft_config = LoraConfig(
             r=config.lora_rank,
-            lora_alpha=config.lora_alpha,  # Try setting this to 16 instead of 32
+            lora_alpha=config.lora_alpha,
             lora_dropout=config.lora_dropout,
             target_modules=config.lora_target_modules,
             bias="none",
             task_type="CAUSAL_LM",
-            init_lora_weights="gaussian",  # Explicitly set Gaussian init
+            init_lora_weights="gaussian",
         )
         policy_model = get_peft_model(policy_model, peft_config)
         policy_model = policy_model.to(torch.bfloat16)
         
         for name, param in policy_model.named_parameters():
             if 'lora_B' in name and param.requires_grad:
-                # Initialize LoRA B with small random values instead of zeros
                 torch.nn.init.normal_(param, mean=0.0, std=0.02)
 
         if accelerator.is_main_process:
@@ -554,7 +553,6 @@ def train(config: DPOConfig):
 
     
     # Initialize frozen reference model π_ref
-    # IMPORTANT: We'll load the reference model from the same checkpoint but BEFORE applying LoRA
     if accelerator.is_main_process:
         print("Loading reference model (frozen)...")
     
@@ -602,14 +600,11 @@ def train(config: DPOConfig):
         num_training_steps=config.max_steps,
     )
     
-    # CRITICAL: Prepare both models together with accelerator
-    # The key is that we set requires_grad=False AFTER accelerator.prepare()
-    # This way FSDP shards both models, but only policy gets gradients
+    # Prepare both models together with accelerator
     policy_model, ref_model, optimizer, train_dataloader, eval_dataloader, lr_scheduler = accelerator.prepare(
         policy_model, ref_model, optimizer, train_dataloader, eval_dataloader, lr_scheduler
     )
     
-
     # Make sure reference model stays frozen even after prepare
     ref_model.eval()
     for param in ref_model.parameters():
@@ -852,7 +847,6 @@ def train(config: DPOConfig):
                 save_path = Path(config.output_dir) / f"checkpoint-{global_step}"
                 save_path.mkdir(parents=True, exist_ok=True)
                 
-                # Use accelerator.save_model() instead
                 accelerator.save_model(policy_model, save_path)
                 
                 if accelerator.is_main_process:
@@ -871,7 +865,6 @@ def train(config: DPOConfig):
     final_path = Path(config.output_dir) / "final"
     final_path.mkdir(parents=True, exist_ok=True)
 
-    # Use accelerator.save_model() which handles FSDP correctly
     accelerator.save_model(policy_model, final_path)
 
     if accelerator.is_main_process:

@@ -1,12 +1,10 @@
 import torch
 import argparse
 import os
-import re
 from pathlib import Path
 from dataclasses import dataclass, fields, MISSING
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from peft import get_peft_model, LoraConfig, TaskType
-
+import ray
 
 @dataclass
 class Config:
@@ -14,9 +12,9 @@ class Config:
     model_path: str = None
     base_model: str = "Qwen/Qwen3-8B"
     checkpoints_dir: str = None
+    full_ft: bool = False
     
     # LoRA settings
-    full_ft: bool = False
     lora_rank: int = 32
     lora_alpha: int = 32
     lora_dropout: float = 0.1
@@ -29,15 +27,29 @@ class Config:
     def checkpoint_path(self) -> str:
         """Find the latest checkpoint in the checkpoints directory."""
         ckpt_dir_path = Path(self.checkpoints_dir)
-        # Look for checkpoint-* directories (exclude converted ones)
+        
+        # Look for checkpoint_* directories, potentially nested under TorchTrainer_* dirs
         ckpt_dirs = []
-        for d in ckpt_dir_path.glob("checkpoint-*"):
-            if d.is_dir() and not re.search(r'\.(hf_model|hf_peft|merged)$', d.name):
-                ckpt_dirs.append(d)
-        ckpt_dirs = sorted(ckpt_dirs, key=lambda p: int(p.name.split('-')[1]))
+        
+        # First, check if there are TorchTrainer_* directories (Ray Train structure)
+        trainer_dirs = list(ckpt_dir_path.glob("TorchTrainer_*"))
+        if trainer_dirs:
+            # Sort trainer directories by modification time and get the latest
+            latest_trainer_dir = max(trainer_dirs, key=lambda p: p.stat().st_mtime)
+            # Look inside the latest trainer directory for checkpoint_* directories
+            ckpt_dirs = [d for d in latest_trainer_dir.glob("checkpoint_*") if d.is_dir()]
+        else:
+            # Fallback: look directly for checkpoint_* directories
+            ckpt_dirs = [d for d in ckpt_dir_path.glob("checkpoint_*") if d.is_dir()]
+        
         if not ckpt_dirs:
             raise FileNotFoundError(f"No checkpoint directories found in {ckpt_dir_path}")
-        return str(ckpt_dirs[-1])
+        
+        # Sort by modification time and get the latest checkpoint
+        latest_ckpt = max(ckpt_dirs, key=lambda p: p.stat().st_mtime)
+        
+        # Return the checkpoint subdirectory inside the Ray checkpoint
+        return str(latest_ckpt / "checkpoint")
                                 
     @property
     def output_dir(self) -> str:
@@ -56,7 +68,7 @@ class Config:
             self.model_path = self.base_model
 
         if self.checkpoints_dir is None:
-            self.checkpoints_dir = str(Path.home() /  f"results/{self.base_model}")
+            self.checkpoints_dir = str(Path.home() / f"results/{self.base_model.replace('/', '-')}")
    
 
 def create_parser_from_dataclass(dataclass_type) -> argparse.ArgumentParser:
@@ -79,7 +91,7 @@ def create_parser_from_dataclass(dataclass_type) -> argparse.ArgumentParser:
             )
     return parser
 
-def convert_accelerate_to_hf(
+def convert_ray_train_to_hf(
     base_model_id: str,
     checkpoint_path: str,
     output_dir: str,
@@ -87,71 +99,67 @@ def convert_accelerate_to_hf(
     config: Config = None,
 ):
     """
-    Convert Accelerate FSDP checkpoint to Hugging Face format.
+    Convert Ray Train FSDP checkpoint to Hugging Face format.
     
     Args:
         base_model_id: Base model ID from HuggingFace
-        checkpoint_path: Path to Accelerate checkpoint directory
+        checkpoint_path: Path to Ray Train checkpoint directory
         output_dir: Directory to save the converted model
         merge_lora: If True, merge LoRA weights into base model (recommended for vLLM)
-                    If False, save as separate LoRA adapter
+                    If False, save as separate LoRA adapter (ignored for full fine-tuning)
     """
-    import torch.distributed.checkpoint as dcp
+    from peft import PeftModel
     
     print(f"\n{'='*80}")
-    print("Converting Accelerate FSDP Checkpoint to Hugging Face Format")
+    print("Converting Ray Train FSDP Checkpoint to Hugging Face Format")
     print(f"{'='*80}\n")
+    
+    model_to_load = config.model_path if config and config.model_path else base_model_id
     
     print(f"Loading checkpoint: {checkpoint_path}")
     print(f"Output directory: {output_dir}")
-    print(f"Merge LoRA weights: {merge_lora}")
+    print(f"Full fine-tuning: {config.full_ft}")
+    if not config.full_ft:
+        print(f"Merge LoRA weights: {merge_lora}")
     print()
     
-    # Load tokenizer
-    print(f"Loading tokenizer from: {base_model_id}")
-    tokenizer = AutoTokenizer.from_pretrained(base_model_id, trust_remote_code=True)
-    
-    # Load base model
-    print(f"Loading base model: {base_model_id}")
-    base_model = AutoModelForCausalLM.from_pretrained(
-        base_model_id,
-        dtype=torch.bfloat16,
-        device_map="auto",
-        trust_remote_code=True,
-    )
-    
-    # Apply LoRA config if not full fine-tuning
-    if not config.full_ft:
-        print("\nApplying LoRA configuration...")
-        peft_config = LoraConfig(
-            task_type=TaskType.CAUSAL_LM,
-            r=config.lora_rank,
-            lora_alpha=config.lora_alpha,
-            lora_dropout=config.lora_dropout,
-            target_modules=[m.strip() for m in config.lora_target_modules.split(',')],
-            bias="none",
-        )
-        model = get_peft_model(base_model, peft_config)
-    else:
-        model = base_model
-    
-    # Load FSDP checkpoint
-    print("Loading FSDP checkpoint weights...")
-    fsdp_checkpoint_dir = Path(checkpoint_path) / "pytorch_model_fsdp_0"
-    state_dict = {}
-    dcp.load(state_dict, checkpoint_id=str(fsdp_checkpoint_dir))
-    model.load_state_dict(state_dict, strict=False)
-    print("✓ Checkpoint loaded")
+    # Load tokenizer from checkpoint
+    print(f"Loading tokenizer from checkpoint...")
+    tokenizer = AutoTokenizer.from_pretrained(checkpoint_path, trust_remote_code=True)
     
     if config.full_ft:
-        # Full fine-tuning: save model directly
-        print(f"\nSaving full fine-tuned model to: {output_dir}")
+        # Full fine-tuning: load model directly from checkpoint
+        print(f"Loading fully fine-tuned model from checkpoint...")
+        model = AutoModelForCausalLM.from_pretrained(
+            checkpoint_path,
+            dtype=torch.bfloat16,
+            device_map="auto",
+            trust_remote_code=True,
+        )
+        print("✓ Checkpoint loaded")
+    else:
+        # LoRA: load base model + adapter
+        print(f"Loading base model: {model_to_load}")
+        base_model = AutoModelForCausalLM.from_pretrained(
+            model_to_load,
+            dtype=torch.bfloat16,
+            device_map="auto",
+            trust_remote_code=True,
+        )
+        
+        print("Loading LoRA adapter from checkpoint...")
+        model = PeftModel.from_pretrained(base_model, checkpoint_path)
+        print("✓ Checkpoint loaded")
+    
+    if config.full_ft:
+        # Full fine-tuning: just save the model
+        print(f"\nSaving fully fine-tuned model to: {output_dir}")
         model.save_pretrained(
             output_dir,
             safe_serialization=True,
         )
         tokenizer.save_pretrained(output_dir)
-        print("✓ Full fine-tuned model saved")
+        print("✓ Model saved")
     elif merge_lora:
         # Merge LoRA weights into base model for vLLM compatibility
         print("\nMerging LoRA weights into base model...")
@@ -196,11 +204,15 @@ def main():
     args = parser.parse_args()
     config = Config.from_args(args)
     
+    # Initialize Ray with runtime_env
+    if not ray.is_initialized():
+        ray.init()
+
     # Create output directory
     os.makedirs(config.output_dir, exist_ok=True)
     
     # Convert
-    convert_accelerate_to_hf(
+    convert_ray_train_to_hf(
         base_model_id=config.model_path,
         checkpoint_path=config.checkpoint_path,
         output_dir=config.output_dir,

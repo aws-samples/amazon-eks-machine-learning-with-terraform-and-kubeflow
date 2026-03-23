@@ -1,37 +1,48 @@
 import os
 import argparse
 import json
+import re
 import time
 import shutil
 import tempfile
 import gc
 from dataclasses import dataclass, fields, MISSING
 from pathlib import Path
+
 import torch
+import torch.distributed.checkpoint as dcp
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from peft import PeftModel
+from peft import LoraConfig, get_peft_model
 import evaluate
 from vllm import LLM, SamplingParams
-import ray
+
 
 @dataclass
 class Config:
     # Checkpoint and Model
-    model_path:str = None
+    model_path: str = None
     base_model: str = "Qwen/Qwen3-8B"
     checkpoints_dir: str = None
+    
+    # Training mode
     full_ft: bool = False
+    
+    # LoRA settings (only used when full_ft=False)
+    lora_rank: int = 32
+    lora_alpha: int = 32
+    lora_dropout: float = 0.1
+    lora_target_modules: str = "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj"
     
     # Data
     test_path: str = None
     max_samples: int = 1024
+    batch_size: int = 128
     
     # Generation settings
     temperature: float = 0.1
-    top_k: int = -1
+    top_k: int = -1  # vLLM uses -1 for disabled
     top_p: float = 0.95
-    max_tokens: int = 512
-    batch_size: int = 128
+    max_tokens: int = 512  # max_new_tokens
     
     # vLLM settings
     tensor_parallel_size: int = 8
@@ -41,35 +52,23 @@ class Config:
     
     @property
     def output_path(self) -> str:
-       return str(Path(self.checkpoint_path) / "predictions.jsonl")
+        return str(Path(self.checkpoint_path) / "predictions.jsonl")
     
     @property
     def checkpoint_path(self) -> str:
         """Find the latest checkpoint in the checkpoints directory."""
         ckpt_dir_path = Path(self.checkpoints_dir)
-        
-        # Look for checkpoint_* directories, potentially nested under TorchTrainer_* dirs
+        # Look for checkpoint-* directories (exclude converted ones)
         ckpt_dirs = []
-        
-        # First, check if there are TorchTrainer_* directories (Ray Train structure)
-        trainer_dirs = list(ckpt_dir_path.glob("TorchTrainer_*"))
-        if trainer_dirs:
-            # Sort trainer directories by modification time and get the latest
-            latest_trainer_dir = max(trainer_dirs, key=lambda p: p.stat().st_mtime)
-            # Look inside the latest trainer directory for checkpoint_* directories
-            ckpt_dirs = [d for d in latest_trainer_dir.glob("checkpoint_*") if d.is_dir()]
-        else:
-            # Fallback: look directly for checkpoint_* directories
-            ckpt_dirs = [d for d in ckpt_dir_path.glob("checkpoint_*") if d.is_dir()]
-        
+        for d in ckpt_dir_path.glob("checkpoint-*"):
+            if d.is_dir() and not re.search(r'\.(hf_model|hf_peft|merged)', d.name):
+                ckpt_dirs.append(d)
+        ckpt_dirs = sorted(ckpt_dirs, key=lambda p: int(p.name.split('-')[1]))
         if not ckpt_dirs:
             raise FileNotFoundError(f"No checkpoint directories found in {ckpt_dir_path}")
-        
-        # Sort by modification time and get the latest checkpoint
-        latest_ckpt = max(ckpt_dirs, key=lambda p: p.stat().st_mtime)
-        
-        # Return the checkpoint subdirectory inside the Ray checkpoint
-        return str(latest_ckpt / "checkpoint")
+        return str(ckpt_dirs[-1])
+    
+
     
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> 'Config':
@@ -82,17 +81,17 @@ class Config:
             self.model_path = self.base_model
 
         if self.checkpoints_dir is None:
-            self.checkpoints_dir = str(Path.home() /  f"results/{self.base_model.replace('/', '-')}" )
-
+            self.checkpoints_dir = str(Path.home() / f"results/{self.base_model}")
+        
         if self.test_path is None:
             datasets_path = Path.home() / "datasets"
             test_files = list(datasets_path.rglob("test.jsonl"))
             if test_files:
-                self.test_path = str(max(test_files, key=lambda p: p.stat().st_mtime))
+                self.test_path = str(test_files[0])
                 print(f"Found test file: {self.test_path}")
             else:
                 raise ValueError("No test.jsonl file found under datasets folder")
-    
+
 def create_parser_from_dataclass(dataclass_type) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     for f in fields(dataclass_type):
@@ -106,68 +105,89 @@ def create_parser_from_dataclass(dataclass_type) -> argparse.ArgumentParser:
     return parser
 
 def load_checkpoint_in_memory(config: Config):
-    """Load Ray Train checkpoint and merge LoRA if needed."""
+    """Load FSDP checkpoint and optionally merge LoRA adapters in memory."""
     
     print("=" * 80)
-    print("LOADING RAY TRAIN CHECKPOINT INTO MEMORY")
+    print("LOADING CHECKPOINT INTO MEMORY")
     print("=" * 80)
     print(f"Source: {config.checkpoint_path}")
     print(f"Mode: {'Full Fine-Tuning' if config.full_ft else 'LoRA (will merge adapters)'}")
     print("=" * 80)
     
-    checkpoint_path = config.checkpoint_path
+    # Load base model
+    print("\n[1/3] Loading base model...")
+    base_model = AutoModelForCausalLM.from_pretrained(
+        config.model_path,
+        torch_dtype=torch.bfloat16,
+        trust_remote_code=True,
+    )
+    
+    # Load FSDP checkpoint
+    print("\n[2/3] Loading FSDP checkpoint weights...")
+    fsdp_checkpoint_dir = Path(config.checkpoint_path) / "pytorch_model_fsdp_0"
+    
+    if not fsdp_checkpoint_dir.exists():
+        raise FileNotFoundError(f"FSDP checkpoint not found: {fsdp_checkpoint_dir}")
+    
+    state_dict = {}
+    dcp.load(state_dict, checkpoint_id=str(fsdp_checkpoint_dir))
     
     if config.full_ft:
-        print("\nLoading fully fine-tuned model...")
-        model = AutoModelForCausalLM.from_pretrained(
-            checkpoint_path,
-            dtype=torch.bfloat16,
-            trust_remote_code=True,
-        )
+        # For full fine-tuning, load weights directly into base model
+        print("Loading full fine-tuning weights...")
+        base_model.load_state_dict(state_dict, strict=False)
+        final_model = base_model
     else:
-        print(f"\nLoading base model: {config.base_model}")
-        base_model = AutoModelForCausalLM.from_pretrained(
-            config.model_path,
-            dtype=torch.bfloat16,
-            trust_remote_code=True,
+        # For LoRA, need to apply LoRA config, load weights, then merge
+        print("Applying LoRA configuration...")
+        peft_config = LoraConfig(
+            task_type="CAUSAL_LM",
+            r=config.lora_rank,
+            lora_alpha=config.lora_alpha,
+            lora_dropout=config.lora_dropout,
+            target_modules=[m.strip() for m in config.lora_target_modules.split(',')],
+            bias="none",
         )
-        print("\nLoading LoRA adapter...")
-        model = PeftModel.from_pretrained(base_model, checkpoint_path)
-        print("\nMerging LoRA adapters...")
-        model = model.merge_and_unload()
+        model_with_adapters = get_peft_model(base_model, peft_config)
+        
+        print("Loading LoRA weights...")
+        model_with_adapters.load_state_dict(state_dict, strict=False)
+        
+        print("\n[3/3] Merging LoRA adapters...")
+        final_model = model_with_adapters.merge_and_unload()
     
     print("\n✓ Checkpoint loaded and ready for inference!")
     print("=" * 80)
     
-    return model
+    return final_model
 
 def load_model_with_vllm(config: Config):
-    """Load Ray Train checkpoint and initialize vLLM."""
+    """Load model using vLLM for efficient inference with temporary model storage."""
     
+    # Load checkpoint and merge in memory
     model = load_checkpoint_in_memory(config)
+    
+    # Create temporary directory for the model
     temp_dir = tempfile.mkdtemp(prefix="vllm_model_")
     
     try:
         print("\n" + "=" * 80)
         print("INITIALIZING vLLM")
         print("=" * 80)
-        print(f"Base model: {config.base_model}")
+        print(f"Base model: {config.model_path}")
         print(f"Tensor parallel size: {config.tensor_parallel_size}")
         print(f"GPU memory utilization: {config.gpu_memory_utilization}")
         print(f"Max model length: {config.max_model_len}")
         print("=" * 80)
         
+        # Save model and tokenizer to temp directory
         print(f"\nSaving model to temporary directory: {temp_dir}")
         model.save_pretrained(temp_dir)
         
-        # Load tokenizer from checkpoint or base model
-        checkpoint_path = config.checkpoint_path
-        try:
-            tokenizer = AutoTokenizer.from_pretrained(checkpoint_path, trust_remote_code=True)
-        except:
-            tokenizer = AutoTokenizer.from_pretrained(config.base_model, trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained(config.model_path, trust_remote_code=True)
         tokenizer.save_pretrained(temp_dir)
         
+        # Initialize vLLM from temp directory
         print("Loading model into vLLM...")
         llm = LLM(
             model=temp_dir,
@@ -181,10 +201,13 @@ def load_model_with_vllm(config: Config):
         print("\n✓ vLLM initialized successfully!")
         print("=" * 80 + "\n")
         
+        # Store temp_dir path so we can clean it up later
         llm._temp_dir = temp_dir
+        
         return llm
         
     except Exception as e:
+        # Clean up temp directory if initialization fails
         shutil.rmtree(temp_dir, ignore_errors=True)
         raise e
 
@@ -271,9 +294,9 @@ def evaluate_predictions(output_path):
     print("\nComputing metrics...")
     bert_scores = bertscore.compute(predictions=predictions, references=references, lang='en')
     
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("EVALUATION RESULTS")
-    print("="*80)
+    print("=" * 80)
     print(f"\nBERTScore F1: {sum(bert_scores['f1'])/len(bert_scores['f1']):.4f}")
     print("="*80)
     
@@ -283,23 +306,26 @@ def evaluate_predictions(output_path):
 
 def run_testing(config: Config):
     print("=" * 80)
-    print("Testing Ray Train Checkpoint with vLLM")
+    print("Testing Model with vLLM")
     print("=" * 80)
     print(f"Checkpoint: {config.checkpoint_path}")
-    print(f"Base Model: {config.base_model}")
+    print(f"Base Model: {config.model_path}")
     print(f"Mode: {'Full Fine-Tuning' if config.full_ft else 'LoRA'}")
     print("=" * 80)
     
     llm = None
     temp_dir = None
     try:
+        # Load model with vLLM
         print("\n[1/2] Loading model with vLLM...")
         llm = load_model_with_vllm(config)
         temp_dir = llm._temp_dir if hasattr(llm, '_temp_dir') else None
         
+        # Generate predictions
         print("\n[2/2] Generating predictions...")
         generate_and_save_predictions(llm, config)
         
+        # Display sample predictions
         print("\n" + "=" * 80)
         print("SAMPLE PREDICTIONS")
         print("=" * 80)
@@ -314,6 +340,7 @@ def run_testing(config: Config):
                 print(f"\nPredicted:\n{pred['prediction'][:200]}...")
                 print("-" * 80)
         
+        # Unload vLLM model and clear GPU memory
         print("\n" + "=" * 80)
         print("UNLOADING VLLM MODEL")
         print("=" * 80)
@@ -324,6 +351,7 @@ def run_testing(config: Config):
         print("✓ GPU memory cleared")
         print("=" * 80)
         
+        # Evaluate
         print("\n" + "=" * 80)
         print("EVALUATING PREDICTIONS")
         print("=" * 80)
@@ -332,6 +360,7 @@ def run_testing(config: Config):
         print("\n✓ Complete!")
         
     finally:
+        # Clean up temporary directory
         if temp_dir is not None:
             print(f"\nCleaning up temporary model directory: {temp_dir}")
             shutil.rmtree(temp_dir, ignore_errors=True)
@@ -341,11 +370,7 @@ def main():
     parser = create_parser_from_dataclass(Config)
     args = parser.parse_args()
     config = Config.from_args(args)
-
-    # Initialize Ray with runtime_env
-    if not ray.is_initialized():
-        ray.init()
-
+    
     run_testing(config)
 
 if __name__ == "__main__":

@@ -75,7 +75,7 @@ train:
   command:
     - python
   args:
-    - fine_tune.py
+    - text/ray_train_sft.py
     - --hf_model_id="Qwen/Qwen3-14B"
     - --model_path=$MODEL_PATH
     - --per_device_train_batch_size=2

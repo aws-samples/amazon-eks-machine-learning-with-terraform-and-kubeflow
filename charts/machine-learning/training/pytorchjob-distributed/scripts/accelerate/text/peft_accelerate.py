@@ -7,6 +7,10 @@ import time
 from dataclasses import dataclass, field, fields, MISSING
 from pathlib import Path
 from typing import List
+import sys
+
+# Add parent directory to path to import shared modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import torch
 from accelerate.utils import set_seed
@@ -24,27 +28,7 @@ from transformers import (
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
 from dataset_module import HFDatasetConfig, SFTDataset, prepare_datasets
-
-
-class SaveOnBestMetricCallback(TrainerCallback):
-    """Save checkpoint only when metric improves."""
-    
-    def on_evaluate(self, args, state: TrainerState, control: TrainerControl, metrics, **kwargs):
-        metric_value = metrics.get(args.metric_for_best_model)
-        if metric_value is None:
-            return control
-        
-        if state.best_metric is None:
-            control.should_save = True
-        else:
-            if args.greater_is_better:
-                if metric_value > state.best_metric:
-                    control.should_save = True
-            else:
-                if metric_value < state.best_metric:
-                    control.should_save = True
-        
-        return control
+from shared.callbacks import SaveOnBestMetricCallback
 
 
 @dataclass
@@ -52,8 +36,8 @@ class TrainingConfig:
     """Configuration for training with Accelerate."""
     
     # Model settings
-    model_path: str = None
     hf_model_id: str = "Qwen/Qwen3-8B"
+    model_path: str = None
     trust_remote_code: bool = True
     
     # LoRA settings
@@ -141,7 +125,6 @@ class TrainingConfig:
         return cls(**kwargs)
     
     def __post_init__(self):
-
         if self.model_path is None:
             self.model_path = self.hf_model_id
 
@@ -152,10 +135,10 @@ class TrainingConfig:
             remaining_pct = 100 - train_pct
             val_pct = int(remaining_pct * (1 - self.hf_dataset_config.val_test_split_ratio))
             test_pct = remaining_pct - val_pct
-            self.data_dir = str(Path.home() /  f"datasets/{dataset_name}/{dataset_config}/train={train_pct}%-val={val_pct}%-test={test_pct}%")
+            self.data_dir = str(Path.home() / f"datasets/{dataset_name}/{dataset_config}/train={train_pct}%-val={val_pct}%-test={test_pct}%")
         
         if self.output_dir is None:
-            self.output_dir = str(Path.home() /  f"results/{self.hf_model_id}" )
+            self.output_dir = str(Path.home() / f"results/{self.hf_model_id}")
 
 
 def train(config: TrainingConfig):
@@ -170,7 +153,7 @@ def train(config: TrainingConfig):
     print("=" * 80)
     print("Training with Hugging Face Trainer")
     print("=" * 80)
-    print(f"Model: {config.hf_model_id}")
+    print(f"Model: {config.model_path}")
     print(f"Dataset: {config.hf_dataset_config.dataset_name}")
     print(f"LoRA enabled: {not config.full_ft}")
     print(f"Output directory: {config.output_dir}")
@@ -222,7 +205,7 @@ def train(config: TrainingConfig):
         eval_dataset = torch.utils.data.Subset(eval_dataset, range(min(config.max_eval_samples, len(eval_dataset))))
     
     # Load model
-    print(f"Loading model: {config.hf_model_id}")
+    print(f"Loading model: {config.model_path}")
     
     model = AutoModelForCausalLM.from_pretrained(
         config.model_path,

@@ -81,7 +81,7 @@ train:
     - launch
     - --config_file
     - /tmp/accel_config.yaml
-    - fine_tune.py
+    - text/peft_accelerate.py
     - --hf_model_id="Qwen/Qwen3-14B"
     - --model_path=$MODEL_PATH
     - --max_steps=10000

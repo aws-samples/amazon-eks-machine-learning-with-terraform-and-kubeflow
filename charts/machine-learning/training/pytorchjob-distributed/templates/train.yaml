@@ -57,9 +57,10 @@ kind: ConfigMap
 metadata:
   name: framework-scripts-{{ .Release.Name }}
 data:
-{{- $frameworkGlob := printf "scripts/%s/*" .Values.framework }}
+{{- $frameworkGlob := printf "scripts/%s/**" .Values.framework }}
+{{- $frameworkPrefix := printf "scripts/%s/" .Values.framework }}
 {{- range $path, $_ := .Files.Glob $frameworkGlob }}
-  {{ base $path }}: |
+  {{ $path | trimPrefix $frameworkPrefix | replace "/" "--" }}: |
 {{ $.Files.Get $path | nindent 4 }}
 {{- end }}
 ---
@@ -110,10 +111,12 @@ spec:
                 path: train-script.sh
               name: train-script-{{ .Release.Name }}
           {{- if .Values.framework }}
-          - name: framework-scripts
+          - name: framework-scripts-flat
             configMap:
               defaultMode: 420
               name: framework-scripts-{{ .Release.Name }}
+          - name: framework-scripts
+            emptyDir: {}
           {{- end }}
           - name: shm
             hostPath:
@@ -164,7 +167,30 @@ spec:
           {{- end }}
           nodeSelector:
             node.kubernetes.io/instance-type: {{ $nodeType }}
+          {{- if .Values.framework }}
+          initContainers:
+            - name: init-framework-scripts
+              image: {{ .Values.image }}
+              command:
+              - sh
+              - -c
+              - |
+                SRC=/tmp/framework-scripts-flat
+                DST=/etc/framework-scripts
+                for f in $(ls "$SRC"); do
+                  real=$(echo "$f" | sed 's/--/\//g')
+                  mkdir -p "$DST/$(dirname "$real")"
+                  cp "$SRC/$f" "$DST/$real"
+                done
+              volumeMounts:
+                - mountPath: /tmp/framework-scripts-flat
+                  name: framework-scripts-flat
+                  readOnly: true
+                - mountPath: /etc/framework-scripts
+                  name: framework-scripts
+          {{- end }}
           containers:
+
             - name: pytorch
               env:
               {{- range $v := .Values.train.env }}
@@ -229,10 +255,12 @@ spec:
                 path: train-script.sh
               name: train-script-{{ .Release.Name }}
           {{- if .Values.framework }}
-          - name: framework-scripts
+          - name: framework-scripts-flat
             configMap:
               defaultMode: 420
               name: framework-scripts-{{ .Release.Name }}
+          - name: framework-scripts
+            emptyDir: {}
           {{- end }}
           - name: shm
             hostPath:
@@ -283,6 +311,28 @@ spec:
           {{- end }}
           nodeSelector:
             node.kubernetes.io/instance-type: {{ $nodeType }}
+          {{- if .Values.framework }}
+          initContainers:
+            - name: init-framework-scripts
+              image: {{ .Values.image }}
+              command:
+              - sh
+              - -c
+              - |
+                SRC=/tmp/framework-scripts-flat
+                DST=/etc/framework-scripts
+                for f in $(ls "$SRC"); do
+                  real=$(echo "$f" | sed 's/--/\//g')
+                  mkdir -p "$DST/$(dirname "$real")"
+                  cp "$SRC/$f" "$DST/$real"
+                done
+              volumeMounts:
+                - mountPath: /tmp/framework-scripts-flat
+                  name: framework-scripts-flat
+                  readOnly: true
+                - mountPath: /etc/framework-scripts
+                  name: framework-scripts
+          {{- end }}
           containers:
             - name: pytorch
               env:

@@ -58,9 +58,10 @@ kind: ConfigMap
 metadata:
   name: framework-scripts-{{ .Release.Name }}
 data:
-{{- $frameworkGlob := printf "scripts/%s/*" .Values.framework }}
+{{- $frameworkGlob := printf "scripts/%s/**" .Values.framework }}
+{{- $frameworkPrefix := printf "scripts/%s/" .Values.framework }}
 {{- range $path, $_ := .Files.Glob $frameworkGlob }}
-  {{ base $path }}: |
+  {{ $path | trimPrefix $frameworkPrefix | replace "/" "--" }}: |
 {{ $.Files.Get $path | nindent 4 }}
 {{- end }}
 ---
@@ -88,6 +89,69 @@ spec:
         app.kubernetes.io/managed-by: {{ .Release.Service }}
     spec:
       restartPolicy: Never
+      volumes:
+        - name: config
+          configMap:
+            defaultMode: 420
+            items:
+            - key: train-script.sh
+              mode: 365
+              path: train-script.sh
+            name: train-script-{{ .Release.Name }}
+        {{- if .Values.framework }}
+        - name: framework-scripts-flat
+          configMap:
+            defaultMode: 420
+            name: framework-scripts-{{ .Release.Name }}
+        - name: framework-scripts
+          emptyDir: {}
+        {{- end }}
+        - name: shm
+          hostPath:
+            path: /dev/shm
+            type: Directory
+        {{- $pv_index := 1 }}
+        {{- range $pv := .Values.pvc }}
+        - name: pv-{{ $pv_index }}
+          persistentVolumeClaim:
+            claimName: {{ $pv.name }}
+        {{- $pv_index = add $pv_index 1 }}
+        {{- end }}
+      tolerations:
+      {{- range $v := .Values.tolerations }}
+        - key: {{ $v.key }}
+          {{- if $v.operator }}
+          operator: "{{ $v.operator }}"
+          {{- end }}
+          {{- if $v.effect }}
+          effect: "{{ $v.effect }}"
+          {{- end }}
+      {{- end }}
+      nodeSelector:
+        node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
+
+      {{- if .Values.framework }}
+      initContainers:
+        - name: init-framework-scripts
+          image: {{ .Values.image }}
+          command:
+          - sh
+          - -c
+          - |
+            SRC=/tmp/framework-scripts-flat
+            DST=/etc/framework-scripts
+            for f in $(ls "$SRC"); do
+              real=$(echo "$f" | sed 's/--/\//g')
+              mkdir -p "$DST/$(dirname "$real")"
+              cp "$SRC/$f" "$DST/$real"
+            done
+          volumeMounts:
+            - mountPath: /tmp/framework-scripts-flat
+              name: framework-scripts-flat
+              readOnly: true
+            - mountPath: /etc/framework-scripts
+              name: framework-scripts
+      {{- end }}
       containers:
         - name: job-submitter
           env:
@@ -119,44 +183,6 @@ spec:
             {{- range $k, $v := .Values.ray.resources.limits }}
               {{ $k }}: {{ $v }}
             {{- end }}
-      volumes:
-        - name: config
-          configMap:
-            defaultMode: 420
-            items:
-            - key: train-script.sh
-              mode: 365
-              path: train-script.sh
-            name: train-script-{{ .Release.Name }}
-        {{- if .Values.framework }}
-        - name: framework-scripts
-          configMap:
-            defaultMode: 420
-            name: framework-scripts-{{ .Release.Name }}
-        {{- end }}
-        - name: shm
-          hostPath:
-            path: /dev/shm
-            type: Directory
-        {{- $pv_index := 1 }}
-        {{- range $pv := .Values.pvc }}
-        - name: pv-{{ $pv_index }}
-          persistentVolumeClaim:
-            claimName: {{ $pv.name }}
-        {{- $pv_index = add $pv_index 1 }}
-        {{- end }}
-      tolerations:
-      {{- range $v := .Values.tolerations }}
-        - key: {{ $v.key }}
-          {{- if $v.operator }}
-          operator: "{{ $v.operator }}"
-          {{- end }}
-          {{- if $v.effect }}
-          effect: "{{ $v.effect }}"
-          {{- end }}
-      {{- end }}
-      nodeSelector:
-        node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
   rayClusterSpec:
     rayVersion: {{ .Values.ray.version }}
     headGroupSpec:
@@ -172,6 +198,69 @@ spec:
             app.kubernetes.io/managed-by: {{ .Release.Service }}
         spec:
           restartPolicy: OnFailure
+          volumes:
+            - name: config
+              configMap:
+                defaultMode: 420
+                items:
+                - key: train-script.sh
+                  mode: 365
+                  path: train-script.sh
+                name: train-script-{{ .Release.Name }}
+            {{- if .Values.framework }}
+            - name: framework-scripts-flat
+              configMap:
+                defaultMode: 420
+                name: framework-scripts-{{ .Release.Name }}
+            - name: framework-scripts
+              emptyDir: {}
+            {{- end }}
+            - name: shm
+              hostPath:
+                path: /dev/shm
+                type: Directory
+            {{- $pv_index := 1 }}
+            {{- range $pv := .Values.pvc }}
+            - name: pv-{{ $pv_index }}
+              persistentVolumeClaim:
+                claimName: {{ $pv.name }}
+            {{- $pv_index = add $pv_index 1 }}
+            {{- end }}
+          tolerations:
+          {{- range $v := .Values.tolerations }}
+            - key: {{ $v.key }}
+              {{- if $v.operator }}
+              operator: "{{ $v.operator }}"
+              {{- end }}
+              {{- if $v.effect }}
+              effect: "{{ $v.effect }}"
+              {{- end }}
+          {{- end }}
+          nodeSelector:
+            node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
+
+          {{- if .Values.framework }}
+          initContainers:
+            - name: init-framework-scripts
+              image: {{ .Values.image }}
+              command:
+              - sh
+              - -c
+              - |
+                SRC=/tmp/framework-scripts-flat
+                DST=/etc/framework-scripts
+                for f in $(ls "$SRC"); do
+                  real=$(echo "$f" | sed 's/--/\//g')
+                  mkdir -p "$DST/$(dirname "$real")"
+                  cp "$SRC/$f" "$DST/$real"
+                done
+              volumeMounts:
+                - mountPath: /tmp/framework-scripts-flat
+                  name: framework-scripts-flat
+                  readOnly: true
+                - mountPath: /etc/framework-scripts
+                  name: framework-scripts
+          {{- end }}
           containers:
           - name: ray-head
             env:
@@ -208,6 +297,22 @@ spec:
               {{- range $k, $v := .Values.ray.resources.limits }}
                 {{ $k }}: {{ $v }}
               {{- end }}
+
+    workerGroupSpecs:
+    - replicas: {{ .Values.resources.nnodes }}
+      minReplicas: {{ .Values.resources.nnodes }}
+      maxReplicas: {{ .Values.resources.nnodes }}
+      groupName: training
+      rayStartParams: {}
+      template:
+        metadata:
+          annotations:
+            karpenter.sh/do-not-disrupt: "true"
+            sidecar.istio.io/inject: 'false'
+            app.kubernetes.io/instance: {{ .Release.Name }}
+            app.kubernetes.io/managed-by: {{ .Release.Service }}
+        spec:
+          restartPolicy: OnFailure
           volumes:
             - name: config
               configMap:
@@ -218,10 +323,12 @@ spec:
                   path: train-script.sh
                 name: train-script-{{ .Release.Name }}
             {{- if .Values.framework }}
-            - name: framework-scripts
+            - name: framework-scripts-flat
               configMap:
                 defaultMode: 420
                 name: framework-scripts-{{ .Release.Name }}
+            - name: framework-scripts
+              emptyDir: {}
             {{- end }}
             - name: shm
               hostPath:
@@ -247,21 +354,28 @@ spec:
           nodeSelector:
             node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
 
-    workerGroupSpecs:
-    - replicas: {{ .Values.resources.nnodes }}
-      minReplicas: {{ .Values.resources.nnodes }}
-      maxReplicas: {{ .Values.resources.nnodes }}
-      groupName: training
-      rayStartParams: {}
-      template:
-        metadata:
-          annotations:
-            karpenter.sh/do-not-disrupt: "true"
-            sidecar.istio.io/inject: 'false'
-            app.kubernetes.io/instance: {{ .Release.Name }}
-            app.kubernetes.io/managed-by: {{ .Release.Service }}
-        spec:
-          restartPolicy: OnFailure
+          {{- if .Values.framework }}
+          initContainers:
+            - name: init-framework-scripts
+              image: {{ .Values.image }}
+              command:
+              - sh
+              - -c
+              - |
+                SRC=/tmp/framework-scripts-flat
+                DST=/etc/framework-scripts
+                for f in $(ls "$SRC"); do
+                  real=$(echo "$f" | sed 's/--/\//g')
+                  mkdir -p "$DST/$(dirname "$real")"
+                  cp "$SRC/$f" "$DST/$real"
+                done
+              volumeMounts:
+                - mountPath: /tmp/framework-scripts-flat
+                  name: framework-scripts-flat
+                  readOnly: true
+                - mountPath: /etc/framework-scripts
+                  name: framework-scripts
+          {{- end }}
           containers:
           - name: ray-worker
             env:
@@ -299,42 +413,3 @@ spec:
               {{- range $k, $v := .Values.resources.limits }}
                 {{ $k }}: {{ $v }}
               {{- end }}
-          volumes:
-            - name: config
-              configMap:
-                defaultMode: 420
-                items:
-                - key: train-script.sh
-                  mode: 365
-                  path: train-script.sh
-                name: train-script-{{ .Release.Name }}
-            {{- if .Values.framework }}
-            - name: framework-scripts
-              configMap:
-                defaultMode: 420
-                name: framework-scripts-{{ .Release.Name }}
-            {{- end }}
-            - name: shm
-              hostPath:
-                path: /dev/shm
-                type: Directory
-            {{- $pv_index := 1 }}
-            {{- range $pv := .Values.pvc }}
-            - name: pv-{{ $pv_index }}
-              persistentVolumeClaim:
-                claimName: {{ $pv.name }}
-            {{- $pv_index = add $pv_index 1 }}
-            {{- end }}
-          tolerations:
-          {{- range $v := .Values.tolerations }}
-            - key: {{ $v.key }}
-              {{- if $v.operator }}
-              operator: "{{ $v.operator }}"
-              {{- end }}
-              {{- if $v.effect }}
-              effect: "{{ $v.effect }}"
-              {{- end }}
-          {{- end }}
-          nodeSelector:
-            node.kubernetes.io/instance-type: {{ .Values.resources.node_type }}
-              

@@ -73,7 +73,7 @@ train:
   command:
     - python
   args:
-    - test_checkpoint.py
+    - shared/test_checkpoint.py
     - --base_model="Qwen/Qwen3-14B"
     - --model_path=$MODEL_PATH
     - --max_samples=1024

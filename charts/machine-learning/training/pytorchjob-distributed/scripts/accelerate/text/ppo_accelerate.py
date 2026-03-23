@@ -42,7 +42,7 @@ def find_latest_converted_checkpoint(checkpoints_dir: str) -> str:
     
     converted_ckpts = []
     for d in ckpt_dir_path.glob("checkpoint-*"):
-        if d.is_dir() and re.search(r'\.(hf_model|hf_peft)$', d.name):
+        if d.is_dir() and re.search(r'\.(hf_model|hf_peft)', d.name):
             match = re.match(r'checkpoint-(\d+)', d.name)
             if match:
                 converted_ckpts.append((int(match.group(1)), str(d)))
@@ -76,7 +76,6 @@ class VLLMEngineActor:
         self.temp_dir = None
         
         # CRITICAL: Clear ALL distributed training environment variables
-        # These are inherited from the parent Accelerate process
         distributed_vars = [
             'RANK', 'LOCAL_RANK', 'WORLD_SIZE', 'GROUP_RANK',
             'MASTER_ADDR', 'MASTER_PORT',
@@ -153,7 +152,7 @@ class VLLMEngineActor:
             seed=42,
             enforce_eager=True,
             disable_custom_all_reduce=True,
-            max_model_len=4096,  # Control memory usage
+            max_model_len=4096,
         )
         
         print(f"[vLLM Actor] vLLM Engine initialized successfully with TP={tensor_parallel_size}!")
@@ -190,17 +189,10 @@ class ValueHead(nn.Module):
     def __init__(self, hidden_size: int, dtype=torch.bfloat16):
         super().__init__()
         self.value_head = nn.Linear(hidden_size, 1, bias=False, dtype=dtype)
-        # Initialize with small weights for stability
         with torch.no_grad():
             self.value_head.weight.normal_(std=0.01)
     
     def forward(self, hidden_states):
-        """
-        Args:
-            hidden_states: [batch_size, seq_len, hidden_size]
-        Returns:
-            values: [batch_size, seq_len]
-        """
         values = self.value_head(hidden_states).squeeze(-1)
         return values
 
@@ -216,18 +208,6 @@ class PolicyWithValue(nn.Module):
         self.value_head = ValueHead(hidden_size, dtype=dtype)
         
     def forward(self, input_ids, attention_mask, return_values=False):
-        """
-        Forward pass through both policy and value networks.
-        
-        Args:
-            input_ids: [batch_size, seq_len]
-            attention_mask: [batch_size, seq_len]
-            return_values: Whether to compute and return values
-            
-        Returns:
-            outputs: Model outputs with logits
-            values: [batch_size, seq_len] if return_values=True, else None
-        """
         outputs = self.policy_model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -236,25 +216,18 @@ class PolicyWithValue(nn.Module):
         
         values = None
         if return_values:
-            # Get hidden states from the last layer
-            hidden_states = outputs.hidden_states[-1]  # [batch_size, seq_len, hidden_size]
-            values = self.value_head(hidden_states)     # [batch_size, seq_len]
+            hidden_states = outputs.hidden_states[-1]
+            values = self.value_head(hidden_states)
         
         return outputs, values
     
     def get_base_model(self):
-        """Get the underlying policy model (for saving/loading)."""
         return self.policy_model
     
     def save_pretrained(self, save_path):
-        """Save both policy and value head."""
         save_path = Path(save_path)
         save_path.mkdir(parents=True, exist_ok=True)
-        
-        # Save policy model
         self.policy_model.save_pretrained(save_path)
-        
-        # Save value head separately
         value_head_path = save_path / "value_head.pt"
         torch.save(self.value_head.state_dict(), value_head_path)
         print(f"Saved value head to {value_head_path}")
@@ -350,8 +323,8 @@ class PPOConfig:
         num_proc=8
     ))
     
-    # PPO hyperparameters (following the complete RLHF algorithm)
-    ppo_epochs: int = 4                    # K = 4: Number of PPO epochs per batch
+    # PPO hyperparameters
+    ppo_epochs: int = 4
     num_rollouts: int = 128
     max_steps: int = 1000
     per_device_batch_size: int = 1
@@ -360,13 +333,13 @@ class PPOConfig:
     weight_decay: float = 0.01
     warmup_steps: int = 100
     max_grad_norm: float = 1.0
-    clip_range: float = 0.2                # ε = 0.2: Clipping threshold
-    vf_coef: float = 1.0                   # c_1 = 1.0: Value loss coefficient
-    kl_coef: float = 0.02                  # β = 0.02: KL penalty coefficient
-    gamma: float = 1.0                     # γ = 1.0: Discount factor
-    lam: float = 0.95                      # λ = 0.95: GAE parameter
-    entropy_coef: float = 0.01             # c_2 = 0.01: Entropy coefficient
-    target_kl: float = 0.015               # Early stopping KL threshold
+    clip_range: float = 0.2
+    vf_coef: float = 1.0
+    kl_coef: float = 0.02
+    gamma: float = 1.0
+    lam: float = 0.95
+    entropy_coef: float = 0.01
+    target_kl: float = 0.015
     
     # Generation settings
     max_new_tokens: int = 256
@@ -374,8 +347,8 @@ class PPOConfig:
     top_p: float = 0.9
     
     # vLLM Settings
-    vllm_tensor_parallel_size: int = 8  # Use all 8 GPUs
-    vllm_gpu_memory_utilization: float = 0.10  # Lower since distributed across 8 GPUs
+    vllm_tensor_parallel_size: int = 8
+    vllm_gpu_memory_utilization: float = 0.10
     
     # Sequence settings
     max_seq_length: int = 2048
@@ -419,12 +392,12 @@ class PPOConfig:
     
     def __post_init__(self):
         if self.sft_model_path is None:
-            checkpoints_dir = f"results/{self.hf_model_id}"
+            checkpoints_dir = str(Path.home() / f"results/{self.hf_model_id}")
             self.sft_model_path = find_latest_converted_checkpoint(checkpoints_dir)
             print(f"Using SFT checkpoint: {self.sft_model_path}")
         
         if self.reward_model_path is None:
-            reward_checkpoints_dir = f"results/reward_{self.hf_model_id}"
+            reward_checkpoints_dir = str(Path.home() / f"results/reward_{self.hf_model_id}")
             self.reward_model_path = find_latest_converted_checkpoint(reward_checkpoints_dir)
             print(f"Using reward model checkpoint: {self.reward_model_path}")
         
@@ -435,68 +408,35 @@ class PPOConfig:
             remaining_pct = 100 - train_pct
             val_pct = int(remaining_pct * (1 - self.hf_dataset_config.val_test_split_ratio))
             test_pct = remaining_pct - val_pct
-            self.data_dir = f"datasets/{dataset_name}/{dataset_config}/train={train_pct}%-val={val_pct}%-test={test_pct}%"
+            self.data_dir = str(Path.home() / f"datasets/{dataset_name}/{dataset_config}/train={train_pct}%-val={val_pct}%-test={test_pct}%")
         
         if self.output_dir is None:
-            self.output_dir = f"results/ppo_{self.hf_model_id}"
+            self.output_dir = str(Path.home() / f"results/ppo_{self.hf_model_id}")
 
 
 def compute_advantages_dense(rewards, values, gamma, lam, mask):
-    """
-    Compute GAE advantages for DENSE rewards (per-token).
-    
-    Following Algorithm Lines 38-45:
-    For each prompt x_i:
-        Initialize last_gae ← 0
-        For t = T down to 1:
-            δ_t ← r_{i,t} + γ·v_{i,t+1} - v_{i,t}
-            Â_{i,t} ← δ_t + (γλ)·last_gae
-            last_gae ← Â_{i,t}
-            R̂_{i,t} ← Â_{i,t} + v_{i,t}
-    
-    Args:
-        rewards: [batch_size, seq_len] - dense per-token rewards
-        values: [batch_size, seq_len] - per-token values
-        gamma: discount factor
-        lam: GAE lambda
-        mask: [batch_size, seq_len] - attention mask (1 for real tokens, 0 for padding)
-    
-    Returns:
-        advantages: [batch_size, seq_len]
-        returns: [batch_size, seq_len]
-    """
+    """Compute GAE advantages for DENSE rewards (per-token)."""
     batch_size, seq_len = rewards.shape
     advantages = torch.zeros_like(rewards)
     
-    # Process each sequence in the batch
     for i in range(batch_size):
         last_gae = 0
-        
-        # Find the actual length of this sequence (before padding)
         seq_mask = mask[i]
         actual_len = seq_mask.sum().item()
         
         if actual_len == 0:
             continue
         
-        # Loop backwards from T down to 1
         for t in reversed(range(int(actual_len))):
             if t == actual_len - 1:
-                # Terminal state: next value is 0
                 next_value = 0
             else:
                 next_value = values[i, t + 1]
             
-            # TD error: δ_t = r_{i,t} + γ·v_{i,t+1} - v_{i,t}
             delta = rewards[i, t] + gamma * next_value - values[i, t]
-            
-            # GAE: Â_{i,t} = δ_t + (γλ)·last_gae
             advantages[i, t] = last_gae = delta + gamma * lam * last_gae
     
-    # Returns: R̂_{i,t} = Â_{i,t} + v_{i,t}
     returns = advantages + values
-    
-    # Mask out padding positions
     advantages = advantages * mask
     returns = returns * mask
     
@@ -546,7 +486,6 @@ def train(config: PPOConfig):
     
     accelerator.wait_for_everyone()
     
-    # All other processes connect to the same namespace
     if not accelerator.is_main_process:
         if not ray.is_initialized():
             ray.init(address='auto', namespace=RAY_NAMESPACE, ignore_reinit_error=True)
@@ -626,10 +565,8 @@ def train(config: PPOConfig):
     
     policy_model.gradient_checkpointing_enable()
     
-    # Get hidden size for value head
     hidden_size = policy_model.config.hidden_size
     
-    # Apply NEW LoRA for PPO training if not full fine-tuning
     if not config.full_ft:
         if accelerator.is_main_process:
             print("Applying new LoRA to policy model for PPO training...")
@@ -653,8 +590,6 @@ def train(config: PPOConfig):
         print(f"Adding value head (hidden_size={hidden_size})...")
     
     policy_with_value = PolicyWithValue(policy_model, hidden_size, dtype=torch.bfloat16)
-    
-    # Ensure the entire model is in bfloat16
     policy_with_value = policy_with_value.to(torch.bfloat16)
     
     # 1c. Fix reference policy π_ref ← π^SFT (ON CPU)
@@ -687,7 +622,6 @@ def train(config: PPOConfig):
             device_map="cpu",
         )
     
-    # Freeze reference model and ensure it's on CPU
     ref_model.eval()
     for param in ref_model.parameters():
         param.requires_grad = False
@@ -745,7 +679,6 @@ def train(config: PPOConfig):
                 gpu_memory_utilization=config.vllm_gpu_memory_utilization
             )
             
-            # Test it
             ray.get(vllm_actor.generate.remote(["test"], {"max_tokens": 1, "temperature": 1.0}))
             print(f"[Main Process] Ray vLLM actor initialized successfully!")
             
@@ -757,14 +690,12 @@ def train(config: PPOConfig):
     
     accelerator.wait_for_everyone()
     
-    # Other processes get the actor by name
     if not accelerator.is_main_process:
         vllm_actor = ray.get_actor("vllm_inference_actor")
         print(f"[Rank {accelerator.process_index}] Retrieved vLLM actor")
     
     accelerator.wait_for_everyone()
     
-    # Sampling parameters as dict for Ray serialization
     sampling_params_dict = {
         'temperature': config.temperature,
         'top_p': config.top_p,
@@ -785,8 +716,6 @@ def train(config: PPOConfig):
         num_training_steps=num_training_steps,
     )
     
-    # Prepare policy+value model with accelerator
-    # ref_model and reward_model stay on CPU, NOT prepared
     policy_with_value, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
         policy_with_value, optimizer, train_dataloader, lr_scheduler
     )
@@ -805,7 +734,6 @@ def train(config: PPOConfig):
     dataloader_iterator = iter(train_dataloader)
     
     for step in range(config.max_steps):
-        # Fetch next batch of prompts
         try:
             batch = next(dataloader_iterator)
         except StopIteration:
@@ -815,15 +743,13 @@ def train(config: PPOConfig):
         prompt_texts = batch['prompt_texts']
         
         # =====================================================================
-        # PHASE 1: EXPERIENCE COLLECTION (Algorithm Lines 11-31)
+        # PHASE 1: EXPERIENCE COLLECTION
         # =====================================================================
         with torch.no_grad():
-            # Step 1: Generate responses y_i ~ π_θ_old(·|x_i) using vLLM
             generation_results = ray.get(
                 vllm_actor.generate.remote(prompt_texts, sampling_params_dict)
             )
             
-            # Reconstruct padded tensor from results
             batch_input_ids = []
             prompt_lengths = []
             max_len_in_batch = 0
@@ -844,14 +770,12 @@ def train(config: PPOConfig):
             generated = torch.tensor(padded_batch, dtype=torch.long, device=accelerator.device)
             attention_mask = (generated != tokenizer.pad_token_id).long()
             
-            # Create mask for generated tokens only (exclude prompt)
             generation_mask = torch.zeros_like(attention_mask)
             for i, prompt_len in enumerate(prompt_lengths):
                 generation_mask[i, prompt_len:] = attention_mask[i, prompt_len:]
             
             accelerator.wait_for_everyone()
             
-            # Step 2: Compute scalar outcome reward R_score = r_φ(x_i, y_i)
             generated_cpu = generated.cpu()
             attention_mask_cpu = attention_mask.cpu()
             
@@ -861,32 +785,27 @@ def train(config: PPOConfig):
                 input_ids=generated_cpu,
                 attention_mask=attention_mask_cpu
             )
-            reward_scores = reward_outputs.logits.squeeze(-1).to(accelerator.device)  # [batch_size]
+            reward_scores = reward_outputs.logits.squeeze(-1).to(accelerator.device)
             
             accelerator.wait_for_everyone()
             
-            # Step 3-4: Compute old policy log probs and reference log probs for per-token KL
-            # Get logits from policy
             policy_outputs, _ = policy_with_value(
                 input_ids=generated,
                 attention_mask=attention_mask,
                 return_values=False
             )
-            logits = policy_outputs.logits[:, :-1, :]  # [batch_size, seq_len-1, vocab_size]
-            labels = generated[:, 1:]  # [batch_size, seq_len-1]
+            logits = policy_outputs.logits[:, :-1, :]
+            labels = generated[:, 1:]
             
-            # Compute per-token log probs from policy
             log_probs = F.log_softmax(logits, dim=-1)
             old_log_probs_per_token = torch.gather(
                 log_probs, 2, labels.unsqueeze(-1)
-            ).squeeze(-1)  # [batch_size, seq_len-1]
+            ).squeeze(-1)
             
-            # Store old log probs for PPO ratio
             old_log_probs_stored = old_log_probs_per_token.detach()
             
             accelerator.wait_for_everyone()
             
-            # Compute reference policy log probs (on CPU)
             labels_cpu = labels.cpu()
             
             ref_outputs = ref_model(
@@ -897,48 +816,38 @@ def train(config: PPOConfig):
             ref_log_probs_dist = F.log_softmax(ref_logits, dim=-1)
             ref_log_probs_per_token = torch.gather(
                 ref_log_probs_dist, 2, labels_cpu.unsqueeze(-1)
-            ).squeeze(-1).to(accelerator.device)  # [batch_size, seq_len-1]
+            ).squeeze(-1).to(accelerator.device)
             
             accelerator.wait_for_everyone()
             
-            # Step 5: Compute per-token dense rewards (Algorithm Lines 18-22)
-            # r_{i,t} = -β · log(p_t / p_t^ref) = -β · (log p_t - log p_t^ref)
-            kl_per_token = old_log_probs_per_token - ref_log_probs_per_token  # [batch_size, seq_len-1]
-            dense_rewards = -config.kl_coef * kl_per_token  # [batch_size, seq_len-1]
+            kl_per_token = old_log_probs_per_token - ref_log_probs_per_token
+            dense_rewards = -config.kl_coef * kl_per_token
             
-            # Step 6: Add terminal reward to last non-padding token
-            # r_{i,T} ← r_{i,T} + R_score
             for i in range(generated.size(0)):
-                # Find last non-padding position in generation
-                gen_mask_i = generation_mask[i, 1:]  # Align with labels (seq_len-1)
+                gen_mask_i = generation_mask[i, 1:]
                 if gen_mask_i.sum() > 0:
                     last_gen_idx = gen_mask_i.nonzero(as_tuple=True)[0][-1].item()
                     dense_rewards[i, last_gen_idx] += reward_scores[i]
             
-            # Mask out padding and prompt tokens in rewards
-            reward_mask = generation_mask[:, 1:]  # Align with labels
+            reward_mask = generation_mask[:, 1:]
             dense_rewards = dense_rewards * reward_mask
             
             accelerator.wait_for_everyone()
             
-            # Step 7: Compute values V_ψ(x_i, y_{i,≤t}) (Algorithm Line 30)
             _, values = policy_with_value(
                 input_ids=generated,
                 attention_mask=attention_mask,
                 return_values=True
             )
-            values = values[:, :-1]  # Align with labels: [batch_size, seq_len-1]
-            
-            # Detach values for advantage computation
+            values = values[:, :-1]
             values = values.detach()
             
             accelerator.wait_for_everyone()
         
         # =====================================================================
-        # PHASE 2: GENERALIZED ADVANTAGE ESTIMATION (Algorithm Lines 37-47)
+        # PHASE 2: GENERALIZED ADVANTAGE ESTIMATION
         # =====================================================================
         with torch.no_grad():
-            # Compute GAE advantages using dense rewards
             advantages, returns = compute_advantages_dense(
                 dense_rewards,
                 values,
@@ -947,71 +856,55 @@ def train(config: PPOConfig):
                 reward_mask
             )
             
-            # Normalize advantages across non-padding tokens
-            # Calculate mean and std only over valid (non-padding) positions
             valid_advantages = advantages[reward_mask.bool()]
             if len(valid_advantages) > 1:
                 adv_mean = valid_advantages.mean()
                 adv_std = valid_advantages.std()
                 advantages = (advantages - adv_mean) / (adv_std + 1e-8)
-                # Re-mask after normalization
                 advantages = advantages * reward_mask
             
-            # Detach to prevent gradients flowing through advantage estimation
             advantages = advantages.detach()
             returns = returns.detach()
             
             accelerator.wait_for_everyone()
         
         # =====================================================================
-        # PHASE 3: POLICY AND VALUE UPDATES (Algorithm Lines 50-59)
+        # PHASE 3: POLICY AND VALUE UPDATES
         # =====================================================================
         
-        # For PPO epoch k = 1 to K:
         for ppo_epoch in range(config.ppo_epochs):
-            # Step 1: Compute new action probabilities π_θ(a_t|s_t)
-            # NOW WITH GRADIENTS ENABLED
             outputs, new_values = policy_with_value(
                 input_ids=generated,
                 attention_mask=attention_mask,
                 return_values=True
             )
-            new_values = new_values[:, :-1]  # [batch_size, seq_len-1]
+            new_values = new_values[:, :-1]
             
             logits = outputs.logits[:, :-1, :]
             log_probs = F.log_softmax(logits, dim=-1)
             new_log_probs_per_token = torch.gather(
                 log_probs, 2, labels.unsqueeze(-1)
-            ).squeeze(-1)  # [batch_size, seq_len-1]
+            ).squeeze(-1)
             
-            # Step 2: Compute ratio r_t = π_θ(a_t|s_t) / π_θ_old(a_t|s_t)
-            # old_log_probs_stored is detached, so gradients only flow through new_log_probs_per_token
-            ratio = torch.exp(new_log_probs_per_token - old_log_probs_stored)  # [batch_size, seq_len-1]
+            ratio = torch.exp(new_log_probs_per_token - old_log_probs_stored)
             
-            # Step 3: Compute clipped objective (Algorithm Line 54)
             clipped_ratio = torch.clamp(ratio, 1 - config.clip_range, 1 + config.clip_range)
             policy_loss_unclipped = ratio * advantages
             policy_loss_clipped = clipped_ratio * advantages
             
-            # Take minimum and mean over valid tokens only
             policy_loss_per_token = -torch.min(policy_loss_unclipped, policy_loss_clipped)
             policy_loss = (policy_loss_per_token * reward_mask).sum() / (reward_mask.sum() + 1e-8)
             
-            # Step 4: Compute value loss (Algorithm Line 55)
             value_loss_per_token = (new_values - returns) ** 2
             value_loss = (value_loss_per_token * reward_mask).sum() / (reward_mask.sum() + 1e-8)
             
-            # Step 5: Compute entropy bonus
             entropy_per_token = -(log_probs.exp() * log_probs).sum(dim=-1)
             entropy = (entropy_per_token * reward_mask).sum() / (reward_mask.sum() + 1e-8)
             
-            # Step 6: Combined loss (Algorithm Line 56)
             total_loss = policy_loss + config.vf_coef * value_loss - config.entropy_coef * entropy
             
-            # Step 7: Update (Algorithm Line 57)
             accelerator.backward(total_loss)
             
-            # Check if we have gradients
             has_gradients = any(
                 p.grad is not None for p in policy_with_value.parameters() if p.requires_grad
             )
@@ -1027,7 +920,6 @@ def train(config: PPOConfig):
             lr_scheduler.step()
             optimizer.zero_grad()
             
-            # Optional: Early stopping based on KL divergence
             with torch.no_grad():
                 approx_kl_per_token = old_log_probs_stored - new_log_probs_per_token
                 approx_kl = (approx_kl_per_token * reward_mask).sum() / (reward_mask.sum() + 1e-8)
@@ -1039,9 +931,7 @@ def train(config: PPOConfig):
             
             global_step += 1
             
-            # Logging
             if global_step % config.logging_steps == 0 and accelerator.is_main_process:
-                # Compute average metrics over valid tokens
                 avg_reward = (dense_rewards * reward_mask).sum() / (reward_mask.sum() + 1e-8)
                 avg_kl = (kl_per_token * reward_mask).sum() / (reward_mask.sum() + 1e-8)
                 avg_advantage = (advantages * reward_mask).sum() / (reward_mask.sum() + 1e-8)
@@ -1070,7 +960,6 @@ def train(config: PPOConfig):
                         "global_step": global_step,
                     })
             
-            # Save checkpoint
             if global_step % config.save_steps == 0:
                 accelerator.wait_for_everyone()
                 if accelerator.is_main_process:
@@ -1085,7 +974,6 @@ def train(config: PPOConfig):
     # =========================================================================
     # FINAL CLEANUP
     # =========================================================================
-    # Ensure all ranks complete training
     accelerator.wait_for_everyone()
     
     if accelerator.is_main_process:
@@ -1093,7 +981,6 @@ def train(config: PPOConfig):
         print("Training loop completed - starting cleanup")
         print("=" * 80)
     
-    # Cleanup vLLM actor
     if accelerator.is_main_process:
         try:
             ray.get(vllm_actor.cleanup.remote())
@@ -1103,7 +990,6 @@ def train(config: PPOConfig):
     
     accelerator.wait_for_everyone()
     
-    # Save final model
     if accelerator.is_main_process:
         print("=" * 80)
         print("Training completed! Saving final model...")
@@ -1118,7 +1004,6 @@ def train(config: PPOConfig):
     
     accelerator.wait_for_everyone()
     
-    # Shutdown Ray
     if accelerator.is_main_process:
         print("Shutting down Ray...")
         try:
@@ -1127,7 +1012,6 @@ def train(config: PPOConfig):
         except Exception as e:
             print(f"Error during Ray shutdown: {e}")
     
-    # Final barrier before exit
     accelerator.wait_for_everyone()
     
     if accelerator.is_main_process:

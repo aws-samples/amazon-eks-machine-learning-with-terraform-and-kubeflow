@@ -70,7 +70,7 @@ train:
   command:
     - python
   args:
-    - convert_checkpoint_to_hf.py
+    - shared/convert_checkpoint_to_hf.py
     - --base_model="Qwen/Qwen3-14B"
     - --model_path=$MODEL_PATH
     - '2>&1 | tee $PROCESS_LOG' 
