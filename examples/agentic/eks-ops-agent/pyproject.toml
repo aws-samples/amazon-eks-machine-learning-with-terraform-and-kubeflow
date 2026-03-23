@@ -22,7 +22,7 @@ dependencies = [
 [project.optional-dependencies]
 # Module 3: Memory (engram with pgvector + Bedrock embeddings)
 memory = [
-    "engram[pgvector,bedrock]",
+    "engram[pgvector,bedrock] @ git+https://github.com/ratnopam/engram.git",
 ]
 # Module 4: Observability
 observability = [

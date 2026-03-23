@@ -16,7 +16,7 @@ COPY pyproject.toml .
 COPY src/ ./src/
 
 # Install Python dependencies using uv
-# Include memory extras for Module 3 (engram + pgvector + bedrock)
+# Include memory extras for Module 3 (engram from GitHub + pgvector + bedrock)
 RUN uv sync --no-dev --extra memory
 
 # Verify kagent packages installed correctly
