@@ -7,16 +7,20 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl git \
+    curl \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# Install engram from pre-built wheel (Module 3: memory)
+COPY engram-*.whl /tmp/
+RUN uv pip install --system "/tmp/engram-0.1.0-py3-none-any.whl[pgvector,bedrock]" && rm /tmp/engram-*.whl
 
 # Copy all source files
 COPY pyproject.toml .
 COPY src/ ./src/
 
 # Install Python dependencies using uv
-# Include memory extras for Module 3 (engram from GitHub + pgvector + bedrock)
+# Include memory extras for Module 3
 RUN uv sync --no-dev --extra memory
 
 # Verify kagent packages installed correctly

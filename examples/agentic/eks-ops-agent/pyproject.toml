@@ -21,8 +21,11 @@ dependencies = [
 
 [project.optional-dependencies]
 # Module 3: Memory (engram with pgvector + Bedrock embeddings)
+# engram wheel is installed separately in the Dockerfile
 memory = [
-    "engram[pgvector,bedrock] @ git+https://github.com/ratnopam/engram.git",
+    "asyncpg>=0.29.0",
+    "pgvector>=0.3.0",
+    "boto3>=1.35.0",
 ]
 # Module 4: Observability
 observability = [
