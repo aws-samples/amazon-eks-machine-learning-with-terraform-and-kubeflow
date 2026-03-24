@@ -99,16 +99,13 @@ def load_memory_tools() -> list:
     try:
         from memory import MemoryService, get_memory_tools, set_memory_service
 
-        # Initialize memory service with engram
+        # Initialize memory service with engram (lazy — connects on first use)
         memory_service = MemoryService(
             pg_connection_string=app_config.ENGRAM_PG_URL,
             embedding_provider=app_config.ENGRAM_EMBEDDING_PROVIDER,
             embedding_model=app_config.ENGRAM_EMBEDDING_MODEL,
             embedding_dimensions=app_config.ENGRAM_EMBEDDING_DIMENSIONS,
         )
-
-        # Initialize engram connection (async)
-        asyncio.run(memory_service.initialize())
         set_memory_service(memory_service)
 
         logger.info(f"Memory enabled (engram pgvector: {app_config.ENGRAM_PG_URL.split('@')[-1] if '@' in app_config.ENGRAM_PG_URL else 'configured'})")

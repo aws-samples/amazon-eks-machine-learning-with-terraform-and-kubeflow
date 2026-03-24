@@ -95,14 +95,16 @@ class MemoryService:
         )
         self._engram: Optional[Engram] = None
 
-    async def initialize(self) -> None:
-        """Initialize the engram connection. Must be called before use."""
-        self._engram = await Engram.create(
-            backend_name="pgvector",
-            connection_string=self._pg_connection_string,
-            embedding_config=self._embedding_config,
-        )
-        logger.info("MemoryService initialized with engram (pgvector)")
+    async def _get_engram(self) -> Engram:
+        """Lazy-initialize engram connection on first use."""
+        if self._engram is None:
+            self._engram = await Engram.create(
+                backend_name="pgvector",
+                connection_string=self._pg_connection_string,
+                embedding_config=self._embedding_config,
+            )
+            logger.info("MemoryService initialized with engram (pgvector)")
+        return self._engram
 
     def _defaults_ns(self, user_id: str) -> str:
         """Namespace for user defaults."""
@@ -110,11 +112,10 @@ class MemoryService:
 
     async def get_defaults(self, user_id: str) -> UserDefaults:
         """Retrieve user's default settings from engram."""
-        if self._engram is None:
-            raise RuntimeError("MemoryService not initialized. Call initialize() first.")
+        engram = await self._get_engram()
 
         try:
-            results = await self._engram.search(
+            results = await engram.search(
                 query="user default cluster namespace",
                 namespace=self._defaults_ns(user_id),
                 top_k=1,
@@ -140,8 +141,7 @@ class MemoryService:
         namespace: Optional[str] = None,
     ) -> UserDefaults:
         """Save user's default settings to engram."""
-        if self._engram is None:
-            raise RuntimeError("MemoryService not initialized. Call initialize() first.")
+        engram = await self._get_engram()
 
         try:
             # Get existing defaults and merge
@@ -156,7 +156,7 @@ class MemoryService:
             record_id = f"defaults-{user_id}"
             content = f"User defaults: {existing}"
 
-            await self._engram.add(
+            await engram.add(
                 content=content,
                 record_type=RecordType.SEMANTIC,
                 namespace=self._defaults_ns(user_id),
@@ -174,12 +174,11 @@ class MemoryService:
 
     async def clear_defaults(self, user_id: str) -> None:
         """Clear user's default settings."""
-        if self._engram is None:
-            raise RuntimeError("MemoryService not initialized. Call initialize() first.")
+        engram = await self._get_engram()
 
         try:
             record_id = f"defaults-{user_id}"
-            await self._engram.delete(record_id)
+            await engram.delete(record_id)
             logger.info(f"Cleared defaults for user {user_id}")
 
         except Exception as e:
@@ -194,10 +193,9 @@ class MemoryService:
         **typed_fields: Any,
     ) -> str:
         """Store a memory for future recall. Returns the record ID."""
-        if self._engram is None:
-            raise RuntimeError("MemoryService not initialized. Call initialize() first.")
+        engram = await self._get_engram()
 
-        return await self._engram.add(
+        return await engram.add(
             content=content,
             record_type=record_type,
             namespace=namespace,
@@ -213,10 +211,9 @@ class MemoryService:
         record_type: Optional[RecordType] = None,
     ):
         """Search memories by semantic similarity."""
-        if self._engram is None:
-            raise RuntimeError("MemoryService not initialized. Call initialize() first.")
+        engram = await self._get_engram()
 
-        return await self._engram.search(
+        return await engram.search(
             query=query,
             namespace=namespace,
             top_k=top_k,
@@ -226,7 +223,7 @@ class MemoryService:
     async def close(self) -> None:
         """Close engram connection."""
         if self._engram:
-            await self._engram.close()
+            await engram.close()
             self._engram = None
 
 
