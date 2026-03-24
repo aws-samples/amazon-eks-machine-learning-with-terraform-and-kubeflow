@@ -103,21 +103,27 @@ echo -e "${YELLOW}Deploying with Helm...${NC}"
 cd "$REPO_DIR"
 
 HELM_ARGS=""
+ENGRAM_PG_URL=""
 if [ "$ENABLE_MEMORY" = "true" ]; then
-    HELM_ARGS="--set redis.enabled=true"
+    # Read connection string from kagent-db-credentials secret
+    ENGRAM_PG_URL=$(kubectl get secret kagent-db-credentials -n kagent -o jsonpath='{.data.connection_string}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+    if [ -z "$ENGRAM_PG_URL" ]; then
+        echo -e "${YELLOW}Warning: kagent-db-credentials secret not found. Memory will not work without ENGRAM_PG_URL.${NC}"
+    else
+        echo "Engram PG URL: ${ENGRAM_PG_URL##*@}"  # print host only, hide credentials
+    fi
 fi
 
 helm upgrade --install eks-ops-agent -n kagent \
   charts/machine-learning/agentic/kagent-agent \
   -f examples/agentic/eks-ops-agent/eks-ops-agent.yaml \
   --set image.repository="${ECR_REPO}" \
-  --set-json 'env=[
-    {"name":"AWS_REGION","value":"'"${AWS_REGION}"'"},
-    {"name":"BEDROCK_MODEL_ID","value":"us.anthropic.claude-sonnet-4-20250514-v1:0"},
-    {"name":"ENABLE_MCP_TOOLS","value":"'"${ENABLE_MCP_TOOLS}"'"},
-    {"name":"ENABLE_MEMORY","value":"'"${ENABLE_MEMORY}"'"},
-    {"name":"REDIS_URL","value":"redis://redis.kagent.svc.cluster.local:6379"}
-  ]' $HELM_ARGS
+  --set "env[0].name=AWS_REGION" --set "env[0].value=${AWS_REGION}" \
+  --set "env[1].name=BEDROCK_MODEL_ID" --set "env[1].value=us.anthropic.claude-sonnet-4-20250514-v1:0" \
+  --set "env[2].name=ENABLE_MCP_TOOLS" --set "env[2].value=${ENABLE_MCP_TOOLS}" \
+  --set "env[3].name=ENABLE_MEMORY" --set "env[3].value=${ENABLE_MEMORY}" \
+  --set "env[4].name=ENGRAM_PG_URL" --set "env[4].value=${ENGRAM_PG_URL}" \
+  $HELM_ARGS
 
 # Wait for kagent controller to create the ServiceAccount
 echo ""

@@ -26,12 +26,9 @@ env:
   - name: ENABLE_MEMORY
     value: "false"
   # Engram connection — uses kagent's Aurora PostgreSQL+pgvector
-  # Override with --set-json to inject from kagent-db-credentials secret
+  # Set via build-and-deploy.sh from kagent-db-credentials secret
   - name: ENGRAM_PG_URL
-    valueFrom:
-      secretKeyRef:
-        name: kagent-db-credentials
-        key: connection_string
+    value: ""
 
 resources:
   requests:
