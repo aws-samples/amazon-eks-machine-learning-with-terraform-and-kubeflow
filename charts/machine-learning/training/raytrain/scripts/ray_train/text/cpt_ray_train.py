@@ -230,6 +230,8 @@ def train_func(config_dict: Dict):
         "fsdp_cpu_ram_efficient_loading": True,
         "fsdp_sync_module_states": True,
         "fsdp_auto_wrap_policy": "TRANSFORMER_BASED_WRAP",
+        "fsdp_activation_checkpointing": True,
+        "fsdp_activation_checkpointing_reentrant": False,
     }
 
     report_to = ["tensorboard", "wandb"] if config.use_wandb else ["tensorboard"]
@@ -258,8 +260,6 @@ def train_func(config_dict: Dict):
         logging_dir=f"{config.results_dir}/logs",
         seed=config.seed,
         dataloader_drop_last=False,
-        gradient_checkpointing=True,
-        gradient_checkpointing_kwargs={"use_reentrant": False},
         optim="adamw_torch_fused",
         ddp_find_unused_parameters=False,
         ddp_timeout=7200,

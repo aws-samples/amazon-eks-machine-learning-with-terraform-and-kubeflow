@@ -224,8 +224,6 @@ def train_func(config_dict: Dict):
         use_cache=False,
     )
     
-    model.gradient_checkpointing_enable()
-    
     if not config.full_ft:
         model = prepare_model_for_kbit_training(model)
         peft_config = LoraConfig(
@@ -288,14 +286,14 @@ def train_func(config_dict: Dict):
         greater_is_better=False,
         load_best_model_at_end=False,
         seed=config.seed,
-        gradient_checkpointing=True,
-        gradient_checkpointing_kwargs={"use_reentrant": False},
         optim="adamw_torch_fused",
         ddp_find_unused_parameters=False,
         ddp_timeout=7200,
         save_on_each_node=False,
         fsdp=["full_shard", "auto_wrap"],
         fsdp_config=fsdp_config,
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
     )
     
     trainer = Trainer(

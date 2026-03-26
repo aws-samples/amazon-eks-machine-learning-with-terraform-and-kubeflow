@@ -215,8 +215,6 @@ def train(config: TrainingConfig):
         use_cache=False,
     )
     
-    model.gradient_checkpointing_enable()
-    
     # Apply LoRA if enabled
     if not config.full_ft:
         print("Applying LoRA configuration...")
@@ -258,7 +256,9 @@ def train(config: TrainingConfig):
         eval_strategy="steps",
         metric_for_best_model="eval_loss",
         greater_is_better=False,
-        dataloader_drop_last=False 
+        dataloader_drop_last=False,
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
     )
     
     # Data collator

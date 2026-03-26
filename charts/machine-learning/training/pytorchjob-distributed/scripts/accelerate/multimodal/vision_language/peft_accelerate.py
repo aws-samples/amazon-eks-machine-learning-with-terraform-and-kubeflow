@@ -159,9 +159,6 @@ def train(config: VLMTrainingConfig):
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.pad_token_id = tokenizer.eos_token_id
     
-    # Enable gradient checkpointing
-    model.gradient_checkpointing_enable()
-    
     # Freeze vision encoder if requested
     if config.freeze_vision_encoder:
         print("\nFreezing vision encoder...")
@@ -289,6 +286,7 @@ def train(config: VLMTrainingConfig):
         greater_is_better=False,
         dataloader_drop_last=False,
         gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
     )
     
     # Trainer (no custom data collator needed with batch_size=1)

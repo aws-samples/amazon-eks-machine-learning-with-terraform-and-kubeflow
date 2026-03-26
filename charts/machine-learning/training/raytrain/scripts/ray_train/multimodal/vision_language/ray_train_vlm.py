@@ -247,9 +247,6 @@ def train_func(config_dict: Dict):
     if config.max_eval_samples is not None and len(eval_dataset) > config.max_eval_samples:
         eval_dataset.samples = eval_dataset.samples[:config.max_eval_samples]
     
-    # Enable gradient checkpointing
-    model.gradient_checkpointing_enable()
-    
     # Freeze vision encoder if requested
     if config.freeze_vision_encoder:
         adapter.freeze_vision_encoder(model)
@@ -313,14 +310,14 @@ def train_func(config_dict: Dict):
         greater_is_better=False,
         load_best_model_at_end=False,
         seed=config.seed,
-        gradient_checkpointing=True,
-        gradient_checkpointing_kwargs={"use_reentrant": False},
         optim="adamw_torch_fused",
         ddp_find_unused_parameters=False,
         ddp_timeout=7200,
         save_on_each_node=False,
         fsdp=["full_shard", "auto_wrap"],
         fsdp_config=fsdp_config,
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
     )
     
     trainer = Trainer(

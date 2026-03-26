@@ -78,7 +78,6 @@ class CPTConfig:
     # Other
     seed: int = 42
     num_workers: int = 4
-    disable_gradient_checkpointing: bool = False
     
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> 'CPTConfig':
@@ -207,10 +206,8 @@ def train(config: CPTConfig):
         trust_remote_code=config.trust_remote_code,
         torch_dtype=torch.bfloat16,
         attn_implementation="flash_attention_2",
-        use_cache=False,  # Required for gradient checkpointing
+        use_cache=False,
     )
-    
-    # Gradient checkpointing managed by TrainingArguments (gradient_checkpointing=True)
     
     # Training arguments
     training_args = TrainingArguments(
@@ -238,8 +235,6 @@ def train(config: CPTConfig):
         seed=config.seed,
         dataloader_drop_last=False,
         ddp_find_unused_parameters=False,
-        gradient_checkpointing=not config.disable_gradient_checkpointing,
-        gradient_checkpointing_kwargs={"use_reentrant": False} if not config.disable_gradient_checkpointing else None,
     )
     
     # Data collator

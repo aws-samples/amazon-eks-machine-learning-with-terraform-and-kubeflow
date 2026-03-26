@@ -241,8 +241,6 @@ def train(config: VLMCPTConfig):
         seed=config.seed,
         dataloader_drop_last=False,
         ddp_find_unused_parameters=False,
-        gradient_checkpointing=True,
-        gradient_checkpointing_kwargs={"use_reentrant": False},
     )
 
     # Trainer (no data collator needed with batch_size=1)
@@ -327,7 +325,6 @@ def main():
     # Other
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--num_workers", type=int, default=4)
-
     # Utility
     parser.add_argument("--list_models", action="store_true",
                         help="List all supported models and exit")

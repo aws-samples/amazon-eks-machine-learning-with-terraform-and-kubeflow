@@ -212,9 +212,6 @@ def train_func(config_dict: Dict):
     if config.max_eval_samples is not None and len(eval_dataset) > config.max_eval_samples:
         eval_dataset.samples = eval_dataset.samples[:config.max_eval_samples]
     
-    # Enable gradient checkpointing
-    model.gradient_checkpointing_enable()
-    
     # Freeze vision encoder if requested
     if config.freeze_vision_encoder:
         adapter.freeze_vision_encoder(model)
@@ -234,6 +231,8 @@ def train_func(config_dict: Dict):
         "fsdp_cpu_ram_efficient_loading": True,
         "fsdp_sync_module_states": True,
         "fsdp_auto_wrap_policy": "TRANSFORMER_BASED_WRAP",
+        "fsdp_activation_checkpointing": True,
+        "fsdp_activation_checkpointing_reentrant": False,
     }
     
     report_to = ["tensorboard", "wandb"] if config.use_wandb else ["tensorboard"]
@@ -262,8 +261,6 @@ def train_func(config_dict: Dict):
         logging_dir=f"{config.results_dir}/logs",
         seed=config.seed,
         dataloader_drop_last=False,
-        gradient_checkpointing=True,
-        gradient_checkpointing_kwargs={"use_reentrant": False},
         optim="adamw_torch_fused",
         ddp_find_unused_parameters=False,
         ddp_timeout=7200,
@@ -353,7 +350,6 @@ def parse_args():
     # Other
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--num_workers", type=int, default=4)
-    
     # Utility
     parser.add_argument("--list_models", action="store_true",
                         help="List all supported models and exit")
