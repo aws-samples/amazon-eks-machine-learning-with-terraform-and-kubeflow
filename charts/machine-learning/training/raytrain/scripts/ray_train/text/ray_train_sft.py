@@ -117,6 +117,7 @@ class Config:
     logging_dir: str = None
     early_stopping_patience: int = 3
     early_stopping_threshold: float = 0.001
+    use_liger_kernel: bool = False
 
     def to_dict(self):
         """Convert to dictionary for Ray Train."""
@@ -294,6 +295,7 @@ def train_func(config_dict: Dict):
         fsdp_config=fsdp_config,
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
+        use_liger_kernel=config.use_liger_kernel,
     )
     
     trainer = Trainer(

@@ -26,6 +26,7 @@ ray:
         - torchao==0.14.1
         - wandb==0.23.0
         - mpi4py==4.1.1
+        - liger-kernel==0.7.0
 image:
 image_pull_policy: Always
 ebs:

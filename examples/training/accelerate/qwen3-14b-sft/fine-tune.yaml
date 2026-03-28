@@ -47,6 +47,7 @@ pre_script:
   - pip3 install transformers==4.57.1 datasets==4.4.1 peft==0.18.0 
         accelerate==1.12.0 tensorboard==2.20.0 sentencepiece==0.2.1 torchao==0.14.1
         wandb==0.23.0 mpi4py==4.1.1
+  - pip3 install liger-kernel==0.7.0
   - cat /tmp/accel_config.yaml
   - mkdir -p $HOME/logs/$PET_NODE_RANK
   - PROCESS_LOG=$HOME/logs/$PET_NODE_RANK/fine_tune.log

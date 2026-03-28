@@ -95,6 +95,7 @@ class TrainingConfig:
     # Other
     seed: int = 42
     num_workers: int = 8
+    use_liger_kernel: bool = False
     
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> 'TrainingConfig':
@@ -259,6 +260,7 @@ def train(config: TrainingConfig):
         dataloader_drop_last=False,
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
+        use_liger_kernel=config.use_liger_kernel,
     )
     
     # Data collator

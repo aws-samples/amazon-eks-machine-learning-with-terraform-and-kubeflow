@@ -78,6 +78,7 @@ class CPTConfig:
     # Other
     seed: int = 42
     num_workers: int = 4
+    use_liger_kernel: bool = False
     
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> 'CPTConfig':
@@ -235,6 +236,7 @@ def train(config: CPTConfig):
         seed=config.seed,
         dataloader_drop_last=False,
         ddp_find_unused_parameters=False,
+        use_liger_kernel=config.use_liger_kernel,
     )
     
     # Data collator

@@ -89,6 +89,7 @@ class CPTConfig:
     # Other
     seed: int = 42
     num_workers: int = 4
+    use_liger_kernel: bool = False
 
     def to_dict(self):
         config_dict = asdict(self)
@@ -266,6 +267,7 @@ def train_func(config_dict: Dict):
         save_on_each_node=False,
         fsdp=["full_shard", "auto_wrap"],
         fsdp_config=fsdp_config,
+        use_liger_kernel=config.use_liger_kernel,
     )
 
     trainer = Trainer(
