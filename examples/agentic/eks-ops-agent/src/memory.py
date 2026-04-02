@@ -390,7 +390,10 @@ async def recall_knowledge(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        results = await _memory_service.recall(
+        engram = await _memory_service._get_engram()
+        # Use hybrid search (vector + BM25) when backend supports it,
+        # falls back to vector-only transparently
+        results = await engram.search_hybrid(
             query=query,
             namespace=namespace,
             top_k=top_k,
@@ -556,6 +559,180 @@ async def memory_stats(
         return f"Failed to get stats: {str(e)}"
 
 
+@tool
+async def review_memories(
+    view: str = "active",
+    namespace: Optional[str] = None,
+    days: int = 30,
+) -> str:
+    """
+    Review memories by lifecycle status or staleness — the ops lead's memory audit tool.
+
+    Use this when the user wants to understand what's in memory, find outdated knowledge,
+    or identify memories that need cleanup. This is the "memory hygiene" tool.
+
+    Args:
+        view: What to show:
+            'active' — all active memories (default)
+            'stale' — memories not accessed in the last N days (use 'days' to control)
+            'deprecated' — memories that have been superseded by newer knowledge
+            'expired' — memories marked for archival
+            'archived' — soft-deleted memories (still recoverable)
+        namespace: Optional scope (e.g. "/incidents" to audit only incident memories)
+        days: For 'stale' view — how many days without access counts as stale (default 30)
+
+    Returns:
+        Formatted list of memories matching the criteria
+    """
+    if _memory_service is None:
+        return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
+
+    try:
+        engram = await _memory_service._get_engram()
+
+        if view == "stale":
+            records = await engram.get_stale(days=days, namespace=namespace)
+            label = f"stale (not accessed in {days} days)"
+        elif view in ("deprecated", "expired", "archived", "active"):
+            records = await engram.get_by_status(status=view, namespace=namespace)
+            label = view
+        else:
+            return f"Unknown view '{view}'. Use: active, stale, deprecated, expired, archived."
+
+        if not records:
+            return f"No {label} memories found{' in ' + namespace if namespace else ''}."
+
+        lines = [f"Found {len(records)} {label} memories:"]
+        for i, rec in enumerate(records, 1):
+            age = ""
+            if rec.last_accessed_at:
+                age = f" | last accessed: {rec.last_accessed_at.strftime('%Y-%m-%d')}"
+            elif rec.created_at:
+                age = f" | created: {rec.created_at.strftime('%Y-%m-%d')}"
+            success = ""
+            if rec.success_count or rec.failure_count:
+                success = f" | outcomes: {rec.success_count}✓ {rec.failure_count}✗"
+            lines.append(
+                f"  {i}. [{rec.record_type.value}] {rec.content[:80]}"
+                f" (id: {rec.id[:8]}){age}{success}"
+            )
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"Failed to review memories: {e}")
+        return f"Failed to review memories: {str(e)}"
+
+
+@tool
+async def manage_memory_lifecycle(
+    action: str,
+    record_ids: Optional[list[str]] = None,
+    scope: Optional[str] = None,
+    namespace: Optional[str] = None,
+    days: int = 30,
+) -> str:
+    """
+    Manage memory lifecycle — expire, archive, or clean up memories.
+
+    Use this when the user wants to retire outdated knowledge, archive old memories,
+    or clean up after a memory audit. Always use review_memories first to see what
+    will be affected.
+
+    Args:
+        action: What to do:
+            'expire' — mark memories as expired (grace period before archive)
+            'archive' — soft-delete memories (recoverable but hidden from search)
+            'deprecate' — mark as superseded (use when newer knowledge exists)
+        record_ids: Specific memory IDs to act on (from review_memories output)
+        scope: Bulk scope instead of individual IDs:
+            'all_stale' — act on all memories not accessed in N days
+            'all_deprecated' — act on all deprecated memories
+            'all_expired' — act on all expired memories
+        namespace: Optional scope for bulk operations
+        days: For 'all_stale' scope — staleness threshold (default 30)
+
+    Returns:
+        Summary of what was changed
+    """
+    if _memory_service is None:
+        return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
+
+    if action not in ("expire", "archive", "deprecate"):
+        return f"Unknown action '{action}'. Use: expire, archive, deprecate."
+
+    try:
+        engram = await _memory_service._get_engram()
+
+        # Resolve record IDs from scope if not provided directly
+        ids = record_ids or []
+        if not ids and scope:
+            if scope == "all_stale":
+                records = await engram.get_stale(days=days, namespace=namespace)
+            elif scope == "all_deprecated":
+                records = await engram.get_by_status("deprecated", namespace=namespace)
+            elif scope == "all_expired":
+                records = await engram.get_by_status("expired", namespace=namespace)
+            else:
+                return f"Unknown scope '{scope}'. Use: all_stale, all_deprecated, all_expired."
+            ids = [r.id for r in records]
+
+        if not ids:
+            return f"No memories to {action}. Use review_memories to find candidates."
+
+        # Map action to status
+        status_map = {"expire": "expired", "archive": "archived", "deprecate": "deprecated"}
+        target_status = status_map[action]
+
+        if action == "archive":
+            count = await engram.bulk_archive(ids)
+        else:
+            count = await engram.bulk_update_status(ids, target_status)
+
+        return f"Done: {action}d {count} memories (target status: {target_status})."
+
+    except Exception as e:
+        logger.error(f"Failed to manage lifecycle: {e}")
+        return f"Failed to manage lifecycle: {str(e)}"
+
+
+@tool
+async def session_history(
+    session_id: str,
+) -> str:
+    """
+    Retrieve all memories from a specific session — see what was learned in a conversation.
+
+    Use this when the user asks about what happened in a previous session or wants
+    to review what knowledge was captured during a specific interaction.
+
+    Args:
+        session_id: The session identifier to look up
+
+    Returns:
+        All memories stored during that session
+    """
+    if _memory_service is None:
+        return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
+
+    try:
+        engram = await _memory_service._get_engram()
+        records = await engram.get_by_session(session_id)
+
+        if not records:
+            return f"No memories found for session '{session_id}'."
+
+        lines = [f"Session '{session_id}' — {len(records)} memories:"]
+        for i, rec in enumerate(records, 1):
+            lines.append(
+                f"  {i}. [{rec.record_type.value}] {rec.content[:100]}"
+            )
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"Failed to get session history: {e}")
+        return f"Failed to get session history: {str(e)}"
+
+
 def get_memory_tools() -> list:
     """Get the list of memory tools for the agent."""
     return [
@@ -567,4 +744,7 @@ def get_memory_tools() -> list:
         recall_context,
         mark_memory_outcome,
         memory_stats,
+        review_memories,
+        manage_memory_lifecycle,
+        session_history,
     ]
