@@ -118,6 +118,7 @@ helm upgrade --install eks-ops-agent -n kagent \
   charts/machine-learning/agentic/kagent-agent \
   -f examples/agentic/eks-ops-agent/eks-ops-agent.yaml \
   --set image.repository="${ECR_REPO}" \
+  --set image.tag="${VERSION}" \
   --set "env[0].name=AWS_REGION" --set "env[0].value=${AWS_REGION}" \
   --set "env[1].name=BEDROCK_MODEL_ID" --set "env[1].value=us.anthropic.claude-sonnet-4-20250514-v1:0" \
   --set "env[2].name=ENABLE_MCP_TOOLS" --set "env[2].value=${ENABLE_MCP_TOOLS}" \
