@@ -321,12 +321,18 @@ async def remember_knowledge(
     namespace: str = "/learnings",
     record_type: str = "semantic",
     metadata: Optional[dict] = None,
+    replaces: Optional[str] = None,
 ) -> str:
     """
     Store operational knowledge in long-term memory for future recall.
 
     Use this after resolving an incident, discovering a useful pattern, or
     learning something about the cluster that should be remembered.
+
+    When the user says information has changed or been updated (e.g. "actually
+    the value is 200 not 50", "update your memory"), use the 'replaces' parameter
+    to describe the old memory. The old memory will be marked as deprecated and
+    the new one will take its place.
 
     Args:
         content: What to remember. Be specific and include context.
@@ -338,6 +344,9 @@ async def remember_knowledge(
             /learnings — general knowledge
         record_type: Type of memory - 'semantic' (facts), 'episodic' (events), 'procedural' (how-to)
         metadata: Optional key-value pairs (e.g. {"severity": "P1", "cluster": "eks-prod"})
+        replaces: Description of the old memory this one supersedes. When provided,
+            engram will find the best matching old memory, mark it as deprecated,
+            and link the new memory to it. Example: "maxPoolSize=50 fix for payment-service"
 
     Returns:
         Confirmation with the stored memory ID
@@ -346,14 +355,28 @@ async def remember_knowledge(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
+        engram = await _memory_service._get_engram()
         rt = RecordType(record_type)
+
+        # Resolve supersedes ID from description
+        supersedes_id = None
+        if replaces:
+            results = await engram.search(query=replaces, top_k=1)
+            if results.records:
+                supersedes_id = results.records[0].id
+
         record_id = await _memory_service.remember(
             content=content,
             namespace=namespace,
             record_type=rt,
             metadata=metadata or {},
+            supersedes=supersedes_id,
         )
-        return f"Stored {record_type} memory [{record_id[:8]}]: {content[:100]}"
+
+        msg = f"Stored {record_type} memory [{record_id[:8]}]: {content[:100]}"
+        if supersedes_id:
+            msg += f"\n(Superseded old memory [{supersedes_id[:8]}] — marked as deprecated)"
+        return msg
 
     except Exception as e:
         logger.error(f"Failed to store memory: {e}")
