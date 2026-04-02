@@ -487,21 +487,26 @@ async def mark_memory_outcome(
     try:
         engram = await _memory_service._get_engram()
 
-        # If no record_id provided, search for the best match
-        if not record_id:
+        # Try record_id first, fall back to description-based search
+        matched_content = None
+        if record_id:
+            result = await engram.record_outcome(record_id, success=success)
+            if result:
+                matched_content = record_id[:8]
+
+        # If record_id not provided or didn't match, search by description
+        if not matched_content:
             results = await engram.search(query=description, top_k=1)
             if not results.records:
                 return f"Could not find a memory matching '{description}' to record outcome."
-            record_id = results.records[0].id
+            found_id = results.records[0].id
             matched_content = results.records[0].content[:80]
-        else:
-            matched_content = record_id[:8]
+            result = await engram.record_outcome(found_id, success=success)
+            if not result:
+                return f"Found memory but failed to record outcome."
 
-        result = await engram.record_outcome(record_id, success=success)
         outcome = "successful" if success else "unsuccessful"
-        if result:
-            return f"Recorded outcome as {outcome} for memory: {matched_content}"
-        return f"Memory not found."
+        return f"Recorded outcome as {outcome} for memory: {matched_content}"
 
     except Exception as e:
         logger.error(f"Failed to record outcome: {e}")
