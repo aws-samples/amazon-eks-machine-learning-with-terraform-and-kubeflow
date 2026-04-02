@@ -419,6 +419,130 @@ async def recall_knowledge(
         return f"Failed to search memory: {str(e)}"
 
 
+@tool
+async def recall_context(
+    query: str,
+    namespace: Optional[str] = None,
+    top_k: int = 5,
+) -> str:
+    """
+    Comprehensive memory search: find similar episodes, suggest procedures, and flag known failures.
+
+    Use this for complex situations where you need the full picture — what happened before,
+    what procedures exist, and what approaches failed. More thorough than recall_knowledge.
+
+    Args:
+        query: What situation you're dealing with (natural language)
+            Examples: "pod OOM kills in payment service", "EKS upgrade from 1.28 to 1.29"
+        namespace: Optional scope to narrow search
+        top_k: Number of results per category
+
+    Returns:
+        Grouped results: similar episodes, suggested procedures, known failures
+    """
+    if _memory_service is None:
+        return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
+
+    try:
+        engram = await _memory_service._get_engram()
+        context = await engram.recall_context(
+            query=query,
+            namespace=namespace,
+            top_k=top_k,
+        )
+        return context.summary()
+
+    except Exception as e:
+        logger.error(f"Failed contextual recall: {e}")
+        return f"Failed to search memory: {str(e)}"
+
+
+@tool
+async def mark_memory_outcome(
+    record_id: str,
+    success: bool,
+) -> str:
+    """
+    Record whether a memory was helpful (success) or not (failure).
+
+    Call this after using a recalled memory to improve future ranking.
+    Successful memories will rank higher in future searches.
+
+    Args:
+        record_id: The ID of the memory (from recall results)
+        success: True if the memory was helpful, False if it was misleading
+
+    Returns:
+        Confirmation message
+    """
+    if _memory_service is None:
+        return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
+
+    try:
+        engram = await _memory_service._get_engram()
+        result = await engram.record_outcome(record_id, success=success)
+        outcome = "success" if success else "failure"
+        if result:
+            return f"Recorded {outcome} for memory {record_id[:8]}."
+        return f"Memory {record_id} not found."
+
+    except Exception as e:
+        logger.error(f"Failed to record outcome: {e}")
+        return f"Failed to record outcome: {str(e)}"
+
+
+@tool
+async def memory_stats(
+    namespace: Optional[str] = None,
+) -> str:
+    """
+    Get statistics about what's stored in memory.
+
+    Use this to understand what knowledge domains are populated before searching.
+    Helps decide whether to search memory or investigate from scratch.
+
+    Args:
+        namespace: Optional scope (e.g. "/incidents" to see incident stats only)
+
+    Returns:
+        Summary of stored memories: counts by type, namespaces, success rates
+    """
+    if _memory_service is None:
+        return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
+
+    try:
+        engram = await _memory_service._get_engram()
+        stats = await engram.stats(namespace=namespace)
+
+        if not stats or stats.get("total_count", 0) == 0:
+            scope = f" in namespace '{namespace}'" if namespace else ""
+            return f"No memories stored{scope}."
+
+        lines = [f"Memory statistics{' for ' + namespace if namespace else ''}:"]
+        lines.append(f"  Total memories: {stats['total_count']}")
+
+        if stats.get("by_record_type"):
+            type_parts = [f"{t}: {c}" for t, c in stats["by_record_type"].items()]
+            lines.append(f"  By type: {', '.join(type_parts)}")
+
+        if stats.get("namespaces"):
+            lines.append(f"  Namespaces: {', '.join(stats['namespaces'][:10])}")
+
+        if stats.get("avg_success_rate") is not None:
+            lines.append(f"  Average success rate: {stats['avg_success_rate']:.1%}")
+
+        if stats.get("oldest_memory"):
+            lines.append(f"  Oldest: {stats['oldest_memory']}")
+        if stats.get("newest_memory"):
+            lines.append(f"  Newest: {stats['newest_memory']}")
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"Failed to get memory stats: {e}")
+        return f"Failed to get stats: {str(e)}"
+
+
 def get_memory_tools() -> list:
     """Get the list of memory tools for the agent."""
     return [
@@ -427,4 +551,7 @@ def get_memory_tools() -> list:
         clear_user_defaults,
         remember_knowledge,
         recall_knowledge,
+        recall_context,
+        mark_memory_outcome,
+        memory_stats,
     ]
