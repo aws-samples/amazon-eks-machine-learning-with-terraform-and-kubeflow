@@ -467,7 +467,7 @@ async def mark_memory_outcome(
     Record whether a recalled memory or procedure was helpful (success) or not (failure).
 
     Use this when the user reports that a previously recalled memory, procedure,
-    or recommendation worked or didn't work. The tool will find the most relevant
+    or recommendation worked or didn't work. Engram will find the most relevant
     memory matching the description and record the outcome.
 
     Successful memories will rank higher in future searches.
@@ -476,7 +476,7 @@ async def mark_memory_outcome(
         description: What the memory was about (e.g. "connection pool fix procedure")
         success: True if it was helpful, False if it was misleading
         record_id: Optional exact ID if known (from recall results). If not provided,
-                   the tool will search for the best matching memory.
+                   engram will search for the best matching memory.
 
     Returns:
         Confirmation message
@@ -487,26 +487,17 @@ async def mark_memory_outcome(
     try:
         engram = await _memory_service._get_engram()
 
-        # Try record_id first, fall back to description-based search
-        matched_content = None
-        if record_id:
-            result = await engram.record_outcome(record_id, success=success)
-            if result:
-                matched_content = record_id[:8]
+        result = await engram.record_outcome(
+            record_id=record_id,
+            success=success,
+            description=description,
+        )
 
-        # If record_id not provided or didn't match, search by description
-        if not matched_content:
-            results = await engram.search(query=description, top_k=1)
-            if not results.records:
-                return f"Could not find a memory matching '{description}' to record outcome."
-            found_id = results.records[0].id
-            matched_content = results.records[0].content[:80]
-            result = await engram.record_outcome(found_id, success=success)
-            if not result:
-                return f"Found memory but failed to record outcome."
+        if not result:
+            return f"Could not find a memory matching '{description}' to record outcome."
 
         outcome = "successful" if success else "unsuccessful"
-        return f"Recorded outcome as {outcome} for memory: {matched_content}"
+        return f"Recorded outcome as {outcome} for memory matching: {description[:80]}"
 
     except Exception as e:
         logger.error(f"Failed to record outcome: {e}")
