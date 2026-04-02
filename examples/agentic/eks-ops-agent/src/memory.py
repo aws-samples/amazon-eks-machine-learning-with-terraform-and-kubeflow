@@ -459,18 +459,24 @@ async def recall_context(
 
 @tool
 async def mark_memory_outcome(
-    record_id: str,
+    description: str,
     success: bool,
+    record_id: Optional[str] = None,
 ) -> str:
     """
-    Record whether a memory was helpful (success) or not (failure).
+    Record whether a recalled memory or procedure was helpful (success) or not (failure).
 
-    Call this after using a recalled memory to improve future ranking.
+    Use this when the user reports that a previously recalled memory, procedure,
+    or recommendation worked or didn't work. The tool will find the most relevant
+    memory matching the description and record the outcome.
+
     Successful memories will rank higher in future searches.
 
     Args:
-        record_id: The ID of the memory (from recall results)
-        success: True if the memory was helpful, False if it was misleading
+        description: What the memory was about (e.g. "connection pool fix procedure")
+        success: True if it was helpful, False if it was misleading
+        record_id: Optional exact ID if known (from recall results). If not provided,
+                   the tool will search for the best matching memory.
 
     Returns:
         Confirmation message
@@ -480,11 +486,22 @@ async def mark_memory_outcome(
 
     try:
         engram = await _memory_service._get_engram()
+
+        # If no record_id provided, search for the best match
+        if not record_id:
+            results = await engram.search(query=description, top_k=1)
+            if not results.records:
+                return f"Could not find a memory matching '{description}' to record outcome."
+            record_id = results.records[0].id
+            matched_content = results.records[0].content[:80]
+        else:
+            matched_content = record_id[:8]
+
         result = await engram.record_outcome(record_id, success=success)
-        outcome = "success" if success else "failure"
+        outcome = "successful" if success else "unsuccessful"
         if result:
-            return f"Recorded {outcome} for memory {record_id[:8]}."
-        return f"Memory {record_id} not found."
+            return f"Recorded outcome as {outcome} for memory: {matched_content}"
+        return f"Memory not found."
 
     except Exception as e:
         logger.error(f"Failed to record outcome: {e}")

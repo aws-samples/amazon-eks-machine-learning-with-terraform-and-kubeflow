@@ -12,7 +12,7 @@ description: "EKS Operations Agent - manages and troubleshoots Amazon EKS cluste
 
 image:
   repository: ""  # Set via --set (e.g. 123456789012.dkr.ecr.us-west-2.amazonaws.com/eks-ops-agent)
-  tag: "0.1.1"
+  tag: "0.1.3"
 
 env:
   - name: AWS_REGION
