@@ -18,7 +18,7 @@ COPY engram-*.whl /tmp/
 
 # Install all dependencies at system level (no venv — container is the isolation)
 RUN uv pip install --system . \
-    && uv pip install --system "/tmp/engram-0.1.0-py3-none-any.whl[pgvector,bedrock]" \
+    && uv pip install --system "/tmp/engram-0.3.0-py3-none-any.whl[pgvector,bedrock]" \
     && uv pip install --system ".[memory]" \
     && rm /tmp/engram-*.whl
 
