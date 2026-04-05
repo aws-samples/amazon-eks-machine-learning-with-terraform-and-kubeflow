@@ -29,6 +29,8 @@ class Config:
     # Engram (persistent memory) - Module 3
     # Connection string to PostgreSQL+pgvector (Aurora or in-cluster Postgres)
     ENGRAM_PG_URL: str = os.getenv("ENGRAM_PG_URL", "")
+    # Optional: path to engram YAML config (for composition/multi-backend mode)
+    ENGRAM_CONFIG_PATH: str = os.getenv("ENGRAM_CONFIG_PATH", "")
 
     # Embedding config for engram
     ENGRAM_EMBEDDING_PROVIDER: str = os.getenv("ENGRAM_EMBEDDING_PROVIDER", "bedrock")

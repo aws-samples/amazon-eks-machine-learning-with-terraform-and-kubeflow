@@ -78,16 +78,22 @@ class MemoryService:
     Provides:
     - User defaults (cluster/namespace preferences) via engram records
     - Semantic memory (searchable operational knowledge) via vector search
+
+    Supports two initialization modes:
+    - Direct: pg_connection_string → pgvector backend (default)
+    - Config file: config_path → any backend or composition (for multi-backend)
     """
 
     def __init__(
         self,
-        pg_connection_string: str,
+        pg_connection_string: str = "",
         embedding_provider: str = "bedrock",
         embedding_model: str = "amazon.titan-embed-text-v2:0",
         embedding_dimensions: int = 1024,
+        config_path: str = "",
     ):
         self._pg_connection_string = pg_connection_string
+        self._config_path = config_path
         self._embedding_config = EmbeddingConfig(
             provider=embedding_provider,
             model=embedding_model,
@@ -98,12 +104,16 @@ class MemoryService:
     async def _get_engram(self) -> Engram:
         """Lazy-initialize engram connection on first use."""
         if self._engram is None:
-            self._engram = await Engram.create(
-                backend_name="pgvector",
-                connection_string=self._pg_connection_string,
-                embedding_config=self._embedding_config,
-            )
-            logger.info("MemoryService initialized with engram (pgvector)")
+            if self._config_path:
+                self._engram = await Engram.from_config(self._config_path)
+                logger.info("MemoryService initialized with engram (config: %s)", self._config_path)
+            else:
+                self._engram = await Engram.create(
+                    backend_name="pgvector",
+                    connection_string=self._pg_connection_string,
+                    embedding_config=self._embedding_config,
+                )
+                logger.info("MemoryService initialized with engram (pgvector)")
         return self._engram
 
     def _defaults_ns(self, user_id: str) -> str:
@@ -376,6 +386,18 @@ async def remember_knowledge(
         msg = f"Stored {record_type} memory [{record_id[:8]}]: {content[:100]}"
         if supersedes_id:
             msg += f"\n(Superseded old memory [{supersedes_id[:8]}] — marked as deprecated)"
+
+        # Check if conflict was detected during add()
+        conflict_entries = engram.audit.by_record(record_id)
+        for entry in conflict_entries:
+            if entry.operation == "conflict_detected":
+                msg += (
+                    f"\nWarning: Potential conflict with existing memory "
+                    f"[{entry.details.get('existing_id', '?')[:8]}] "
+                    f"(similarity: {entry.details.get('similarity', '?')})"
+                )
+                break
+
         return msg
 
     except Exception as e:
@@ -756,6 +778,115 @@ async def session_history(
         return f"Failed to get session history: {str(e)}"
 
 
+@tool
+async def memory_audit(
+    record_id: Optional[str] = None,
+    last_n: int = 10,
+) -> str:
+    """
+    Show the audit trail of memory operations — what was stored, searched, updated, and when.
+
+    Use this when the user asks about memory history, wants to understand how knowledge
+    evolved, or needs a compliance trail of what the agent learned and when.
+
+    Args:
+        record_id: Optional — show audit trail for a specific memory only
+        last_n: Number of recent entries to show (default 10)
+
+    Returns:
+        Formatted audit log with timestamps and operations
+    """
+    if _memory_service is None:
+        return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
+
+    try:
+        engram = await _memory_service._get_engram()
+
+        if record_id:
+            entries = engram.audit.by_record(record_id)
+            if not entries:
+                return f"No audit entries found for memory {record_id[:8]}."
+            lines = [f"Audit trail for memory {record_id[:8]} ({len(entries)} entries):"]
+        else:
+            entries = engram.audit.recent(last_n)
+            if not entries:
+                return "No audit entries yet."
+            lines = [f"Memory audit log (last {len(entries)} operations):"]
+
+        for i, entry in enumerate(entries, 1):
+            lines.append(f"  {i}. {entry.summary()}")
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"Failed to get audit log: {e}")
+        return f"Failed to get audit log: {str(e)}"
+
+
+@tool
+async def memory_lineage(
+    description: str,
+    record_id: Optional[str] = None,
+) -> str:
+    """
+    Trace the provenance and lineage of a memory — who created it, who used it,
+    what it superseded, and what confidence level it has.
+
+    Use this when the user asks about the origin of knowledge, wants to understand
+    how information propagated, or needs to verify the reliability of a memory.
+
+    Args:
+        description: What the memory is about (e.g. "connection pool fix")
+        record_id: Optional exact ID if known
+
+    Returns:
+        Provenance chain showing creation, usage, supersession, and confidence
+    """
+    if _memory_service is None:
+        return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
+
+    try:
+        engram = await _memory_service._get_engram()
+        lineage = await engram.get_lineage(
+            record_id=record_id,
+            description=description,
+        )
+
+        if "error" in lineage:
+            return f"Could not find memory: {lineage['error']}"
+
+        rec = lineage["record"]
+        lines = [f"Memory Lineage for [{rec['id'][:8]}]:"]
+        lines.append(f"  Content: {rec['content']}")
+        lines.append(f"  Type: {rec['record_type']} | Status: {rec['status']}")
+        lines.append(f"  Created: {rec.get('created_at', 'unknown')}")
+        lines.append(f"  Confidence: {lineage.get('confidence', 'N/A')}")
+
+        if lineage.get("created_by"):
+            lines.append(f"  Created by: {lineage['created_by']}")
+        if lineage.get("workflow_id"):
+            lines.append(f"  Workflow: {lineage['workflow_id']}")
+        if lineage.get("triggered_by"):
+            lines.append(f"  Triggered by: {lineage['triggered_by']}")
+        if lineage.get("accessed_by"):
+            lines.append(f"  Accessed by: {', '.join(lineage['accessed_by'])}")
+
+        if lineage.get("supersedes_chain"):
+            lines.append(f"  Supersedes chain ({len(lineage['supersedes_chain'])} predecessors):")
+            for pred in lineage["supersedes_chain"]:
+                lines.append(f"    ← [{pred['id'][:8]}] {pred['content'][:60]} ({pred['status']})")
+
+        if lineage.get("derived_records"):
+            lines.append(f"  Derived records ({len(lineage['derived_records'])}):")
+            for derived in lineage["derived_records"]:
+                lines.append(f"    → [{derived['id'][:8]}] {derived['content'][:60]}")
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"Failed to get lineage: {e}")
+        return f"Failed to get lineage: {str(e)}"
+
+
 def get_memory_tools() -> list:
     """Get the list of memory tools for the agent."""
     return [
@@ -770,4 +901,6 @@ def get_memory_tools() -> list:
         review_memories,
         manage_memory_lifecycle,
         session_history,
+        memory_audit,
+        memory_lineage,
     ]

@@ -92,8 +92,8 @@ def load_memory_tools() -> list:
         logger.info("Memory disabled (set ENABLE_MEMORY=true to enable)")
         return []
 
-    if not app_config.ENGRAM_PG_URL:
-        logger.warning("Memory enabled but ENGRAM_PG_URL not set. Memory disabled.")
+    if not app_config.ENGRAM_PG_URL and not app_config.ENGRAM_CONFIG_PATH:
+        logger.warning("Memory enabled but neither ENGRAM_PG_URL nor ENGRAM_CONFIG_PATH set. Memory disabled.")
         return []
 
     try:
@@ -105,10 +105,14 @@ def load_memory_tools() -> list:
             embedding_provider=app_config.ENGRAM_EMBEDDING_PROVIDER,
             embedding_model=app_config.ENGRAM_EMBEDDING_MODEL,
             embedding_dimensions=app_config.ENGRAM_EMBEDDING_DIMENSIONS,
+            config_path=app_config.ENGRAM_CONFIG_PATH,
         )
         set_memory_service(memory_service)
 
-        logger.info(f"Memory enabled (engram pgvector: {app_config.ENGRAM_PG_URL.split('@')[-1] if '@' in app_config.ENGRAM_PG_URL else 'configured'})")
+        if app_config.ENGRAM_CONFIG_PATH:
+            logger.info(f"Memory enabled (engram config: {app_config.ENGRAM_CONFIG_PATH})")
+        else:
+            logger.info(f"Memory enabled (engram pgvector: {app_config.ENGRAM_PG_URL.split('@')[-1] if '@' in app_config.ENGRAM_PG_URL else 'configured'})")
         return get_memory_tools()
 
     except ImportError as e:
