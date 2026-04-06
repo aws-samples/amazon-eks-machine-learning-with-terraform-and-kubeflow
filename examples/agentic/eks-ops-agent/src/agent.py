@@ -179,7 +179,7 @@ def create_agent_graph(
         logger.info(f"Creating agent with {len(tools)} tools")
 
         # Add tool node
-        builder.add_node("tools", ToolNode(tools))
+        builder.add_node("tools", ToolNode(tools, handle_tool_errors=True))
 
         # Add edges with conditional routing
         builder.add_edge(START, "agent")
