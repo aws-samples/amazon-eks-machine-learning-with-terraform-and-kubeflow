@@ -1,0 +1,37 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DynamoDBEngram",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:DescribeTable",
+        "dynamodb:CreateTable"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:us-west-2:489829964455:table/engram-memory",
+        "arn:aws:dynamodb:us-west-2:489829964455:table/engram-memory/index/*"
+      ]
+    },
+    {
+      "Sid": "OpenSearchEngram",
+      "Effect": "Allow",
+      "Action": [
+        "es:ESHttpGet",
+        "es:ESHttpPost",
+        "es:ESHttpPut",
+        "es:ESHttpDelete",
+        "es:ESHttpHead"
+      ],
+      "Resource": "arn:aws:es:us-west-2:489829964455:domain/engram-dev/*"
+    }
+  ]
+}

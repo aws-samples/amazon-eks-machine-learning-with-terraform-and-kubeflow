@@ -30,6 +30,16 @@ env:
   - name: ENGRAM_PG_URL
     value: ""
 
+  # Engram composition mode (DynamoDB primary + OpenSearch search index).
+  # Uncomment ENGRAM_CONFIG_PATH and OPENSEARCH_ENDPOINT to enable.
+  # When ENGRAM_CONFIG_PATH is set, ENGRAM_PG_URL is ignored.
+  # - name: ENGRAM_CONFIG_PATH
+  #   value: "/app/engram-composition.yaml"
+  # - name: OPENSEARCH_ENDPOINT
+  #   value: "search-engram-dev-yq2c52v6qzuivfn4qlrdxxwssm.us-west-2.es.amazonaws.com"
+  # - name: ENGRAM_DDB_TABLE
+  #   value: "engram-memory"
+
 resources:
   requests:
     memory: "512Mi"

@@ -28,6 +28,12 @@ VERSION="${VERSION:-0.1.1}"
 AWS_REGION="${AWS_REGION:-$(aws configure get region 2>/dev/null || echo us-west-2)}"
 ENABLE_MCP_TOOLS="${ENABLE_MCP_TOOLS:-false}"
 ENABLE_MEMORY="${ENABLE_MEMORY:-false}"
+# Composition mode (DynamoDB primary + OpenSearch search index).
+# When ENABLE_COMPOSITION=true, ENGRAM_PG_URL is ignored — engram loads
+# /app/engram-composition.yaml instead. OPENSEARCH_ENDPOINT must be set.
+ENABLE_COMPOSITION="${ENABLE_COMPOSITION:-false}"
+OPENSEARCH_ENDPOINT="${OPENSEARCH_ENDPOINT:-}"
+ENGRAM_DDB_TABLE="${ENGRAM_DDB_TABLE:-engram-memory}"
 
 # Validate required env vars
 if [ -z "$TF_DIR" ]; then
@@ -50,8 +56,13 @@ echo "========================================"
 echo "Image:           ${IMAGE_NAME}"
 echo "Version:         ${VERSION}"
 echo "Region:          ${AWS_REGION}"
-echo "ENABLE_MCP_TOOLS: ${ENABLE_MCP_TOOLS}"
-echo "ENABLE_MEMORY:    ${ENABLE_MEMORY}"
+echo "ENABLE_MCP_TOOLS:   ${ENABLE_MCP_TOOLS}"
+echo "ENABLE_MEMORY:      ${ENABLE_MEMORY}"
+echo "ENABLE_COMPOSITION: ${ENABLE_COMPOSITION}"
+if [ "$ENABLE_COMPOSITION" = "true" ]; then
+    echo "OPENSEARCH_ENDPOINT: ${OPENSEARCH_ENDPOINT}"
+    echo "ENGRAM_DDB_TABLE:   ${ENGRAM_DDB_TABLE}"
+fi
 
 # Build the image
 echo ""
@@ -114,6 +125,18 @@ if [ "$ENABLE_MEMORY" = "true" ]; then
     fi
 fi
 
+COMPOSITION_HELM_ARGS=""
+if [ "$ENABLE_COMPOSITION" = "true" ]; then
+    if [ -z "$OPENSEARCH_ENDPOINT" ]; then
+        echo -e "${YELLOW}ERROR: ENABLE_COMPOSITION=true but OPENSEARCH_ENDPOINT is not set.${NC}"
+        exit 1
+    fi
+    COMPOSITION_HELM_ARGS="\
+        --set env[5].name=ENGRAM_CONFIG_PATH --set env[5].value=/app/engram-composition.yaml \
+        --set env[6].name=OPENSEARCH_ENDPOINT --set env[6].value=${OPENSEARCH_ENDPOINT} \
+        --set env[7].name=ENGRAM_DDB_TABLE --set env[7].value=${ENGRAM_DDB_TABLE}"
+fi
+
 helm upgrade --install eks-ops-agent -n kagent \
   charts/machine-learning/agentic/kagent-agent \
   -f examples/agentic/eks-ops-agent/eks-ops-agent.yaml \
@@ -124,6 +147,7 @@ helm upgrade --install eks-ops-agent -n kagent \
   --set "env[2].name=ENABLE_MCP_TOOLS" --set "env[2].value=${ENABLE_MCP_TOOLS}" \
   --set "env[3].name=ENABLE_MEMORY" --set "env[3].value=${ENABLE_MEMORY}" \
   --set "env[4].name=ENGRAM_PG_URL" --set "env[4].value=${ENGRAM_PG_URL}" \
+  $COMPOSITION_HELM_ARGS \
   $HELM_ARGS
 
 # Wait for kagent controller to create the ServiceAccount
