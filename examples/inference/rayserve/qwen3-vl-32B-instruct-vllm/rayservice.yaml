@@ -1,0 +1,67 @@
+ray:
+  version: '2.54.1'
+  dashboard:
+    host: '0.0.0.0'
+  ports:
+    - name: gcs
+      port: 6379
+    - name: client
+      port: 10001
+    - name: dashboard
+      port: 8265
+    - name: serve
+      port: 8000
+  resources:
+    requests:
+      cpu: 300m 
+    limits:
+      cpu: 2
+  serve_config_v2: 
+    serveConfigV2: |
+      applications:
+        - name: qwen3-vl-32b-instruct
+          import_path: openai_api:deployment
+          runtime_env:
+            env_vars:
+              LD_LIBRARY_PATH: "/home/ray/anaconda3/lib/python3.12/site-packages/nvidia/cusparselt/lib:/usr/local/cuda/lib64"
+              ENGINE_CONFIG: "/etc/engine-config/engine-config.json"
+              PYTHONPATH: "/etc/framework-scripts"
+          deployments:
+          - name: VLLMDeployment
+            max_ongoing_requests: 64
+            autoscaling_config:
+              min_replicas: 1
+              max_replicas: 2
+              target_ongoing_requests: 32
+            ray_actor_options:
+              num_gpus: 8
+  service_unhealthy_threshold_secs: 900
+  deployment_unhealthy_threshold_secs: 300
+engine:
+  config:
+    served_model_name: "qwen3-vl-32b-instruct"
+    model: "/fsx/pretrained-models/Qwen/Qwen3-VL-32B-Instruct"
+    tokenizer: "/fsx/pretrained-models/Qwen/Qwen3-VL-32B-Instruct"
+    enable_log_requests: false
+    tensor_parallel_size: 8
+    disable_log_stats: true
+image:
+image_pull_policy: IfNotPresent
+resources:
+  min_replicas: 1
+  max_replicas: 2
+  requests:
+    "nvidia.com/gpu": 8
+  limits:
+    "nvidia.com/gpu": 8
+  node_type: 'g6e.48xlarge' 
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+framework: vllm-0.19.0
