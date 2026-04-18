@@ -1,0 +1,33 @@
+{
+  "name": "compliance-agent",
+  "description": "Memory governance — audits provenance, enforces RBAC, manages lifecycle, generates trust reports",
+  "url": "localhost:8080",
+  "version": "0.1.0",
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "defaultInputModes": ["text"],
+  "defaultOutputModes": ["text"],
+  "skills": [
+    {
+      "id": "trust-audit",
+      "name": "Trust Audit",
+      "description": "Audit memory provenance and generate trust attestations",
+      "tags": ["audit", "trust", "provenance"]
+    },
+    {
+      "id": "lifecycle-management",
+      "name": "Lifecycle Management",
+      "description": "Enforce retention policies and manage memory lifecycle",
+      "tags": ["lifecycle", "retention", "governance"]
+    },
+    {
+      "id": "compliance-report",
+      "name": "Compliance Report",
+      "description": "Generate compliance reports across all agent namespaces",
+      "tags": ["compliance", "report", "audit"]
+    }
+  ]
+}

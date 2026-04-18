@@ -80,7 +80,7 @@ variable "db_subnet_ids" {
 variable "db_engine_version" {
   description = "Aurora PostgreSQL engine version"
   type        = string
-  default     = "15.4"
+  default     = "15.8"
 }
 
 variable "db_name" {

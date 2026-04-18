@@ -1,4 +1,4 @@
-# EKS Ops Agent - Dockerfile
+# Compliance Agent - Dockerfile
 # Uses uv for fast Python dependency management
 
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
@@ -15,18 +15,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml .
 COPY src/ ./src/
 COPY memledger-*.whl /tmp/
-COPY memledger-composition.yaml /app/memledger-composition.yaml
 
 # Install all dependencies at system level (no venv — container is the isolation)
-# Composition mode needs the dynamodb + opensearch extras alongside pgvector + bedrock.
 RUN uv pip install --system . \
-    && uv pip install --system "/tmp/memledger-0.4.0-py3-none-any.whl[pgvector,bedrock,dynamodb,opensearch]" \
+    && uv pip install --system "/tmp/memledger-0.4.0-py3-none-any.whl[pgvector,bedrock]" \
     && uv pip install --system ".[memory]" \
     && rm /tmp/memledger-*.whl
 
 # Verify packages installed correctly
 RUN python -c "from kagent.langgraph import KAgentApp, KAgentCheckpointer; print('kagent OK')"
 RUN python -c "from memledger import Memledger; print('memledger OK')"
+RUN python -c "from memledger.policies.confidence_policy import ConfidencePolicy; print('ConfidencePolicy OK')"
+RUN python -c "from memledger.policies.namespace_rbac import NamespaceRBAC; print('NamespaceRBAC OK')"
 
 # Set environment variables
 ENV PYTHONPATH=/app/src

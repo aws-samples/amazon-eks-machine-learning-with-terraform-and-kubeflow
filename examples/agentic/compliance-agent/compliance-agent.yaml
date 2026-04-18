@@ -1,0 +1,39 @@
+# Compliance Agent - Helm values for charts/machine-learning/agentic/kagent-agent
+#
+# Usage:
+#   helm install compliance-agent \
+#     charts/machine-learning/agentic/kagent-agent \
+#     -f examples/agentic/compliance-agent/compliance-agent.yaml \
+#     --set image.repository=<ECR_REPO>
+
+name: compliance-agent
+namespace: kagent
+description: "Compliance Agent - memory governance, RBAC enforcement, lifecycle management, trust attestation"
+
+image:
+  repository: ""  # Set via --set (e.g. 123456789012.dkr.ecr.us-west-2.amazonaws.com/compliance-agent)
+  tag: "0.1.0"
+
+env:
+  - name: AWS_REGION
+    value: "us-west-2"
+  - name: BEDROCK_MODEL_ID
+    value: "us.anthropic.claude-sonnet-4-20250514-v1:0"
+  # Memory is always enabled for the compliance agent
+  - name: ENABLE_MEMORY
+    value: "true"
+  # Memledger connection — uses kagent's Aurora PostgreSQL+pgvector
+  # Set via build-and-deploy.sh from kagent-db-credentials secret
+  - name: MEMLEDGER_PG_DSN
+    value: ""
+
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "500m"
+
+# IRSA: build-and-deploy.sh annotates the controller-created ServiceAccount
+# with the Bedrock IAM role post-deploy, then restarts the deployment.

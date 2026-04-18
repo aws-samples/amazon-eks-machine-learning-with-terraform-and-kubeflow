@@ -1,8 +1,8 @@
 """
-Module 3: Long-term Memory with Engram
+Module 3: Long-term Memory with Memledger
 
 This module provides persistent, searchable memory for the EKS Ops Agent
-using engram backed by PostgreSQL+pgvector (Aurora or in-cluster Postgres).
+using memledger backed by PostgreSQL+pgvector (Aurora or in-cluster Postgres).
 
 Two categories of memory:
 1. User defaults — key-value storage for cluster/namespace preferences
@@ -10,7 +10,7 @@ Two categories of memory:
 2. Semantic memory — vector-indexed knowledge that the agent can search
    (incidents, runbooks, operational learnings)
 
-Engram schema:
+Memledger schema:
     Namespace: /users/{user_id}/defaults  — user preferences
     Namespace: /incidents/{cluster}       — incident history
     Namespace: /runbooks                  — operational procedures
@@ -30,8 +30,8 @@ from typing import Any, Optional
 
 from langchain_core.tools import tool
 
-from engram import Engram, RecordType
-from engram.models import EmbeddingConfig
+from memledger import Memledger, RecordType
+from memledger.models import EmbeddingConfig
 
 logger = logging.getLogger(__name__)
 
@@ -73,10 +73,10 @@ class UserDefaults:
 
 class MemoryService:
     """
-    Engram-backed memory service for the EKS Ops Agent.
+    Memledger-backed memory service for the EKS Ops Agent.
 
     Provides:
-    - User defaults (cluster/namespace preferences) via engram records
+    - User defaults (cluster/namespace preferences) via memledger records
     - Semantic memory (searchable operational knowledge) via vector search
 
     Supports two initialization modes:
@@ -99,33 +99,33 @@ class MemoryService:
             model=embedding_model,
             dimensions=embedding_dimensions,
         )
-        self._engram: Optional[Engram] = None
+        self._ml: Optional[Memledger] = None
 
-    async def _get_engram(self) -> Engram:
-        """Lazy-initialize engram connection on first use."""
-        if self._engram is None:
+    async def _get_engram(self) -> Memledger:
+        """Lazy-initialize memledger connection on first use."""
+        if self._ml is None:
             if self._config_path:
-                self._engram = await Engram.from_config(self._config_path)
-                logger.info("MemoryService initialized with engram (config: %s)", self._config_path)
+                self._ml = await Memledger.from_config(self._config_path)
+                logger.info("MemoryService initialized with memledger (config: %s)", self._config_path)
             else:
-                self._engram = await Engram.create(
+                self._ml = await Memledger.create(
                     backend_name="pgvector",
                     connection_string=self._pg_connection_string,
                     embedding_config=self._embedding_config,
                 )
-                logger.info("MemoryService initialized with engram (pgvector)")
-        return self._engram
+                logger.info("MemoryService initialized with memledger (pgvector)")
+        return self._ml
 
     def _defaults_ns(self, user_id: str) -> str:
         """Namespace for user defaults."""
         return f"/users/{user_id}/defaults"
 
     async def get_defaults(self, user_id: str) -> UserDefaults:
-        """Retrieve user's default settings from engram."""
-        engram = await self._get_engram()
+        """Retrieve user's default settings from memledger."""
+        memledger = await self._get_engram()
 
         try:
-            results = await engram.search(
+            results = await memledger.search(
                 query="user default cluster namespace",
                 namespace=self._defaults_ns(user_id),
                 top_k=1,
@@ -150,8 +150,8 @@ class MemoryService:
         cluster: Optional[str] = None,
         namespace: Optional[str] = None,
     ) -> UserDefaults:
-        """Save user's default settings to engram."""
-        engram = await self._get_engram()
+        """Save user's default settings to memledger."""
+        memledger = await self._get_engram()
 
         try:
             # Get existing defaults and merge
@@ -166,7 +166,7 @@ class MemoryService:
             record_id = f"defaults-{user_id}"
             content = f"User defaults: {existing}"
 
-            await engram.add(
+            await memledger.add(
                 content=content,
                 record_type=RecordType.SEMANTIC,
                 namespace=self._defaults_ns(user_id),
@@ -184,11 +184,11 @@ class MemoryService:
 
     async def clear_defaults(self, user_id: str) -> None:
         """Clear user's default settings."""
-        engram = await self._get_engram()
+        memledger = await self._get_engram()
 
         try:
             record_id = f"defaults-{user_id}"
-            await engram.delete(record_id)
+            await memledger.delete(record_id)
             logger.info(f"Cleared defaults for user {user_id}")
 
         except Exception as e:
@@ -203,9 +203,9 @@ class MemoryService:
         **typed_fields: Any,
     ) -> str:
         """Store a memory for future recall. Returns the record ID."""
-        engram = await self._get_engram()
+        memledger = await self._get_engram()
 
-        return await engram.add(
+        return await memledger.add(
             content=content,
             record_type=record_type,
             namespace=namespace,
@@ -221,9 +221,9 @@ class MemoryService:
         record_type: Optional[RecordType] = None,
     ):
         """Search memories by semantic similarity."""
-        engram = await self._get_engram()
+        memledger = await self._get_engram()
 
-        return await engram.search(
+        return await memledger.search(
             query=query,
             namespace=namespace,
             top_k=top_k,
@@ -231,10 +231,10 @@ class MemoryService:
         )
 
     async def close(self) -> None:
-        """Close engram connection."""
-        if self._engram:
-            await engram.close()
-            self._engram = None
+        """Close memledger connection."""
+        if self._ml:
+            await memledger.close()
+            self._ml = None
 
 
 # --- Memory Tools for the Agent ---
@@ -355,7 +355,7 @@ async def remember_knowledge(
         record_type: Type of memory - 'semantic' (facts), 'episodic' (events), 'procedural' (how-to)
         metadata: Optional key-value pairs (e.g. {"severity": "P1", "cluster": "eks-prod"})
         replaces: Description of the old memory this one supersedes. When provided,
-            engram will find the best matching old memory, mark it as deprecated,
+            memledger will find the best matching old memory, mark it as deprecated,
             and link the new memory to it. Example: "maxPoolSize=50 fix for payment-service"
 
     Returns:
@@ -365,13 +365,13 @@ async def remember_knowledge(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        engram = await _memory_service._get_engram()
+        memledger = await _memory_service._get_engram()
         rt = RecordType(record_type)
 
         # Resolve supersedes ID from description
         supersedes_id = None
         if replaces:
-            results = await engram.search(query=replaces, top_k=1)
+            results = await memledger.search(query=replaces, top_k=1)
             if results.records:
                 supersedes_id = results.records[0].id
 
@@ -388,7 +388,7 @@ async def remember_knowledge(
             msg += f"\n(Superseded old memory [{supersedes_id[:8]}] — marked as deprecated)"
 
         # Check if conflict was detected during add()
-        conflict_entries = engram.audit.by_record(record_id)
+        conflict_entries = memledger.audit.by_record(record_id)
         for entry in conflict_entries:
             if entry.operation == "conflict_detected":
                 msg += (
@@ -435,10 +435,10 @@ async def recall_knowledge(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        engram = await _memory_service._get_engram()
+        memledger = await _memory_service._get_engram()
         # Use hybrid search (vector + BM25) when backend supports it,
         # falls back to vector-only transparently
-        results = await engram.search_hybrid(
+        results = await memledger.search_hybrid(
             query=query,
             namespace=namespace,
             top_k=top_k,
@@ -492,8 +492,8 @@ async def recall_context(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        engram = await _memory_service._get_engram()
-        context = await engram.recall_context(
+        memledger = await _memory_service._get_engram()
+        context = await memledger.recall_context(
             query=query,
             namespace=namespace,
             top_k=top_k,
@@ -515,7 +515,7 @@ async def mark_memory_outcome(
     Record whether a recalled memory or procedure was helpful (success) or not (failure).
 
     Use this when the user reports that a previously recalled memory, procedure,
-    or recommendation worked or didn't work. Engram will find the most relevant
+    or recommendation worked or didn't work. Memledger will find the most relevant
     memory matching the description and record the outcome.
 
     Successful memories will rank higher in future searches.
@@ -524,7 +524,7 @@ async def mark_memory_outcome(
         description: What the memory was about (e.g. "connection pool fix procedure")
         success: True if it was helpful, False if it was misleading
         record_id: Optional exact ID if known (from recall results). If not provided,
-                   engram will search for the best matching memory.
+                   memledger will search for the best matching memory.
 
     Returns:
         Confirmation message
@@ -533,9 +533,9 @@ async def mark_memory_outcome(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        engram = await _memory_service._get_engram()
+        memledger = await _memory_service._get_engram()
 
-        result = await engram.record_outcome(
+        result = await memledger.record_outcome(
             record_id=record_id,
             success=success,
             description=description,
@@ -572,8 +572,8 @@ async def memory_stats(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        engram = await _memory_service._get_engram()
-        stats = await engram.stats(namespace=namespace)
+        memledger = await _memory_service._get_engram()
+        stats = await memledger.stats(namespace=namespace)
 
         if not stats or stats.get("total_count", 0) == 0:
             scope = f" in namespace '{namespace}'" if namespace else ""
@@ -633,13 +633,13 @@ async def review_memories(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        engram = await _memory_service._get_engram()
+        memledger = await _memory_service._get_engram()
 
         if view == "stale":
-            records = await engram.get_stale(days=days, namespace=namespace)
+            records = await memledger.get_stale(days=days, namespace=namespace)
             label = f"stale (not accessed in {days} days)"
         elif view in ("deprecated", "expired", "archived", "active"):
-            records = await engram.get_by_status(status=view, namespace=namespace)
+            records = await memledger.get_by_status(status=view, namespace=namespace)
             label = view
         else:
             return f"Unknown view '{view}'. Use: active, stale, deprecated, expired, archived."
@@ -706,17 +706,17 @@ async def manage_memory_lifecycle(
         return f"Unknown action '{action}'. Use: expire, archive, deprecate."
 
     try:
-        engram = await _memory_service._get_engram()
+        memledger = await _memory_service._get_engram()
 
         # Resolve record IDs from scope if not provided directly
         ids = record_ids or []
         if not ids and scope:
             if scope == "all_stale":
-                records = await engram.get_stale(days=days, namespace=namespace)
+                records = await memledger.get_stale(days=days, namespace=namespace)
             elif scope == "all_deprecated":
-                records = await engram.get_by_status("deprecated", namespace=namespace)
+                records = await memledger.get_by_status("deprecated", namespace=namespace)
             elif scope == "all_expired":
-                records = await engram.get_by_status("expired", namespace=namespace)
+                records = await memledger.get_by_status("expired", namespace=namespace)
             else:
                 return f"Unknown scope '{scope}'. Use: all_stale, all_deprecated, all_expired."
             ids = [r.id for r in records]
@@ -729,9 +729,9 @@ async def manage_memory_lifecycle(
         target_status = status_map[action]
 
         if action == "archive":
-            count = await engram.bulk_archive(ids)
+            count = await memledger.bulk_archive(ids)
         else:
-            count = await engram.bulk_update_status(ids, target_status)
+            count = await memledger.bulk_update_status(ids, target_status)
 
         return f"Done: {action}d {count} memories (target status: {target_status})."
 
@@ -760,8 +760,8 @@ async def session_history(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        engram = await _memory_service._get_engram()
-        records = await engram.get_by_session(session_id)
+        memledger = await _memory_service._get_engram()
+        records = await memledger.get_by_session(session_id)
 
         if not records:
             return f"No memories found for session '{session_id}'."
@@ -800,15 +800,15 @@ async def memory_audit(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        engram = await _memory_service._get_engram()
+        memledger = await _memory_service._get_engram()
 
         if record_id:
-            entries = engram.audit.by_record(record_id)
+            entries = memledger.audit.by_record(record_id)
             if not entries:
                 return f"No audit entries found for memory {record_id[:8]}."
             lines = [f"Audit trail for memory {record_id[:8]} ({len(entries)} entries):"]
         else:
-            entries = engram.audit.recent(last_n)
+            entries = memledger.audit.recent(last_n)
             if not entries:
                 return "No audit entries yet."
             lines = [f"Memory audit log (last {len(entries)} operations):"]
@@ -845,8 +845,8 @@ async def memory_lineage(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        engram = await _memory_service._get_engram()
-        lineage = await engram.get_lineage(
+        memledger = await _memory_service._get_engram()
+        lineage = await memledger.get_lineage(
             record_id=record_id,
             description=description,
         )

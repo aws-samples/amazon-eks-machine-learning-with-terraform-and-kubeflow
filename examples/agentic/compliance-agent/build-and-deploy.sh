@@ -1,5 +1,5 @@
 #!/bin/bash
-# EKS Ops Agent - Build, Push, and Deploy
+# Compliance Agent - Build, Push, and Deploy
 #
 # Builds the Docker image, pushes it to ECR, and deploys via Helm.
 #
@@ -9,31 +9,19 @@
 #   3. Helm installed
 #   4. TF_DIR and REPO_DIR environment variables set (from notebook)
 #
-# Environment variable overrides (for module progression):
-#   ENABLE_MCP_TOOLS=true   Enable EKS MCP Server tools (Module 2)
-#   ENABLE_MEMORY=true      Enable Redis memory (Module 3)
-#
 # Usage:
-#   ./build-and-deploy.sh                                    # Module 1: barebone
-#   ENABLE_MCP_TOOLS=true ./build-and-deploy.sh              # Module 2: MCP tools
-#   ENABLE_MCP_TOOLS=true ENABLE_MEMORY=true ./build-and-deploy.sh  # Module 3: memory
+#   ./build-and-deploy.sh
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Configuration
-IMAGE_NAME="eks-ops-agent"
-VERSION="${VERSION:-0.1.1}"
+IMAGE_NAME="compliance-agent"
+VERSION="${VERSION:-0.1.0}"
 AWS_REGION="${AWS_REGION:-$(aws configure get region 2>/dev/null || echo us-west-2)}"
-ENABLE_MCP_TOOLS="${ENABLE_MCP_TOOLS:-false}"
-ENABLE_MEMORY="${ENABLE_MEMORY:-false}"
-# Composition mode (DynamoDB primary + OpenSearch search index).
-# When ENABLE_COMPOSITION=true, MEMLEDGER_PG_DSN is ignored — engram loads
-# /app/memledger-composition.yaml instead. OPENSEARCH_ENDPOINT must be set.
-ENABLE_COMPOSITION="${ENABLE_COMPOSITION:-false}"
-OPENSEARCH_ENDPOINT="${OPENSEARCH_ENDPOINT:-}"
-MEMLEDGER_DDB_TABLE="${MEMLEDGER_DDB_TABLE:-engram-memory}"
+# Memory is always enabled for the compliance agent
+ENABLE_MEMORY="true"
 
 # Validate required env vars
 if [ -z "$TF_DIR" ]; then
@@ -51,18 +39,20 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 echo "========================================"
-echo "EKS Ops Agent - Build, Push, and Deploy"
+echo "Compliance Agent - Build, Push, and Deploy"
 echo "========================================"
 echo "Image:           ${IMAGE_NAME}"
 echo "Version:         ${VERSION}"
 echo "Region:          ${AWS_REGION}"
-echo "ENABLE_MCP_TOOLS:   ${ENABLE_MCP_TOOLS}"
-echo "ENABLE_MEMORY:      ${ENABLE_MEMORY}"
-echo "ENABLE_COMPOSITION: ${ENABLE_COMPOSITION}"
-if [ "$ENABLE_COMPOSITION" = "true" ]; then
-    echo "OPENSEARCH_ENDPOINT: ${OPENSEARCH_ENDPOINT}"
-    echo "MEMLEDGER_DDB_TABLE:   ${MEMLEDGER_DDB_TABLE}"
-fi
+echo "ENABLE_MEMORY:   ${ENABLE_MEMORY}"
+
+# Copy memledger wheel from eks-ops-agent (shared artifact)
+echo ""
+echo "Copying memledger wheel..."
+cp "${SCRIPT_DIR}/../eks-ops-agent/memledger-"*.whl "${SCRIPT_DIR}/" 2>/dev/null || {
+    echo -e "${YELLOW}Warning: memledger wheel not found in eks-ops-agent directory.${NC}"
+    echo "Place memledger-0.4.0-py3-none-any.whl in ${SCRIPT_DIR}/"
+}
 
 # Build the image
 echo ""
@@ -108,47 +98,29 @@ echo "Reading Bedrock role ARN from Terraform output..."
 BEDROCK_ROLE_ARN=$(cd "$TF_DIR" && terraform output -raw kagent_bedrock_iam_role_arn)
 echo "Bedrock Role ARN: ${BEDROCK_ROLE_ARN}"
 
+# Read memledger connection string from kagent-db-credentials secret
+MEMLEDGER_PG_DSN=""
+MEMLEDGER_PG_DSN=$(kubectl get secret kagent-db-credentials -n kagent -o jsonpath='{.data.connection_string}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+if [ -z "$MEMLEDGER_PG_DSN" ]; then
+    echo -e "${YELLOW}Warning: kagent-db-credentials secret not found. Memory will not work without MEMLEDGER_PG_DSN.${NC}"
+else
+    echo "Memledger PG DSN: ${MEMLEDGER_PG_DSN##*@}"  # print host only, hide credentials
+fi
+
 # Deploy with Helm
 echo ""
 echo -e "${YELLOW}Deploying with Helm...${NC}"
 cd "$REPO_DIR"
 
-HELM_ARGS=""
-MEMLEDGER_PG_DSN=""
-if [ "$ENABLE_MEMORY" = "true" ]; then
-    # Read connection string from kagent-db-credentials secret
-    MEMLEDGER_PG_DSN=$(kubectl get secret kagent-db-credentials -n kagent -o jsonpath='{.data.connection_string}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-    if [ -z "$MEMLEDGER_PG_DSN" ]; then
-        echo -e "${YELLOW}Warning: kagent-db-credentials secret not found. Memory will not work without MEMLEDGER_PG_DSN.${NC}"
-    else
-        echo "Engram PG URL: ${MEMLEDGER_PG_DSN##*@}"  # print host only, hide credentials
-    fi
-fi
-
-COMPOSITION_HELM_ARGS=""
-if [ "$ENABLE_COMPOSITION" = "true" ]; then
-    if [ -z "$OPENSEARCH_ENDPOINT" ]; then
-        echo -e "${YELLOW}ERROR: ENABLE_COMPOSITION=true but OPENSEARCH_ENDPOINT is not set.${NC}"
-        exit 1
-    fi
-    COMPOSITION_HELM_ARGS="\
-        --set env[5].name=MEMLEDGER_CONFIG_PATH --set env[5].value=/app/memledger-composition.yaml \
-        --set env[6].name=OPENSEARCH_ENDPOINT --set env[6].value=${OPENSEARCH_ENDPOINT} \
-        --set env[7].name=MEMLEDGER_DDB_TABLE --set env[7].value=${MEMLEDGER_DDB_TABLE}"
-fi
-
-helm upgrade --install eks-ops-agent -n kagent \
+helm upgrade --install compliance-agent -n kagent \
   charts/machine-learning/agentic/kagent-agent \
-  -f examples/agentic/eks-ops-agent/eks-ops-agent.yaml \
+  -f examples/agentic/compliance-agent/compliance-agent.yaml \
   --set image.repository="${ECR_REPO}" \
   --set image.tag="${VERSION}" \
   --set "env[0].name=AWS_REGION" --set "env[0].value=${AWS_REGION}" \
   --set "env[1].name=BEDROCK_MODEL_ID" --set "env[1].value=us.anthropic.claude-sonnet-4-20250514-v1:0" \
-  --set "env[2].name=ENABLE_MCP_TOOLS" --set "env[2].value=${ENABLE_MCP_TOOLS}" \
-  --set "env[3].name=ENABLE_MEMORY" --set "env[3].value=${ENABLE_MEMORY}" \
-  --set "env[4].name=MEMLEDGER_PG_DSN" --set "env[4].value=${MEMLEDGER_PG_DSN}" \
-  $COMPOSITION_HELM_ARGS \
-  $HELM_ARGS
+  --set "env[2].name=ENABLE_MEMORY" --set "env[2].value=${ENABLE_MEMORY}" \
+  --set "env[3].name=MEMLEDGER_PG_DSN" --set "env[3].value=${MEMLEDGER_PG_DSN}"
 
 # Wait for kagent controller to create the ServiceAccount
 echo ""

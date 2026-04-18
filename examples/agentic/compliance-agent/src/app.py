@@ -1,20 +1,14 @@
 """
-KAgentApp wrapper for EKS Ops Agent.
+KAgentApp wrapper for Compliance Agent.
 
 This module wraps the LangGraph agent with kagent's KAgentApp to:
 1. Expose the A2A (Agent-to-Agent) protocol endpoint
 2. Register with kagent controller
 3. Enable session persistence via KAgentCheckpointer
 4. Appear in kagent UI
-
-Module 2 adds:
-5. Load EKS MCP Server tools for cluster operations
-
-Module 3 adds:
-6. Long-term memory via Engram (pgvector) for user defaults and semantic knowledge
+5. Long-term memory via memledger (pgvector) for governance and audit
 """
 
-import asyncio
 import json
 import logging
 import os
@@ -51,39 +45,12 @@ def load_agent_card() -> dict:
         return json.load(f)
 
 
-async def load_mcp_tools() -> list:
-    """
-    Load tools from EKS MCP Server if enabled.
-
-    Returns:
-        List of tools, or empty list if disabled or failed.
-    """
-    if not app_config.ENABLE_MCP_TOOLS:
-        logger.info("MCP tools disabled (set ENABLE_MCP_TOOLS=true to enable)")
-        return []
-
-    try:
-        # Import here to avoid loading MCP dependencies if not needed
-        from tools import load_eks_tools
-
-        logger.info("Loading EKS MCP Server tools...")
-        return await load_eks_tools()
-
-    except ImportError as e:
-        logger.warning(f"MCP dependencies not installed: {e}")
-        logger.info("Install with: pip install mcp langchain-mcp-adapters")
-        return []
-    except Exception as e:
-        logger.error(f"Failed to load MCP tools: {e}")
-        logger.info("Agent will run in Q&A mode (no cluster tools)")
-        return []
-
-
 def load_memory_tools() -> list:
     """
-    Load memory tools if enabled.
+    Load memory tools for the compliance agent.
 
     Uses memledger with pgvector for persistent, searchable memory.
+    Memory is the core capability of the compliance agent.
 
     Returns:
         List of memory tools, or empty list if disabled.
@@ -99,7 +66,6 @@ def load_memory_tools() -> list:
     try:
         from memory import MemoryService, get_memory_tools, set_memory_service
 
-        # Initialize memory service with memledger (lazy — connects on first use)
         memory_service = MemoryService(
             pg_connection_string=app_config.MEMLEDGER_PG_DSN,
             embedding_provider=app_config.MEMLEDGER_EMBEDDING_PROVIDER,
@@ -112,7 +78,8 @@ def load_memory_tools() -> list:
         if app_config.MEMLEDGER_CONFIG_PATH:
             logger.info(f"Memory enabled (memledger config: {app_config.MEMLEDGER_CONFIG_PATH})")
         else:
-            logger.info(f"Memory enabled (memledger pgvector: {app_config.MEMLEDGER_PG_DSN.split('@')[-1] if '@' in app_config.MEMLEDGER_PG_DSN else 'configured'})")
+            dsn_display = app_config.MEMLEDGER_PG_DSN.split('@')[-1] if '@' in app_config.MEMLEDGER_PG_DSN else 'configured'
+            logger.info(f"Memory enabled (memledger pgvector: {dsn_display})")
         return get_memory_tools()
 
     except ImportError as e:
@@ -126,20 +93,14 @@ def load_memory_tools() -> list:
 
 def main():
     """Main entry point - starts the KAgentApp server."""
-    # Load MCP tools (Module 2)
-    mcp_tools = asyncio.run(load_mcp_tools())
-    if mcp_tools:
-        logger.info(f"Loaded {len(mcp_tools)} EKS MCP tools")
-
-    # Load memory tools (Module 3)
+    # Load memory tools (core capability for compliance agent)
     memory_tools = load_memory_tools()
     if memory_tools:
-        logger.info(f"Loaded {len(memory_tools)} memory tools")
+        logger.info(f"Loaded {len(memory_tools)} memory/compliance tools")
 
-    # Combine all tools
-    tools = mcp_tools + memory_tools
+    tools = memory_tools
     if not tools:
-        logger.info("Running in Q&A mode (no tools)")
+        logger.warning("Running in Q&A mode (no tools) — compliance agent needs memory to be useful")
 
     # Create checkpointer for session persistence
     checkpointer = create_checkpointer()
@@ -156,13 +117,13 @@ def main():
         graph=graph,
         agent_card=agent_card,
         config=config,
-        tracing=False,  # Disable until Module 4 (Langfuse)
+        tracing=False,
     )
 
     # Start the server
     port = int(os.getenv("PORT", "8080"))
     host = os.getenv("HOST", "0.0.0.0")
-    logger.info(f"Starting EKS Ops Agent on {host}:{port}")
+    logger.info(f"Starting Compliance Agent on {host}:{port}")
 
     uvicorn.run(
         app.build(),
