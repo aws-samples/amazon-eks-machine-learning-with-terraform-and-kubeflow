@@ -133,6 +133,24 @@ resource "kubernetes_service_account" "otel_collector" {
 }
 
 #---------------------------------------------------------------
+# memledger-ui ServiceAccount — reuses Bedrock IRSA role
+#---------------------------------------------------------------
+
+resource "kubernetes_service_account" "memledger_ui" {
+  count = var.enable_observability ? 1 : 0
+
+  metadata {
+    name      = "memledger-ui-agent"
+    namespace = var.kagent_namespace
+    annotations = {
+      "eks.amazonaws.com/role-arn" = var.enable_bedrock_access ? aws_iam_role.kagent_bedrock[0].arn : ""
+    }
+  }
+
+  depends_on = [kubernetes_namespace.kagent]
+}
+
+#---------------------------------------------------------------
 # OpenTelemetry Collector — Deployment mode
 #---------------------------------------------------------------
 
