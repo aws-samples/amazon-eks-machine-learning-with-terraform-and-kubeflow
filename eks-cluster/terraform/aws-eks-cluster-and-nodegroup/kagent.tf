@@ -43,6 +43,9 @@ module "kagent" {
   # AWS Bedrock access via IRSA
   enable_bedrock_access = var.kagent_enable_bedrock_access
 
+  # F9: Observability — OTEL Collector + Phoenix
+  enable_observability = true
+
   depends_on = [
     module.eks_blueprints_addons,
     helm_release.cluster-autoscaler,
