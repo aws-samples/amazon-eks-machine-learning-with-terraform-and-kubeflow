@@ -20,6 +20,7 @@ COPY memledger-*.whl /tmp/
 RUN uv pip install --system . \
     && uv pip install --system "/tmp/memledger-0.4.0-py3-none-any.whl[pgvector,bedrock]" \
     && uv pip install --system ".[memory]" \
+    && uv pip install --system aws-opentelemetry-distro opentelemetry-instrumentation-langchain \
     && rm /tmp/memledger-*.whl
 
 # Verify packages installed correctly
@@ -41,4 +42,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT}/health || exit 1
 
 # Run the application
-CMD ["python", "src/app.py"]
+CMD ["opentelemetry-instrument", "python", "src/app.py"]

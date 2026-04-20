@@ -147,6 +147,9 @@ helm upgrade --install eks-ops-agent -n kagent \
   --set "env[2].name=ENABLE_MCP_TOOLS" --set "env[2].value=${ENABLE_MCP_TOOLS}" \
   --set "env[3].name=ENABLE_MEMORY" --set "env[3].value=${ENABLE_MEMORY}" \
   --set "env[4].name=MEMLEDGER_PG_DSN" --set "env[4].value=${MEMLEDGER_PG_DSN}" \
+  --set "env[5].name=OTEL_EXPORTER_OTLP_LOGS_HEADERS" --set "env[5].value=x-aws-log-group=memledger-agent-spans,x-aws-log-stream=otel-spans,x-aws-metric-namespace=memledger" \
+  --set "env[6].name=OTEL_EXPORTER_OTLP_LOGS_ENDPOINT" --set "env[6].value=https://logs.${AWS_REGION}.amazonaws.com/v1/logs" \
+  --set "env[7].name=OTEL_RESOURCE_ATTRIBUTES" --set "env[7].value=service.name=eks-ops-agent" \
   $COMPOSITION_HELM_ARGS \
   $HELM_ARGS
 
