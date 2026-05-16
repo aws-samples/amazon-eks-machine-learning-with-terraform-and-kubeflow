@@ -22,23 +22,23 @@ env:
   # Module 2: Set to "true" to enable EKS MCP Server tools
   - name: ENABLE_MCP_TOOLS
     value: "false"
-  # Module 3: Set to "true" to enable engram memory
+  # Module 3: Set to "true" to enable memledger memory
   - name: ENABLE_MEMORY
     value: "false"
-  # Engram connection — uses kagent's Aurora PostgreSQL+pgvector
+  # memledger connection — uses kagent's Aurora PostgreSQL+pgvector
   # Set via build-and-deploy.sh from kagent-db-credentials secret
-  - name: ENGRAM_PG_URL
+  - name: MEMLEDGER_PG_DSN
     value: ""
 
-  # Engram composition mode (DynamoDB primary + OpenSearch search index).
-  # Uncomment ENGRAM_CONFIG_PATH and OPENSEARCH_ENDPOINT to enable.
-  # When ENGRAM_CONFIG_PATH is set, ENGRAM_PG_URL is ignored.
-  # - name: ENGRAM_CONFIG_PATH
-  #   value: "/app/engram-composition.yaml"
+  # v2 (deferred): composition mode (DynamoDB primary + OpenSearch search index).
+  # AWS SDK integration lands in memledger v2; v1 supports pgvector only.
+  # See examples/agentic/eks-ops-agent/v2-preview/ for the reserved config.
+  # - name: MEMLEDGER_CONFIG_PATH
+  #   value: "/app/memledger-composition.yaml"
   # - name: OPENSEARCH_ENDPOINT
-  #   value: "search-engram-dev-yq2c52v6qzuivfn4qlrdxxwssm.us-west-2.es.amazonaws.com"
-  # - name: ENGRAM_DDB_TABLE
-  #   value: "engram-memory"
+  #   value: "search-memledger-dev-xxxxx.us-west-2.es.amazonaws.com"
+  # - name: MEMLEDGER_DDB_TABLE
+  #   value: "memledger-memory"
 
 resources:
   requests:

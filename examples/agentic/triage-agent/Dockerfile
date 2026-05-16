@@ -15,15 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml .
 COPY src/ ./src/
 
-# Copy memledger wheel (built separately)
-COPY memledger-*.whl /tmp/
-
 # Install all dependencies at system level (no venv — container is the isolation)
 RUN uv pip install --system . \
-    && uv pip install --system "/tmp/memledger-0.4.0-py3-none-any.whl[pgvector,bedrock]" \
+    && uv pip install --system "memledger[pgvector,bedrock]==1.0.0" \
     && uv pip install --system ".[memory]" \
-    && uv pip install --system aws-opentelemetry-distro opentelemetry-instrumentation-langchain \
-    && rm /tmp/memledger-*.whl
+    && uv pip install --system aws-opentelemetry-distro opentelemetry-instrumentation-langchain
 
 # Verify packages installed correctly
 RUN python -c "from kagent.langgraph import KAgentApp, KAgentCheckpointer; print('kagent OK')"

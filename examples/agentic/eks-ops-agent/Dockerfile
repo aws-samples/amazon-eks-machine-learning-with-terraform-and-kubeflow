@@ -14,16 +14,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy all source files
 COPY pyproject.toml .
 COPY src/ ./src/
-COPY memledger-*.whl /tmp/
-COPY memledger-composition.yaml /app/memledger-composition.yaml
+# v2: composition config (DynamoDB+OpenSearch) is reserved for v2; see v2-preview/.
 
 # Install all dependencies at system level (no venv — container is the isolation)
-# Composition mode needs the dynamodb + opensearch extras alongside pgvector + bedrock.
+# v1 ships with pgvector + bedrock only. v2 will re-add the dynamodb + opensearch extras.
 RUN uv pip install --system . \
-    && uv pip install --system "/tmp/memledger-0.4.0-py3-none-any.whl[pgvector,bedrock,dynamodb,opensearch]" \
+    && uv pip install --system "memledger[pgvector,bedrock]==1.0.0" \
     && uv pip install --system ".[memory]" \
-    && uv pip install --system aws-opentelemetry-distro opentelemetry-instrumentation-langchain \
-    && rm /tmp/memledger-*.whl
+    && uv pip install --system aws-opentelemetry-distro opentelemetry-instrumentation-langchain
 
 # Verify packages installed correctly
 RUN python -c "from kagent.langgraph import KAgentApp, KAgentCheckpointer; print('kagent OK')"

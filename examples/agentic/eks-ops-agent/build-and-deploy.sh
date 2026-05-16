@@ -28,12 +28,12 @@ VERSION="${VERSION:-0.1.1}"
 AWS_REGION="${AWS_REGION:-$(aws configure get region 2>/dev/null || echo us-west-2)}"
 ENABLE_MCP_TOOLS="${ENABLE_MCP_TOOLS:-false}"
 ENABLE_MEMORY="${ENABLE_MEMORY:-false}"
-# Composition mode (DynamoDB primary + OpenSearch search index).
-# When ENABLE_COMPOSITION=true, MEMLEDGER_PG_DSN is ignored — engram loads
-# /app/memledger-composition.yaml instead. OPENSEARCH_ENDPOINT must be set.
+# v2 (deferred): composition mode (DynamoDB primary + OpenSearch search index).
+# AWS SDK integration lands in memledger v2. v1 supports pgvector only — leave
+# ENABLE_COMPOSITION unset/false. See ./v2-preview/ for the reserved config.
 ENABLE_COMPOSITION="${ENABLE_COMPOSITION:-false}"
 OPENSEARCH_ENDPOINT="${OPENSEARCH_ENDPOINT:-}"
-MEMLEDGER_DDB_TABLE="${MEMLEDGER_DDB_TABLE:-engram-memory}"
+MEMLEDGER_DDB_TABLE="${MEMLEDGER_DDB_TABLE:-memledger-memory}"
 
 # Validate required env vars
 if [ -z "$TF_DIR" ]; then
@@ -127,6 +127,8 @@ fi
 
 COMPOSITION_HELM_ARGS=""
 if [ "$ENABLE_COMPOSITION" = "true" ]; then
+    # v2 path — composition.yaml is not baked into the v1 image. Enabling this
+    # in v1 will deploy with the env wired up but no config file present.
     if [ -z "$OPENSEARCH_ENDPOINT" ]; then
         echo -e "${YELLOW}ERROR: ENABLE_COMPOSITION=true but OPENSEARCH_ENDPOINT is not set.${NC}"
         exit 1
