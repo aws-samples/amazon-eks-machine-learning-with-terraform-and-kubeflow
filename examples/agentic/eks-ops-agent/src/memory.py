@@ -114,6 +114,12 @@ class MemoryService:
                     embedding_config=self._embedding_config,
                 )
                 logger.info("MemoryService initialized with memledger (pgvector)")
+            try:
+                from memledger.telemetry import instrument_engram
+                instrument_engram(self._ml)
+                logger.info("memledger OTEL instrumentation enabled")
+            except Exception as e:
+                logger.warning(f"memledger OTEL instrumentation not available: {e}")
         return self._ml
 
     def _defaults_ns(self, user_id: str) -> str:
@@ -325,41 +331,42 @@ async def clear_user_defaults() -> str:
         return f"Failed to clear defaults: {str(e)}"
 
 
+EKS_OPS_AGENT_ID = "eks-ops-agent"
+
+
 @tool
 async def remember_knowledge(
     content: str,
     namespace: str = "/learnings",
     record_type: str = "semantic",
     metadata: Optional[dict] = None,
+    confidence: float = 0.5,
+    hedged: bool = False,
+    derived_from: Optional[list[str]] = None,
+    supersedes: Optional[str] = None,
     replaces: Optional[str] = None,
+    workflow_id: Optional[str] = None,
+    triggered_by: Optional[str] = None,
 ) -> str:
     """
-    Store operational knowledge in long-term memory for future recall.
-
-    Use this after resolving an incident, discovering a useful pattern, or
-    learning something about the cluster that should be remembered.
-
-    When the user says information has changed or been updated (e.g. "actually
-    the value is 200 not 50", "update your memory"), use the 'replaces' parameter
-    to describe the old memory. The old memory will be marked as deprecated and
-    the new one will take its place.
+    Store operational knowledge with full v1 trust attribution.
 
     Args:
         content: What to remember. Be specific and include context.
-            Good: "EKS cluster eks-prod OOM kills caused by HikariCP pool leak. Fix: set maxPoolSize=50"
-            Bad: "Fixed a bug"
-        namespace: Category path for organizing memories.
-            /incidents/{cluster} — incident resolutions
-            /runbooks — operational procedures
-            /learnings — general knowledge
-        record_type: Type of memory - 'semantic' (facts), 'episodic' (events), 'procedural' (how-to)
-        metadata: Optional key-value pairs (e.g. {"severity": "P1", "cluster": "eks-prod"})
-        replaces: Description of the old memory this one supersedes. When provided,
-            memledger will find the best matching old memory, mark it as deprecated,
-            and link the new memory to it. Example: "maxPoolSize=50 fix for payment-service"
+        namespace: Category path (/incidents/{cluster}, /runbooks, /learnings, /eks-ops/remediations).
+        record_type: 'semantic' (facts), 'episodic' (events), 'procedural' (how-to).
+        metadata: Optional key-value extras.
+        confidence: Trust signal (0.0-1.0). How sure are you? Lower for speculation.
+        hedged: True if the claim is speculative or unverified.
+        derived_from: List of memory IDs this record derives from (provenance chain).
+            Use when the new knowledge is a remediation derived from a recalled incident.
+        supersedes: Memory ID this record replaces.
+        replaces: Natural-language description; resolved to a supersedes ID via search.
+        workflow_id: Workflow/run identifier for cross-step correlation.
+        triggered_by: Upstream alert/event ID that caused this record.
 
     Returns:
-        Confirmation with the stored memory ID
+        Confirmation with the stored memory ID.
     """
     if _memory_service is None:
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
@@ -368,9 +375,8 @@ async def remember_knowledge(
         memledger = await _memory_service._get_engram()
         rt = RecordType(record_type)
 
-        # Resolve supersedes ID from description
-        supersedes_id = None
-        if replaces:
+        supersedes_id = supersedes
+        if not supersedes_id and replaces:
             results = await memledger.search(query=replaces, top_k=1)
             if results.records:
                 supersedes_id = results.records[0].id
@@ -380,10 +386,17 @@ async def remember_knowledge(
             namespace=namespace,
             record_type=rt,
             metadata=metadata or {},
+            confidence=confidence,
+            hedged=hedged,
+            derived_from=derived_from,
             supersedes=supersedes_id,
+            agent_id=EKS_OPS_AGENT_ID,
+            created_by=EKS_OPS_AGENT_ID,
+            workflow_id=workflow_id,
+            triggered_by=triggered_by,
         )
 
-        msg = f"Stored {record_type} memory [{record_id[:8]}]: {content[:100]}"
+        msg = f"Stored {record_type} memory id={record_id} (confidence={confidence:.2f} hedged={hedged}): {content[:100]}"
         if supersedes_id:
             msg += f"\n(Superseded old memory [{supersedes_id[:8]}] — marked as deprecated)"
 
@@ -453,13 +466,17 @@ async def recall_knowledge(
             type_str = f" [{rec.record_type.value}]"
             meta_str = f" | metadata: {rec.metadata}" if rec.metadata else ""
             lines.append(
-                f"{i}. [{rec.namespace}]{type_str}{score_str}: {rec.content}{meta_str}"
+                f"{i}. id={rec.id} [{rec.namespace}]{type_str}{score_str} "
+                f"confidence={rec.confidence:.2f} hedged={rec.hedged}: "
+                f"{rec.content}{meta_str}"
             )
 
         return (
             f"Found {len(results.records)} memories "
             f"(search took {results.search_time_ms}ms):\n"
             + "\n".join(lines)
+            + "\n\nNote: Use the full `id=...` UUIDs above (not 8-char prefixes) "
+            "when passing to derived_from or supersedes."
         )
 
     except Exception as e:

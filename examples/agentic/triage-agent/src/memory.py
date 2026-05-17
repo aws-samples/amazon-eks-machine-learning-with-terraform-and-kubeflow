@@ -77,6 +77,13 @@ class MemoryService:
                     embedding_config=self._embedding_config,
                 )
                 logger.info("MemoryService initialized with memledger (pgvector)")
+            # v1 telemetry is opt-in — wrap the instance to emit memledger.* spans
+            try:
+                from memledger.telemetry import instrument_engram
+                instrument_engram(self._ml)
+                logger.info("memledger OTEL instrumentation enabled")
+            except Exception as e:
+                logger.warning(f"memledger OTEL instrumentation not available: {e}")
         return self._ml
 
     async def remember(
@@ -216,19 +223,32 @@ async def ingest_alert(
 
         content = f"[{severity.upper()}] Alert from {source}: {description}"
 
+        # Confidence reflects how sure we are this alert is real/actionable —
+        # high for critical/high severity, lower for medium/low. This is
+        # separate from importance (operational priority).
+        severity_confidence = {
+            "critical": 0.9,
+            "high": 0.85,
+            "medium": 0.6,
+            "low": 0.4,
+        }.get(severity.lower(), 0.5)
+
         record_id = await _memory_service.remember(
             content=content,
             namespace="/triage/alerts",
             record_type=RecordType.EPISODIC,
             metadata=metadata,
             importance=importance,
+            confidence=severity_confidence,
+            agent_id=AGENT_ID,
             created_by=AGENT_ID,
+            triggered_by=alert_id,
         )
 
         # Build response
         lines = [
             f"Alert ingested: {alert_id}",
-            f"  Record ID: {record_id[:8]}",
+            f"  Record ID: {record_id}",
             f"  Severity: {severity.upper()}",
             f"  Source: {source}",
             f"  Importance: {importance:.2f}",
@@ -351,14 +371,17 @@ async def escalate_to_ops(
             namespace="/shared/escalations",
             record_type=RecordType.EPISODIC,
             metadata=metadata,
-            importance=0.7,  # escalations are high importance by definition
+            importance=0.7,
+            confidence=0.85,
+            agent_id=AGENT_ID,
             created_by=AGENT_ID,
+            triggered_by=alert_id,
         )
 
         return (
             f"Escalated to ops team:\n"
             f"  Escalation ID: {escalation_id}\n"
-            f"  Record ID: {record_id[:8]}\n"
+            f"  Record ID: {record_id}\n"
             f"  Severity: {severity.upper()}\n"
             f"  Triggered by: {alert_id}\n"
             f"  Namespace: /shared/escalations\n"
@@ -380,30 +403,34 @@ async def remember_knowledge(
     record_type: str = "episodic",
     metadata: Optional[dict] = None,
     importance: float = 0.45,
+    confidence: float = 0.5,
+    hedged: bool = False,
+    derived_from: Optional[list[str]] = None,
+    supersedes: Optional[str] = None,
     replaces: Optional[str] = None,
+    workflow_id: Optional[str] = None,
+    triggered_by: Optional[str] = None,
 ) -> str:
     """
-    Store triage findings in long-term memory for future recall.
-
-    Use this after completing alert analysis, discovering a pattern, or
-    documenting investigation findings. Default importance is 0.45 (conservative)
-    — adjust based on confidence in the finding.
+    Store triage findings in long-term memory with full v1 trust attribution.
 
     Args:
         content: What to remember. Be specific and include context.
-            Good: "OOM alerts from payment-service correlate with HikariCP pool leak. 3 incidents in past week."
-            Bad: "Alert was about memory"
-        namespace: Category path for organizing memories.
-            /triage/alerts — alert records (default)
-            /triage/findings — investigation conclusions
-            /shared/knowledge — cross-agent knowledge
-        record_type: Type of memory - 'episodic' (events, default), 'semantic' (facts), 'procedural' (how-to)
-        metadata: Optional key-value pairs (e.g. {"severity": "high", "cluster": "eks-prod"})
-        importance: Confidence/importance score (0.0-1.0). Default 0.45. Use lower values when unsure.
-        replaces: Description of the old memory this one supersedes.
+        namespace: Category path (e.g. /triage/alerts, /triage/findings, /shared/knowledge).
+        record_type: 'episodic' (events), 'semantic' (facts), 'procedural' (how-to).
+        metadata: Optional key-value extras.
+        importance: Operational priority (0.0-1.0). Default 0.45.
+        confidence: Trust signal (0.0-1.0). How sure are you? Lower for speculation.
+        hedged: True if the claim is speculative or unverified.
+        derived_from: List of memory IDs this record derives from (provenance chain).
+        supersedes: Memory ID this record replaces (chain head).
+        replaces: Natural-language description; resolved to a supersedes ID via search.
+            If both `supersedes` and `replaces` are set, `supersedes` wins.
+        workflow_id: Workflow/run identifier for cross-step correlation.
+        triggered_by: Upstream alert/event ID that caused this record.
 
     Returns:
-        Confirmation with the stored memory ID
+        Confirmation with the stored memory ID.
     """
     if _memory_service is None:
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
@@ -412,9 +439,8 @@ async def remember_knowledge(
         ml = await _memory_service._get_ml()
         rt = RecordType(record_type)
 
-        # Resolve supersedes ID from description
-        supersedes_id = None
-        if replaces:
+        supersedes_id = supersedes
+        if not supersedes_id and replaces:
             results = await ml.search(query=replaces, top_k=1)
             if results.records:
                 supersedes_id = results.records[0].id
@@ -425,11 +451,17 @@ async def remember_knowledge(
             record_type=rt,
             metadata=metadata or {},
             importance=importance,
-            created_by=AGENT_ID,
+            confidence=confidence,
+            hedged=hedged,
+            derived_from=derived_from,
             supersedes=supersedes_id,
+            agent_id=AGENT_ID,
+            created_by=AGENT_ID,
+            workflow_id=workflow_id,
+            triggered_by=triggered_by,
         )
 
-        msg = f"Stored {record_type} memory [{record_id[:8]}] (importance: {importance:.2f}): {content[:100]}"
+        msg = f"Stored {record_type} memory id={record_id} (importance={importance:.2f} confidence={confidence:.2f} hedged={hedged}): {content[:100]}"
         if supersedes_id:
             msg += f"\n(Superseded old memory [{supersedes_id[:8]}] — marked as deprecated)"
 
@@ -495,13 +527,17 @@ async def recall_knowledge(
             type_str = f" [{rec.record_type.value}]"
             meta_str = f" | metadata: {rec.metadata}" if rec.metadata else ""
             lines.append(
-                f"{i}. [{rec.namespace}]{type_str}{score_str}: {rec.content}{meta_str}"
+                f"{i}. id={rec.id} [{rec.namespace}]{type_str}{score_str} "
+                f"confidence={rec.confidence:.2f} hedged={rec.hedged}: "
+                f"{rec.content}{meta_str}"
             )
 
         return (
             f"Found {len(results.records)} memories "
             f"(search took {results.search_time_ms}ms):\n"
             + "\n".join(lines)
+            + "\n\nNote: Use the full `id=...` UUIDs above (not 8-char prefixes) "
+            "when passing to derived_from or supersedes."
         )
 
     except Exception as e:

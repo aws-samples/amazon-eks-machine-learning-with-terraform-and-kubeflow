@@ -93,6 +93,12 @@ class MemoryService:
                     embedding_config=self._embedding_config,
                 )
                 logger.info("MemoryService initialized with memledger (pgvector)")
+            try:
+                from memledger.telemetry import instrument_engram
+                instrument_engram(self._ml)
+                logger.info("memledger OTEL instrumentation enabled")
+            except Exception as e:
+                logger.warning(f"memledger OTEL instrumentation not available: {e}")
         return self._ml
 
     async def recall(
@@ -759,6 +765,9 @@ async def run_staleness_scan(
                 "stale_count": len(stale_records),
                 "scan_time": scan_time,
             },
+            confidence=0.95,
+            agent_id=COMPLIANCE_AGENT_ID,
+            created_by=COMPLIANCE_AGENT_ID,
         )
         lines.append(f"Report saved to /compliance/reports/ (id: {report_id[:8]})")
         lines.append("=" * 60)
@@ -853,6 +862,9 @@ async def enforce_lifecycle(
                 "namespace": namespace,
                 "enforcement_time": now,
             },
+            confidence=0.95,
+            agent_id=COMPLIANCE_AGENT_ID,
+            created_by=COMPLIANCE_AGENT_ID,
         )
 
         return (

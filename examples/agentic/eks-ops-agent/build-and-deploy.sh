@@ -114,14 +114,16 @@ echo -e "${YELLOW}Deploying with Helm...${NC}"
 cd "$REPO_DIR"
 
 HELM_ARGS=""
-MEMLEDGER_PG_DSN=""
 if [ "$ENABLE_MEMORY" = "true" ]; then
-    # Read connection string from kagent-db-credentials secret
-    MEMLEDGER_PG_DSN=$(kubectl get secret kagent-db-credentials -n kagent -o jsonpath='{.data.connection_string}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-    if [ -z "$MEMLEDGER_PG_DSN" ]; then
-        echo -e "${YELLOW}Warning: kagent-db-credentials secret not found. Memory will not work without MEMLEDGER_PG_DSN.${NC}"
+    if [ -n "$MEMLEDGER_PG_DSN" ]; then
+        echo "Using MEMLEDGER_PG_DSN from environment: ${MEMLEDGER_PG_DSN##*@}"
     else
-        echo "Engram PG URL: ${MEMLEDGER_PG_DSN##*@}"  # print host only, hide credentials
+        MEMLEDGER_PG_DSN=$(kubectl get secret kagent-db-credentials -n kagent -o jsonpath='{.data.connection_string}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+        if [ -z "$MEMLEDGER_PG_DSN" ]; then
+            echo -e "${YELLOW}Warning: kagent-db-credentials secret not found. Memory will not work without MEMLEDGER_PG_DSN.${NC}"
+        else
+            echo "memledger PG URL (from kagent-db-credentials): ${MEMLEDGER_PG_DSN##*@}"
+        fi
     fi
 fi
 

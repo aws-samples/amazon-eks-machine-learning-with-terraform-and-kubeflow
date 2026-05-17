@@ -98,13 +98,15 @@ echo "Reading Bedrock role ARN from Terraform output..."
 BEDROCK_ROLE_ARN=$(cd "$TF_DIR" && terraform output -raw kagent_bedrock_iam_role_arn)
 echo "Bedrock Role ARN: ${BEDROCK_ROLE_ARN}"
 
-# Read memledger connection string from kagent-db-credentials secret
-MEMLEDGER_PG_DSN=""
-MEMLEDGER_PG_DSN=$(kubectl get secret kagent-db-credentials -n kagent -o jsonpath='{.data.connection_string}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
-if [ -z "$MEMLEDGER_PG_DSN" ]; then
-    echo -e "${YELLOW}Warning: kagent-db-credentials secret not found. Memory will not work without MEMLEDGER_PG_DSN.${NC}"
+if [ -n "$MEMLEDGER_PG_DSN" ]; then
+    echo "Using MEMLEDGER_PG_DSN from environment: ${MEMLEDGER_PG_DSN##*@}"
 else
-    echo "Memledger PG DSN: ${MEMLEDGER_PG_DSN##*@}"  # print host only, hide credentials
+    MEMLEDGER_PG_DSN=$(kubectl get secret kagent-db-credentials -n kagent -o jsonpath='{.data.connection_string}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+    if [ -z "$MEMLEDGER_PG_DSN" ]; then
+        echo -e "${YELLOW}Warning: kagent-db-credentials secret not found. Memory will not work without MEMLEDGER_PG_DSN.${NC}"
+    else
+        echo "memledger PG DSN (from kagent-db-credentials): ${MEMLEDGER_PG_DSN##*@}"
+    fi
 fi
 
 # Deploy with Helm

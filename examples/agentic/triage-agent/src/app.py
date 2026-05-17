@@ -91,8 +91,47 @@ def load_memory_tools() -> list:
         return []
 
 
+def _init_otel():
+    """Initialize OTEL tracer so memledger spans get exported.
+    Without this the global TracerProvider is a no-op ProxyTracerProvider."""
+    import os
+    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+    if not endpoint:
+        logger.info("OTEL_EXPORTER_OTLP_ENDPOINT not set; tracing disabled")
+        return
+    try:
+        from opentelemetry import trace
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+
+        # Pod env exposes the HTTP endpoint (:4318); gRPC exporter needs :4317
+        grpc_endpoint = endpoint.replace(":4318", ":4317").replace("http://", "")
+        resource = Resource.create({
+            "service.name": os.getenv("OTEL_SERVICE_NAME", "triage-agent"),
+        })
+        provider = TracerProvider(resource=resource)
+        provider.add_span_processor(BatchSpanProcessor(
+            OTLPSpanExporter(endpoint=grpc_endpoint, insecure=True)
+        ))
+        trace.set_tracer_provider(provider)
+        logger.info(f"OTEL tracer initialized → {grpc_endpoint}")
+    except Exception as e:
+        logger.warning(f"OTEL tracer init failed: {e}")
+
+
 def main():
     """Main entry point - starts the KAgentApp server."""
+    _init_otel()
+
+    try:
+        from opentelemetry.instrumentation.langchain import LangchainInstrumentor
+        LangchainInstrumentor().instrument()
+        logger.info("LangChain OTEL instrumentation enabled")
+    except Exception as e:
+        logger.warning(f"LangChain instrumentation not available: {e}")
+
     # Load memory tools (always enabled for triage agent)
     memory_tools = load_memory_tools()
     if memory_tools:

@@ -19,7 +19,7 @@ COPY src/ ./src/
 RUN uv pip install --system . \
     && uv pip install --system "memledger[pgvector,bedrock]==1.0.0" \
     && uv pip install --system ".[memory]" \
-    && uv pip install --system aws-opentelemetry-distro opentelemetry-instrumentation-langchain
+    && uv pip install --system opentelemetry-instrumentation-langchain
 
 # Verify packages installed correctly
 RUN python -c "from kagent.langgraph import KAgentApp, KAgentCheckpointer; print('kagent OK')"
@@ -40,4 +40,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT}/health || exit 1
 
 # Run the application
-CMD ["opentelemetry-instrument", "python", "src/app.py"]
+CMD ["python", "src/app.py"]

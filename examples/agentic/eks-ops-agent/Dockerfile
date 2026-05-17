@@ -21,7 +21,7 @@ COPY src/ ./src/
 RUN uv pip install --system . \
     && uv pip install --system "memledger[pgvector,bedrock]==1.0.0" \
     && uv pip install --system ".[memory]" \
-    && uv pip install --system aws-opentelemetry-distro opentelemetry-instrumentation-langchain
+    && uv pip install --system opentelemetry-instrumentation-langchain
 
 # Verify packages installed correctly
 RUN python -c "from kagent.langgraph import KAgentApp, KAgentCheckpointer; print('kagent OK')"
@@ -33,11 +33,8 @@ ENV PYTHONPATH=/app/src
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
 
-# AWS OTEL distro env vars for AgentCore evaluation
-ENV AGENT_OBSERVABILITY_ENABLED=true
-ENV OTEL_PYTHON_DISTRO=aws_distro
-ENV OTEL_PYTHON_CONFIGURATOR=aws_configurator
-# OTEL protocol: use grpc (default) to match collector port 4317
+# OTEL protocol: grpc (default) to OTEL Collector :4317 → Phoenix.
+# LangChain instrumentation is wired up programmatically in app.py.
 
 # Expose port
 EXPOSE 8080
@@ -46,5 +43,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT}/health || exit 1
 
-# Run the application with OTEL auto-instrumentation
-CMD ["opentelemetry-instrument", "python", "src/app.py"]
+CMD ["python", "src/app.py"]
