@@ -46,14 +46,6 @@ echo "Version:         ${VERSION}"
 echo "Region:          ${AWS_REGION}"
 echo "ENABLE_MEMORY:   ${ENABLE_MEMORY}"
 
-# Copy memledger wheel from eks-ops-agent (shared artifact)
-echo ""
-echo "Copying memledger wheel..."
-cp "${SCRIPT_DIR}/../eks-ops-agent/memledger-"*.whl "${SCRIPT_DIR}/" 2>/dev/null || {
-    echo -e "${YELLOW}Warning: memledger wheel not found in eks-ops-agent directory.${NC}"
-    echo "Place memledger-0.4.0-py3-none-any.whl in ${SCRIPT_DIR}/"
-}
-
 # Build the image
 echo ""
 echo -e "${YELLOW}Building Docker image...${NC}"

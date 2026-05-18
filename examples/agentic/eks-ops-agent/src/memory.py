@@ -101,7 +101,7 @@ class MemoryService:
         )
         self._ml: Optional[Memledger] = None
 
-    async def _get_engram(self) -> Memledger:
+    async def _get_memledger(self) -> Memledger:
         """Lazy-initialize memledger connection on first use."""
         if self._ml is None:
             if self._config_path:
@@ -128,7 +128,7 @@ class MemoryService:
 
     async def get_defaults(self, user_id: str) -> UserDefaults:
         """Retrieve user's default settings from memledger."""
-        memledger = await self._get_engram()
+        memledger = await self._get_memledger()
 
         try:
             results = await memledger.search(
@@ -157,7 +157,7 @@ class MemoryService:
         namespace: Optional[str] = None,
     ) -> UserDefaults:
         """Save user's default settings to memledger."""
-        memledger = await self._get_engram()
+        memledger = await self._get_memledger()
 
         try:
             # Get existing defaults and merge
@@ -190,7 +190,7 @@ class MemoryService:
 
     async def clear_defaults(self, user_id: str) -> None:
         """Clear user's default settings."""
-        memledger = await self._get_engram()
+        memledger = await self._get_memledger()
 
         try:
             record_id = f"defaults-{user_id}"
@@ -209,7 +209,7 @@ class MemoryService:
         **typed_fields: Any,
     ) -> str:
         """Store a memory for future recall. Returns the record ID."""
-        memledger = await self._get_engram()
+        memledger = await self._get_memledger()
 
         return await memledger.add(
             content=content,
@@ -227,7 +227,7 @@ class MemoryService:
         record_type: Optional[RecordType] = None,
     ):
         """Search memories by semantic similarity."""
-        memledger = await self._get_engram()
+        memledger = await self._get_memledger()
 
         return await memledger.search(
             query=query,
@@ -372,7 +372,7 @@ async def remember_knowledge(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        memledger = await _memory_service._get_engram()
+        memledger = await _memory_service._get_memledger()
         rt = RecordType(record_type)
 
         supersedes_id = supersedes
@@ -448,7 +448,7 @@ async def recall_knowledge(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        memledger = await _memory_service._get_engram()
+        memledger = await _memory_service._get_memledger()
         # Use hybrid search (vector + BM25) when backend supports it,
         # falls back to vector-only transparently
         results = await memledger.search_hybrid(
@@ -509,7 +509,7 @@ async def recall_context(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        memledger = await _memory_service._get_engram()
+        memledger = await _memory_service._get_memledger()
         context = await memledger.recall_context(
             query=query,
             namespace=namespace,
@@ -550,7 +550,7 @@ async def mark_memory_outcome(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        memledger = await _memory_service._get_engram()
+        memledger = await _memory_service._get_memledger()
 
         result = await memledger.record_outcome(
             record_id=record_id,
@@ -589,7 +589,7 @@ async def memory_stats(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        memledger = await _memory_service._get_engram()
+        memledger = await _memory_service._get_memledger()
         stats = await memledger.stats(namespace=namespace)
 
         if not stats or stats.get("total_count", 0) == 0:
@@ -650,7 +650,7 @@ async def review_memories(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        memledger = await _memory_service._get_engram()
+        memledger = await _memory_service._get_memledger()
 
         if view == "stale":
             records = await memledger.get_stale(days=days, namespace=namespace)
@@ -723,7 +723,7 @@ async def manage_memory_lifecycle(
         return f"Unknown action '{action}'. Use: expire, archive, deprecate."
 
     try:
-        memledger = await _memory_service._get_engram()
+        memledger = await _memory_service._get_memledger()
 
         # Resolve record IDs from scope if not provided directly
         ids = record_ids or []
@@ -777,7 +777,7 @@ async def session_history(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        memledger = await _memory_service._get_engram()
+        memledger = await _memory_service._get_memledger()
         records = await memledger.get_by_session(session_id)
 
         if not records:
@@ -817,7 +817,7 @@ async def memory_audit(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        memledger = await _memory_service._get_engram()
+        memledger = await _memory_service._get_memledger()
 
         if record_id:
             entries = memledger.audit.by_record(record_id)
@@ -862,7 +862,7 @@ async def memory_lineage(
         return "Memory is not enabled. Set ENABLE_MEMORY=true to use this feature."
 
     try:
-        memledger = await _memory_service._get_engram()
+        memledger = await _memory_service._get_memledger()
         lineage = await memledger.get_lineage(
             record_id=record_id,
             description=description,

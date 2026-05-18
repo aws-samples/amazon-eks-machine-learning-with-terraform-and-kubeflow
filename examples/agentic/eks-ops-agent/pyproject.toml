@@ -21,8 +21,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Module 3: Memory (engram with pgvector + Bedrock embeddings)
-# engram wheel is installed separately in the Dockerfile
+# Module 3: Memory (memledger with pgvector + Bedrock embeddings).
+# memledger==1.0.0 is installed from PyPI in the Dockerfile.
 memory = [
     "asyncpg>=0.29.0",
     "pgvector>=0.3.0",

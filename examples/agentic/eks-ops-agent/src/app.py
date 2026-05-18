@@ -11,7 +11,7 @@ Module 2 adds:
 5. Load EKS MCP Server tools for cluster operations
 
 Module 3 adds:
-6. Long-term memory via Engram (pgvector) for user defaults and semantic knowledge
+6. Long-term memory via memledger (pgvector) for user defaults and semantic knowledge
 """
 
 import asyncio
