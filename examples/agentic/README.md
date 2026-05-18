@@ -1,5 +1,18 @@
 # Agentic AI Examples
 
+This directory bundles three reference agents (`triage-agent`,
+`eks-ops-agent`, `compliance-agent`) that run on kagent and share a
+governed memory layer through [memledger](https://pypi.org/project/memledger/).
+
+- This README — kagent infrastructure setup (Terraform, Helm).
+- [`MEMLEDGER.md`](MEMLEDGER.md) — multi-agent memory governance,
+  attribution surface, MAI scoring rubric + 3-tier evaluator results,
+  Phoenix observability, CLI quick reference.
+- [`B9-RUNBOOK.md`](B9-RUNBOOK.md) — cluster-side upgrade procedure to
+  memledger v1.0.0.
+- [`B9-RESULTS-2026-05-17.md`](B9-RESULTS-2026-05-17.md) — raw
+  end-to-end validation results.
+
 ## kagent - Kubernetes Native AI Agents
 
 [kagent](https://github.com/kagent-dev/kagent) is a Kubernetes-native framework for building AI agents with tool capabilities and LLM integration.
