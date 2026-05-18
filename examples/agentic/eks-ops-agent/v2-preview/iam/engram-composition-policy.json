@@ -17,8 +17,8 @@
         "dynamodb:CreateTable"
       ],
       "Resource": [
-        "arn:aws:dynamodb:us-west-2:489829964455:table/engram-memory",
-        "arn:aws:dynamodb:us-west-2:489829964455:table/engram-memory/index/*"
+        "arn:aws:dynamodb:REGION:ACCOUNT_ID:table/engram-memory",
+        "arn:aws:dynamodb:REGION:ACCOUNT_ID:table/engram-memory/index/*"
       ]
     },
     {
@@ -31,7 +31,7 @@
         "es:ESHttpDelete",
         "es:ESHttpHead"
       ],
-      "Resource": "arn:aws:es:us-west-2:489829964455:domain/engram-dev/*"
+      "Resource": "arn:aws:es:REGION:ACCOUNT_ID:domain/engram-dev/*"
     }
   ]
 }

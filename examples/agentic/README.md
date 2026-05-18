@@ -643,9 +643,10 @@ keep the cached image (`imagePullPolicy: IfNotPresent`). Either bump
 `VERSION=...` inline or pin the deployment to the new digest:
 
 ```bash
-DIGEST=$(grep 'digest:' /tmp/build.log | head -1 | awk '{print $3}')
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+DIGEST=$(grep 'digest:' "$BUILD_LOG" | head -1 | awk '{print $3}')
 kubectl set image -n kagent deployment/eks-ops-agent \
-  kagent=489829964455.dkr.ecr.us-west-2.amazonaws.com/eks-ops-agent@${DIGEST}
+  kagent="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/eks-ops-agent@${DIGEST}"
 ```
 
 ### 6.5 Apply agent CRDs (optional, for prompt-only edits)
