@@ -11,13 +11,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
+# memledger version is configurable via build args (v1 vs v2). See the
+# eks-ops-agent Dockerfile for the full description of the two tracks.
+ARG MEMLEDGER_VERSION=2.0.0
+ARG MEMLEDGER_EXTRAS=aws,dynamodb,opensearch
+
 # Copy all source files
 COPY pyproject.toml .
 COPY src/ ./src/
 
 # Install all dependencies at system level (no venv — container is the isolation)
 RUN uv pip install --system . \
-    && uv pip install --system "memledger[pgvector,bedrock]==1.0.0" \
+    && uv pip install --system "memledger[${MEMLEDGER_EXTRAS}]==${MEMLEDGER_VERSION}" \
     && uv pip install --system ".[memory]" \
     && uv pip install --system opentelemetry-instrumentation-langchain
 

@@ -2,7 +2,7 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "DynamoDBEngram",
+      "Sid": "DynamoDBMemledger",
       "Effect": "Allow",
       "Action": [
         "dynamodb:GetItem",
@@ -17,12 +17,12 @@
         "dynamodb:CreateTable"
       ],
       "Resource": [
-        "arn:aws:dynamodb:REGION:ACCOUNT_ID:table/engram-memory",
-        "arn:aws:dynamodb:REGION:ACCOUNT_ID:table/engram-memory/index/*"
+        "arn:aws:dynamodb:<REGION>:<ACCOUNT-ID>:table/memledger-memory",
+        "arn:aws:dynamodb:<REGION>:<ACCOUNT-ID>:table/memledger-memory/index/*"
       ]
     },
     {
-      "Sid": "OpenSearchEngram",
+      "Sid": "OpenSearchMemledger",
       "Effect": "Allow",
       "Action": [
         "es:ESHttpGet",
@@ -31,7 +31,13 @@
         "es:ESHttpDelete",
         "es:ESHttpHead"
       ],
-      "Resource": "arn:aws:es:REGION:ACCOUNT_ID:domain/engram-dev/*"
+      "Resource": "arn:aws:es:<REGION>:<ACCOUNT-ID>:domain/memledger-dev/*"
+    },
+    {
+      "Sid": "AuroraIAMAuth",
+      "Effect": "Allow",
+      "Action": ["rds-db:connect"],
+      "Resource": "arn:aws:rds-db:<REGION>:<ACCOUNT-ID>:dbuser:<DB-RESOURCE-ID>/memledger"
     }
   ]
 }

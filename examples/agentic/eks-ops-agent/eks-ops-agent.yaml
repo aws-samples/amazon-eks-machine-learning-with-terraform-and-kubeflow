@@ -15,6 +15,8 @@ image:
   tag: "0.1.3"
 
 env:
+  # AWS_REGION resolves via the SDK chain (memledger v2): explicit value >
+  # $AWS_REGION > $AWS_DEFAULT_REGION > ~/.aws/config. Set here to pin it.
   - name: AWS_REGION
     value: "us-west-2"
   - name: BEDROCK_MODEL_ID
@@ -22,19 +24,29 @@ env:
   # Module 2: Set to "true" to enable EKS MCP Server tools
   - name: ENABLE_MCP_TOOLS
     value: "false"
-  # Module 3: Set to "true" to enable memledger memory
+  # Module 3 — memory. Two implementations live side by side:
+  #   * Redis (existing baseline) — set ENABLE_MEMORY=true and the agent
+  #     uses the in-cluster Redis service for user defaults. Redis is the
+  #     default and remains undisturbed.
+  #   * memledger v1 or v2 (opt-in addon) — set ENABLE_MEMLEDGER=true
+  #     plus MEMLEDGER_PG_DSN (and MEMLEDGER_CONFIG_PATH for v2). See the
+  #     agentic README for both tracks.
   - name: ENABLE_MEMORY
     value: "false"
-  # memledger connection — uses kagent's Aurora PostgreSQL+pgvector
-  # Set via build-and-deploy.sh from kagent-db-credentials secret
+  - name: ENABLE_MEMLEDGER
+    value: "false"
+  # OSS pgvector track is the default composition. To switch to AWS-native
+  # composition, override with /app/memledger-composition-aws.yaml and set
+  # OPENSEARCH_ENDPOINT + MEMLEDGER_DDB_TABLE below.
+  - name: MEMLEDGER_CONFIG_PATH
+    value: "/app/memledger-composition.yaml"
+  # Postgres DSN — required for both v1 and v2 OSS track. Populated by
+  # build-and-deploy.sh from the kagent-db-credentials secret. v2 supports
+  # IAM auth (no password in the DSN) — set MEMLEDGER_PG_IAM_AUTH=true.
   - name: MEMLEDGER_PG_DSN
     value: ""
-
-  # v2 (deferred): composition mode (DynamoDB primary + OpenSearch search index).
-  # AWS SDK integration lands in memledger v2; v1 supports pgvector only.
-  # See examples/agentic/eks-ops-agent/v2-preview/ for the reserved config.
-  # - name: MEMLEDGER_CONFIG_PATH
-  #   value: "/app/memledger-composition.yaml"
+  # AWS-track-only env vars (v2 composition with DynamoDB + OpenSearch).
+  # Leave commented out for the OSS track.
   # - name: OPENSEARCH_ENDPOINT
   #   value: "search-memledger-dev-xxxxx.us-west-2.es.amazonaws.com"
   # - name: MEMLEDGER_DDB_TABLE

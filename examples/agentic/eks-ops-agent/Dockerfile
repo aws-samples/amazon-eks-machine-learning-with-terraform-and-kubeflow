@@ -11,15 +11,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
+# memledger version + extras are configurable via build args so the same
+# Dockerfile builds both the v1 (OSS pgvector) and v2 (AWS composition) tracks.
+#   v1 OSS:  --build-arg MEMLEDGER_VERSION=1.0.0 --build-arg MEMLEDGER_EXTRAS=pgvector,bedrock
+#   v2 OSS:  defaults below — pgvector still works (default composition file)
+#   v2 AWS:  defaults below + flip MEMLEDGER_CONFIG_PATH to memledger-composition-aws.yaml
+ARG MEMLEDGER_VERSION=2.0.0
+ARG MEMLEDGER_EXTRAS=aws,dynamodb,opensearch
+
 # Copy all source files
 COPY pyproject.toml .
 COPY src/ ./src/
-# v2: composition config (DynamoDB+OpenSearch) is reserved for v2; see v2-preview/.
+
+# Both composition configs ship in the image. The OSS pgvector config is the
+# default at /app/memledger-composition.yaml; the AWS config is alongside it.
+# Override MEMLEDGER_CONFIG_PATH on the pod to switch tracks.
+COPY memledger-composition-pgvector.yaml /app/memledger-composition-pgvector.yaml
+COPY memledger-composition-aws.yaml /app/memledger-composition-aws.yaml
+RUN ln -sf /app/memledger-composition-pgvector.yaml /app/memledger-composition.yaml
 
 # Install all dependencies at system level (no venv — container is the isolation)
-# v1 ships with pgvector + bedrock only. v2 will re-add the dynamodb + opensearch extras.
 RUN uv pip install --system . \
-    && uv pip install --system "memledger[pgvector,bedrock]==1.0.0" \
+    && uv pip install --system "memledger[${MEMLEDGER_EXTRAS}]==${MEMLEDGER_VERSION}" \
     && uv pip install --system ".[memory]" \
     && uv pip install --system opentelemetry-instrumentation-langchain
 

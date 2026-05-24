@@ -28,9 +28,13 @@ VERSION="${VERSION:-0.1.1}"
 AWS_REGION="${AWS_REGION:-$(aws configure get region 2>/dev/null || echo us-west-2)}"
 ENABLE_MCP_TOOLS="${ENABLE_MCP_TOOLS:-false}"
 ENABLE_MEMORY="${ENABLE_MEMORY:-false}"
-# v2 (deferred): composition mode (DynamoDB primary + OpenSearch search index).
-# AWS SDK integration lands in memledger v2. v1 supports pgvector only — leave
-# ENABLE_COMPOSITION unset/false. See ./v2-preview/ for the reserved config.
+# memledger version + extras — forwarded to docker build as build args.
+# Defaults to v2 with the AWS umbrella; override for v1:
+#   MEMLEDGER_VERSION=1.0.0 MEMLEDGER_EXTRAS=pgvector,bedrock ./build-and-deploy.sh
+MEMLEDGER_VERSION="${MEMLEDGER_VERSION:-2.0.0}"
+MEMLEDGER_EXTRAS="${MEMLEDGER_EXTRAS:-aws,dynamodb,opensearch}"
+# AWS-track composition mode (DynamoDB primary + OpenSearch search index).
+# v2 only. Defaults off — pgvector composition is the image default.
 ENABLE_COMPOSITION="${ENABLE_COMPOSITION:-false}"
 OPENSEARCH_ENDPOINT="${OPENSEARCH_ENDPOINT:-}"
 MEMLEDGER_DDB_TABLE="${MEMLEDGER_DDB_TABLE:-memledger-memory}"
@@ -58,6 +62,7 @@ echo "Version:         ${VERSION}"
 echo "Region:          ${AWS_REGION}"
 echo "ENABLE_MCP_TOOLS:   ${ENABLE_MCP_TOOLS}"
 echo "ENABLE_MEMORY:      ${ENABLE_MEMORY}"
+echo "MEMLEDGER:          ${MEMLEDGER_VERSION} [${MEMLEDGER_EXTRAS}]"
 echo "ENABLE_COMPOSITION: ${ENABLE_COMPOSITION}"
 if [ "$ENABLE_COMPOSITION" = "true" ]; then
     echo "OPENSEARCH_ENDPOINT: ${OPENSEARCH_ENDPOINT}"
@@ -70,6 +75,8 @@ echo -e "${YELLOW}Building Docker image...${NC}"
 docker build \
     --no-cache \
     --platform linux/amd64 \
+    --build-arg "MEMLEDGER_VERSION=${MEMLEDGER_VERSION}" \
+    --build-arg "MEMLEDGER_EXTRAS=${MEMLEDGER_EXTRAS}" \
     -t "${IMAGE_NAME}:${VERSION}" \
     -t "${IMAGE_NAME}:latest" \
     "${SCRIPT_DIR}"
@@ -129,8 +136,6 @@ fi
 
 COMPOSITION_HELM_ARGS=""
 if [ "$ENABLE_COMPOSITION" = "true" ]; then
-    # v2 path — composition.yaml is not baked into the v1 image. Enabling this
-    # in v1 will deploy with the env wired up but no config file present.
     if [ -z "$OPENSEARCH_ENDPOINT" ]; then
         echo -e "${YELLOW}ERROR: ENABLE_COMPOSITION=true but OPENSEARCH_ENDPOINT is not set.${NC}"
         exit 1

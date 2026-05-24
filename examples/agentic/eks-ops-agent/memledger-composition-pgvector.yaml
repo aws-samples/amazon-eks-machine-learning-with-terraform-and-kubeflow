@@ -1,0 +1,30 @@
+# Memledger composition config — OSS track (PostgreSQL + pgvector).
+#
+# Default config baked into the image. Works with both memledger v1.x and
+# v2.x. Requires only an in-cluster (or Aurora) PostgreSQL with the pgvector
+# extension installed; no DynamoDB / OpenSearch / IAM-auth machinery needed.
+#
+# To activate: leave MEMLEDGER_CONFIG_PATH at its default
+# (/app/memledger-composition.yaml — symlinked to this file in the image)
+# and set MEMLEDGER_PG_DSN to the connection string.
+
+version: "1.0"
+
+embeddings:
+  provider: bedrock
+  model: amazon.titan-embed-text-v2:0
+  dimensions: 1024
+
+conflict_threshold: 0.65
+auto_promote_threshold: 3
+
+default_backend: pgvector
+
+backends:
+  pgvector:
+    provider: pgvector
+    config:
+      connection_string: ${MEMLEDGER_PG_DSN}
+      # iam_auth is v2-only; ignored by v1. Set to true when running against
+      # Aurora with IAM authentication (no password in the DSN).
+      iam_auth: ${MEMLEDGER_PG_IAM_AUTH:false}

@@ -21,6 +21,10 @@ IMAGE_NAME="triage-agent"
 VERSION="${VERSION:-0.1.0}"
 AWS_REGION="${AWS_REGION:-$(aws configure get region 2>/dev/null || echo us-west-2)}"
 ENABLE_MEMORY="true"  # Always enabled for triage agent
+# memledger version + extras — forwarded to docker build. v1: MEMLEDGER_VERSION=1.0.0
+# MEMLEDGER_EXTRAS=pgvector,bedrock. Defaults below select v2 with the AWS umbrella.
+MEMLEDGER_VERSION="${MEMLEDGER_VERSION:-2.0.0}"
+MEMLEDGER_EXTRAS="${MEMLEDGER_EXTRAS:-aws,dynamodb,opensearch}"
 
 # Validate required env vars
 if [ -z "$TF_DIR" ]; then
@@ -51,6 +55,8 @@ echo -e "${YELLOW}Building Docker image...${NC}"
 docker build \
     --no-cache \
     --platform linux/amd64 \
+    --build-arg "MEMLEDGER_VERSION=${MEMLEDGER_VERSION}" \
+    --build-arg "MEMLEDGER_EXTRAS=${MEMLEDGER_EXTRAS}" \
     -t "${IMAGE_NAME}:${VERSION}" \
     -t "${IMAGE_NAME}:latest" \
     "${SCRIPT_DIR}"

@@ -1,0 +1,62 @@
+# Memledger v2 composition config — DynamoDB primary + OpenSearch search index.
+#
+# Baked into the agent image at /app/memledger-composition.yaml. Activate with
+# MEMLEDGER_CONFIG_PATH=/app/memledger-composition.yaml on the agent pod and
+# install memledger[aws,dynamodb,opensearch]==2.0.0.
+#
+# Backend topology:
+#   DynamoDB (memledger-memory) → primary store, sub-ms key-value reads
+#   OpenSearch (memledger-dev)  → search index, BM25 + faiss vector hybrid
+#   Aurora (pgvector)           → fallback, IAM auth via iam_auth: true
+#
+# Region resolution follows the AWS SDK chain:
+#   explicit `region:` field > $AWS_REGION > $AWS_DEFAULT_REGION > ~/.aws/config
+# v2 no longer hardcodes us-west-2 — leave `region:` unset to let the SDK pick.
+#
+# IAM (attach to the agent's IRSA role):
+#   - DynamoDB CRUD on arn:aws:dynamodb:<region>:<ACCOUNT-ID>:table/memledger-memory
+#   - OpenSearch es:ESHttp* on arn:aws:es:<region>:<ACCOUNT-ID>:domain/memledger-dev/*
+#   - rds-db:connect on the Aurora cluster (for the pgvector fallback)
+
+version: "1.0"
+
+embeddings:
+  provider: bedrock
+  model: amazon.titan-embed-text-v2:0
+  dimensions: 1024
+
+conflict_threshold: 0.65
+auto_promote_threshold: 3
+
+default_backend: composition
+
+backends:
+  composition:
+    provider: composition
+    config:
+      primary: dynamodb
+      search: opensearch
+      sync: inline
+
+  dynamodb:
+    provider: dynamodb
+    config:
+      table_name: ${MEMLEDGER_DDB_TABLE:memledger-memory}
+      create_table: true
+
+  opensearch:
+    provider: opensearch
+    config:
+      hosts:
+        - https://${OPENSEARCH_ENDPOINT}
+      index_name: ${MEMLEDGER_OS_INDEX:memledger-memory}
+      auth_type: aws_sigv4
+      verify_certs: true
+      dimensions: 1024
+      vector_engine: faiss
+
+  pgvector:
+    provider: pgvector
+    config:
+      connection_string: ${MEMLEDGER_PG_DSN}
+      iam_auth: true

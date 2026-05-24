@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Set up IAM and OpenSearch access for engram composition mode.
+# Set up IAM and OpenSearch access for memledger v2 composition mode.
 #
 # Idempotent — safe to re-run. Provisions:
 #   - Inline IAM policy on the agent's IRSA role (DynamoDB + OpenSearch)
 #   - OpenSearch domain access policy update (allows the IRSA role)
+#
+# If you've already provisioned via memledger-core's
+# examples/aws/provision-opensearch.sh, you can skip this script.
 #
 # Pre-requisites:
 #   - DynamoDB table already created (or set CREATE_TABLE=true)
@@ -11,28 +14,28 @@
 #   - aws CLI configured with permissions to update IAM + OpenSearch
 #
 # Usage:
-#   bash setup-engram-composition.sh
+#   bash setup-memledger-composition.sh
 #
 # Override defaults via env vars:
 #   AGENT_ROLE      (default: kagent-on-eks-kagent-bedrock-role)
 #   ACCOUNT_ID      (default: derived from `aws sts get-caller-identity`)
 #   AWS_REGION      (default: us-west-2)
-#   DDB_TABLE       (default: engram-memory)
-#   OS_DOMAIN       (default: engram-dev)
+#   DDB_TABLE       (default: memledger-memory)
+#   OS_DOMAIN       (default: memledger-dev)
 #   ADMIN_USER      (default: admin)  — kept in OpenSearch access policy
-#   POLICY_NAME     (default: engram-composition-policy)
+#   POLICY_NAME     (default: memledger-composition-policy)
 
 set -euo pipefail
 
 AGENT_ROLE="${AGENT_ROLE:-kagent-on-eks-kagent-bedrock-role}"
 AWS_REGION="${AWS_REGION:-us-west-2}"
-DDB_TABLE="${DDB_TABLE:-engram-memory}"
-OS_DOMAIN="${OS_DOMAIN:-engram-dev}"
+DDB_TABLE="${DDB_TABLE:-memledger-memory}"
+OS_DOMAIN="${OS_DOMAIN:-memledger-dev}"
 ADMIN_USER="${ADMIN_USER:-admin}"
-POLICY_NAME="${POLICY_NAME:-engram-composition-policy}"
+POLICY_NAME="${POLICY_NAME:-memledger-composition-policy}"
 ACCOUNT_ID="${ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}"
 
-echo "==> Configuring engram composition IAM + OpenSearch access"
+echo "==> Configuring memledger v2 composition IAM + OpenSearch access"
 echo "    Account:      ${ACCOUNT_ID}"
 echo "    Region:       ${AWS_REGION}"
 echo "    Agent role:   ${AGENT_ROLE}"
@@ -54,7 +57,7 @@ POLICY_DOC=$(cat <<EOF
       "Resource": "*"
     },
     {
-      "Sid": "DynamoDBEngram",
+      "Sid": "DynamoDBMemledger",
       "Effect": "Allow",
       "Action": [
         "dynamodb:GetItem",
@@ -76,7 +79,7 @@ POLICY_DOC=$(cat <<EOF
       ]
     },
     {
-      "Sid": "OpenSearchEngram",
+      "Sid": "OpenSearchMemledger",
       "Effect": "Allow",
       "Action": [
         "es:ESHttpGet",
