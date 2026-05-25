@@ -27,7 +27,7 @@ MEMLEDGER_VERSION="${MEMLEDGER_VERSION:-2.0.0}"
 MEMLEDGER_EXTRAS="${MEMLEDGER_EXTRAS:-aws,dynamodb,opensearch}"
 # MEMLEDGER_USE_TESTPYPI=true → install from Test PyPI (pre Wed May 27 prod publish).
 if [ "${MEMLEDGER_USE_TESTPYPI:-false}" = "true" ]; then
-    MEMLEDGER_INDEX_ARGS="${MEMLEDGER_INDEX_ARGS:---index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/}"
+    MEMLEDGER_INDEX_ARGS="${MEMLEDGER_INDEX_ARGS:---index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ --index-strategy unsafe-best-match}"
 else
     MEMLEDGER_INDEX_ARGS="${MEMLEDGER_INDEX_ARGS:-}"
 fi

@@ -18,10 +18,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #   v2 AWS:  defaults below + flip MEMLEDGER_CONFIG_PATH to memledger-composition-aws.yaml
 ARG MEMLEDGER_VERSION=2.0.0
 ARG MEMLEDGER_EXTRAS=aws,dynamodb,opensearch
-# MEMLEDGER_INDEX_ARGS lets you point pip at Test PyPI for pre-prod validation
-# (memledger 2.0.0 lands on Test PyPI before the Wed May 27 prod publish).
-# After May 27, leave this empty — the same wheel resolves from regular PyPI.
-#   --build-arg MEMLEDGER_INDEX_ARGS="--index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/"
+# MEMLEDGER_INDEX_ARGS lets you point pip/uv at Test PyPI for pre-prod
+# validation (memledger 2.0.0 lands on Test PyPI before the Wed May 27
+# prod publish). After May 27, leave this empty — the same wheel resolves
+# from regular PyPI.
+#
+# `uv pip install` treats --index-url as authoritative by default and will
+# refuse to consider --extra-index-url if any version of the package exists
+# on the primary index. memledger 1.0.0 is on regular PyPI; 2.0.0 is only on
+# Test PyPI, so we need --index-strategy=unsafe-best-match for the fallback
+# to work. The flag is uv-specific; remove it for plain pip.
+#   --build-arg MEMLEDGER_INDEX_ARGS="--index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ --index-strategy unsafe-best-match"
 ARG MEMLEDGER_INDEX_ARGS=""
 
 # Copy all source files
@@ -35,8 +42,15 @@ COPY memledger-composition-pgvector.yaml /app/memledger-composition-pgvector.yam
 COPY memledger-composition-aws.yaml /app/memledger-composition-aws.yaml
 RUN ln -sf /app/memledger-composition-pgvector.yaml /app/memledger-composition.yaml
 
-# Install all dependencies at system level (no venv — container is the isolation)
+# Install all dependencies at system level (no venv — container is the isolation).
+#
+# When MEMLEDGER_INDEX_ARGS pulls from Test PyPI, we pre-install Events from
+# regular PyPI first. Test PyPI hosts a broken `events==1.0.0` sdist that
+# uv's unsafe-best-match strategy would otherwise prefer over the working
+# `Events==0.5` wheel on prod PyPI. Pinning here is harmless when
+# MEMLEDGER_INDEX_ARGS is empty (post-May-27 prod publish).
 RUN uv pip install --system . \
+    && uv pip install --system "Events>=0.3,<1.0" \
     && uv pip install --system ${MEMLEDGER_INDEX_ARGS} "memledger[${MEMLEDGER_EXTRAS}]==${MEMLEDGER_VERSION}" \
     && uv pip install --system ".[memory]" \
     && uv pip install --system opentelemetry-instrumentation-langchain

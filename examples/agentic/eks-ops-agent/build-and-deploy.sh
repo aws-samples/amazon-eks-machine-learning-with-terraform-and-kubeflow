@@ -37,7 +37,10 @@ MEMLEDGER_EXTRAS="${MEMLEDGER_EXTRAS:-aws,dynamodb,opensearch}"
 # prod publish. Set MEMLEDGER_USE_TESTPYPI=true to opt in. Same wheel + same
 # hash on Wed; this var becomes a no-op afterward.
 if [ "${MEMLEDGER_USE_TESTPYPI:-false}" = "true" ]; then
-    MEMLEDGER_INDEX_ARGS="${MEMLEDGER_INDEX_ARGS:---index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/}"
+    # --index-strategy unsafe-best-match is required for uv pip to fall through
+    # from Test PyPI to regular PyPI for transitive deps (memledger 1.0.0 is on
+    # both indexes; 2.0.0 only on Test PyPI). Drop this flag for plain pip.
+    MEMLEDGER_INDEX_ARGS="${MEMLEDGER_INDEX_ARGS:---index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ --index-strategy unsafe-best-match}"
 else
     MEMLEDGER_INDEX_ARGS="${MEMLEDGER_INDEX_ARGS:-}"
 fi
