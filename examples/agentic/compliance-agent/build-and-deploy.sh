@@ -26,6 +26,12 @@ ENABLE_MEMORY="true"
 # MEMLEDGER_EXTRAS=pgvector,bedrock. Defaults below select v2 with the AWS umbrella.
 MEMLEDGER_VERSION="${MEMLEDGER_VERSION:-2.0.0}"
 MEMLEDGER_EXTRAS="${MEMLEDGER_EXTRAS:-aws,dynamodb,opensearch}"
+# MEMLEDGER_USE_TESTPYPI=true → install from Test PyPI (pre Wed May 27 prod publish).
+if [ "${MEMLEDGER_USE_TESTPYPI:-false}" = "true" ]; then
+    MEMLEDGER_INDEX_ARGS="${MEMLEDGER_INDEX_ARGS:---index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/}"
+else
+    MEMLEDGER_INDEX_ARGS="${MEMLEDGER_INDEX_ARGS:-}"
+fi
 
 # Validate required env vars
 if [ -z "$TF_DIR" ]; then
@@ -58,6 +64,7 @@ docker build \
     --platform linux/amd64 \
     --build-arg "MEMLEDGER_VERSION=${MEMLEDGER_VERSION}" \
     --build-arg "MEMLEDGER_EXTRAS=${MEMLEDGER_EXTRAS}" \
+    --build-arg "MEMLEDGER_INDEX_ARGS=${MEMLEDGER_INDEX_ARGS}" \
     -t "${IMAGE_NAME}:${VERSION}" \
     -t "${IMAGE_NAME}:latest" \
     "${SCRIPT_DIR}"

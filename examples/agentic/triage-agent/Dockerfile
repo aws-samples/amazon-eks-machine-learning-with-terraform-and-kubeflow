@@ -15,6 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # eks-ops-agent Dockerfile for the full description of the two tracks.
 ARG MEMLEDGER_VERSION=2.0.0
 ARG MEMLEDGER_EXTRAS=aws,dynamodb,opensearch
+# Pass the Test PyPI flags here for pre-prod validation; empty after May 27.
+ARG MEMLEDGER_INDEX_ARGS=""
 
 # Copy all source files
 COPY pyproject.toml .
@@ -22,7 +24,7 @@ COPY src/ ./src/
 
 # Install all dependencies at system level (no venv — container is the isolation)
 RUN uv pip install --system . \
-    && uv pip install --system "memledger[${MEMLEDGER_EXTRAS}]==${MEMLEDGER_VERSION}" \
+    && uv pip install --system ${MEMLEDGER_INDEX_ARGS} "memledger[${MEMLEDGER_EXTRAS}]==${MEMLEDGER_VERSION}" \
     && uv pip install --system ".[memory]" \
     && uv pip install --system opentelemetry-instrumentation-langchain
 

@@ -576,6 +576,22 @@ The `build-and-deploy.sh` scripts forward `MEMLEDGER_VERSION` and
 `MEMLEDGER_EXTRAS` to `docker build`, so set those env vars before
 invoking the script if you want v1.
 
+> **Pre-prod (before Wed May 27):** memledger 2.0.0 is on Test PyPI ahead
+> of the prod publish. Set `MEMLEDGER_USE_TESTPYPI=true` to pull the
+> wheel from `https://test.pypi.org/simple/` while transitive deps come
+> from regular PyPI:
+>
+> ```bash
+> MEMLEDGER_USE_TESTPYPI=true ENABLE_MCP_TOOLS=true ENABLE_MEMORY=true \
+>   ./build-and-deploy.sh
+> ```
+>
+> The wheel published to prod PyPI on May 27 is bit-identical (same
+> commit, same hash). After that date drop the env var; the same pin
+> resolves from regular PyPI without an `--index-url` override. To
+> override the index flags directly (e.g. for a private mirror), pass
+> `MEMLEDGER_INDEX_ARGS="--index-url https://my-mirror/simple/"`.
+
 ### 6.1 Prerequisites
 
 Tools on your workstation:

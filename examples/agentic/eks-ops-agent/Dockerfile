@@ -18,6 +18,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #   v2 AWS:  defaults below + flip MEMLEDGER_CONFIG_PATH to memledger-composition-aws.yaml
 ARG MEMLEDGER_VERSION=2.0.0
 ARG MEMLEDGER_EXTRAS=aws,dynamodb,opensearch
+# MEMLEDGER_INDEX_ARGS lets you point pip at Test PyPI for pre-prod validation
+# (memledger 2.0.0 lands on Test PyPI before the Wed May 27 prod publish).
+# After May 27, leave this empty — the same wheel resolves from regular PyPI.
+#   --build-arg MEMLEDGER_INDEX_ARGS="--index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/"
+ARG MEMLEDGER_INDEX_ARGS=""
 
 # Copy all source files
 COPY pyproject.toml .
@@ -32,7 +37,7 @@ RUN ln -sf /app/memledger-composition-pgvector.yaml /app/memledger-composition.y
 
 # Install all dependencies at system level (no venv — container is the isolation)
 RUN uv pip install --system . \
-    && uv pip install --system "memledger[${MEMLEDGER_EXTRAS}]==${MEMLEDGER_VERSION}" \
+    && uv pip install --system ${MEMLEDGER_INDEX_ARGS} "memledger[${MEMLEDGER_EXTRAS}]==${MEMLEDGER_VERSION}" \
     && uv pip install --system ".[memory]" \
     && uv pip install --system opentelemetry-instrumentation-langchain
 

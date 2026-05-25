@@ -33,6 +33,14 @@ ENABLE_MEMORY="${ENABLE_MEMORY:-false}"
 #   MEMLEDGER_VERSION=1.0.0 MEMLEDGER_EXTRAS=pgvector,bedrock ./build-and-deploy.sh
 MEMLEDGER_VERSION="${MEMLEDGER_VERSION:-2.0.0}"
 MEMLEDGER_EXTRAS="${MEMLEDGER_EXTRAS:-aws,dynamodb,opensearch}"
+# Pre-prod: install memledger 2.0.0 from Test PyPI ahead of the Wed May 27
+# prod publish. Set MEMLEDGER_USE_TESTPYPI=true to opt in. Same wheel + same
+# hash on Wed; this var becomes a no-op afterward.
+if [ "${MEMLEDGER_USE_TESTPYPI:-false}" = "true" ]; then
+    MEMLEDGER_INDEX_ARGS="${MEMLEDGER_INDEX_ARGS:---index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/}"
+else
+    MEMLEDGER_INDEX_ARGS="${MEMLEDGER_INDEX_ARGS:-}"
+fi
 # AWS-track composition mode (DynamoDB primary + OpenSearch search index).
 # v2 only. Defaults off — pgvector composition is the image default.
 ENABLE_COMPOSITION="${ENABLE_COMPOSITION:-false}"
@@ -63,6 +71,7 @@ echo "Region:          ${AWS_REGION}"
 echo "ENABLE_MCP_TOOLS:   ${ENABLE_MCP_TOOLS}"
 echo "ENABLE_MEMORY:      ${ENABLE_MEMORY}"
 echo "MEMLEDGER:          ${MEMLEDGER_VERSION} [${MEMLEDGER_EXTRAS}]"
+[ -n "$MEMLEDGER_INDEX_ARGS" ] && echo "MEMLEDGER_INDEX:    ${MEMLEDGER_INDEX_ARGS}"
 echo "ENABLE_COMPOSITION: ${ENABLE_COMPOSITION}"
 if [ "$ENABLE_COMPOSITION" = "true" ]; then
     echo "OPENSEARCH_ENDPOINT: ${OPENSEARCH_ENDPOINT}"
@@ -77,6 +86,7 @@ docker build \
     --platform linux/amd64 \
     --build-arg "MEMLEDGER_VERSION=${MEMLEDGER_VERSION}" \
     --build-arg "MEMLEDGER_EXTRAS=${MEMLEDGER_EXTRAS}" \
+    --build-arg "MEMLEDGER_INDEX_ARGS=${MEMLEDGER_INDEX_ARGS}" \
     -t "${IMAGE_NAME}:${VERSION}" \
     -t "${IMAGE_NAME}:latest" \
     "${SCRIPT_DIR}"
