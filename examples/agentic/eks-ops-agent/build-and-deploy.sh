@@ -29,10 +29,11 @@ AWS_REGION="${AWS_REGION:-$(aws configure get region 2>/dev/null || echo us-west
 ENABLE_MCP_TOOLS="${ENABLE_MCP_TOOLS:-false}"
 ENABLE_MEMORY="${ENABLE_MEMORY:-false}"
 # memledger version + extras — forwarded to docker build as build args.
-# Defaults to v2 with the AWS umbrella; override for v1:
+# Defaults to v2.0 with the aws + opensearch extras (covers pgvector,
+# Aurora IAM auth, and OpenSearch SigV4). Override for v1:
 #   MEMLEDGER_VERSION=1.0.0 MEMLEDGER_EXTRAS=pgvector,bedrock ./build-and-deploy.sh
 MEMLEDGER_VERSION="${MEMLEDGER_VERSION:-2.0.0}"
-MEMLEDGER_EXTRAS="${MEMLEDGER_EXTRAS:-aws,dynamodb,opensearch}"
+MEMLEDGER_EXTRAS="${MEMLEDGER_EXTRAS:-aws,opensearch}"
 # Pre-prod: install memledger 2.0.0 from Test PyPI ahead of the Wed May 27
 # prod publish. Set MEMLEDGER_USE_TESTPYPI=true to opt in. Same wheel + same
 # hash on Wed; this var becomes a no-op afterward.
@@ -44,11 +45,10 @@ if [ "${MEMLEDGER_USE_TESTPYPI:-false}" = "true" ]; then
 else
     MEMLEDGER_INDEX_ARGS="${MEMLEDGER_INDEX_ARGS:-}"
 fi
-# AWS-track composition mode (DynamoDB primary + OpenSearch search index).
-# v2 only. Defaults off — pgvector composition is the image default.
-ENABLE_COMPOSITION="${ENABLE_COMPOSITION:-false}"
+# OpenSearch backend (v2.0 single-backend option). Set OPENSEARCH_ENDPOINT
+# to the domain endpoint to switch the agent from pgvector to OpenSearch.
+# Requires the OpenSearch IAM statement on the agent's IRSA role.
 OPENSEARCH_ENDPOINT="${OPENSEARCH_ENDPOINT:-}"
-MEMLEDGER_DDB_TABLE="${MEMLEDGER_DDB_TABLE:-memledger-memory}"
 
 # Validate required env vars
 if [ -z "$TF_DIR" ]; then
@@ -75,11 +75,7 @@ echo "ENABLE_MCP_TOOLS:   ${ENABLE_MCP_TOOLS}"
 echo "ENABLE_MEMORY:      ${ENABLE_MEMORY}"
 echo "MEMLEDGER:          ${MEMLEDGER_VERSION} [${MEMLEDGER_EXTRAS}]"
 [ -n "$MEMLEDGER_INDEX_ARGS" ] && echo "MEMLEDGER_INDEX:    ${MEMLEDGER_INDEX_ARGS}"
-echo "ENABLE_COMPOSITION: ${ENABLE_COMPOSITION}"
-if [ "$ENABLE_COMPOSITION" = "true" ]; then
-    echo "OPENSEARCH_ENDPOINT: ${OPENSEARCH_ENDPOINT}"
-    echo "MEMLEDGER_DDB_TABLE:   ${MEMLEDGER_DDB_TABLE}"
-fi
+[ -n "$OPENSEARCH_ENDPOINT" ] && echo "OPENSEARCH_ENDPOINT: ${OPENSEARCH_ENDPOINT}"
 
 # Build the image
 echo ""
@@ -147,16 +143,9 @@ if [ "$ENABLE_MEMORY" = "true" ]; then
     fi
 fi
 
-COMPOSITION_HELM_ARGS=""
-if [ "$ENABLE_COMPOSITION" = "true" ]; then
-    if [ -z "$OPENSEARCH_ENDPOINT" ]; then
-        echo -e "${YELLOW}ERROR: ENABLE_COMPOSITION=true but OPENSEARCH_ENDPOINT is not set.${NC}"
-        exit 1
-    fi
-    COMPOSITION_HELM_ARGS="\
-        --set env[5].name=MEMLEDGER_CONFIG_PATH --set env[5].value=/app/memledger-composition.yaml \
-        --set env[6].name=OPENSEARCH_ENDPOINT --set env[6].value=${OPENSEARCH_ENDPOINT} \
-        --set env[7].name=MEMLEDGER_DDB_TABLE --set env[7].value=${MEMLEDGER_DDB_TABLE}"
+OPENSEARCH_HELM_ARGS=""
+if [ -n "$OPENSEARCH_ENDPOINT" ]; then
+    OPENSEARCH_HELM_ARGS="--set env[8].name=OPENSEARCH_ENDPOINT --set env[8].value=${OPENSEARCH_ENDPOINT}"
 fi
 
 helm upgrade --install eks-ops-agent -n kagent \
@@ -172,7 +161,7 @@ helm upgrade --install eks-ops-agent -n kagent \
   --set "env[5].name=OTEL_EXPORTER_OTLP_LOGS_HEADERS" --set "env[5].value=x-aws-log-group=memledger-agent-spans,x-aws-log-stream=otel-spans,x-aws-metric-namespace=memledger" \
   --set "env[6].name=OTEL_EXPORTER_OTLP_LOGS_ENDPOINT" --set "env[6].value=https://logs.${AWS_REGION}.amazonaws.com/v1/logs" \
   --set "env[7].name=OTEL_RESOURCE_ATTRIBUTES" --set "env[7].value=service.name=eks-ops-agent" \
-  $COMPOSITION_HELM_ARGS \
+  $OPENSEARCH_HELM_ARGS \
   $HELM_ARGS
 
 # Wait for kagent controller to create the ServiceAccount

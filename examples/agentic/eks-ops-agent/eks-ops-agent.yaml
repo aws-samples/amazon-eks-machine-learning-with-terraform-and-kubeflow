@@ -35,22 +35,25 @@ env:
     value: "false"
   - name: ENABLE_MEMLEDGER
     value: "false"
-  # OSS pgvector track is the default composition. To switch to AWS-native
-  # composition, override with /app/memledger-composition-aws.yaml and set
-  # OPENSEARCH_ENDPOINT + MEMLEDGER_DDB_TABLE below.
+  # memledger v2.0 ships three single-backend choices (one at a time):
+  #   1. Postgres + pgvector (OSS, in-cluster) — default below.
+  #   2. Aurora + pgvector with IAM auth — same config path; flip
+  #      MEMLEDGER_PG_IAM_AUTH=true and point MEMLEDGER_PG_DSN at Aurora
+  #      (no password in the DSN).
+  #   3. OpenSearch with SigV4 — uncomment OPENSEARCH_ENDPOINT below.
+  # DynamoDB + multi-backend composition land in v2.1 — see v2-preview/.
   - name: MEMLEDGER_CONFIG_PATH
     value: "/app/memledger-composition.yaml"
-  # Postgres DSN — required for both v1 and v2 OSS track. Populated by
-  # build-and-deploy.sh from the kagent-db-credentials secret. v2 supports
-  # IAM auth (no password in the DSN) — set MEMLEDGER_PG_IAM_AUTH=true.
+  # Postgres / Aurora DSN — required for backends 1 and 2. Populated by
+  # build-and-deploy.sh from the kagent-db-credentials secret.
   - name: MEMLEDGER_PG_DSN
     value: ""
-  # AWS-track-only env vars (v2 composition with DynamoDB + OpenSearch).
-  # Leave commented out for the OSS track.
+  # OpenSearch backend (option 3). Uncomment + set the domain endpoint
+  # to switch the agent to OpenSearch SigV4. Requires the OpenSearch IAM
+  # statement on the agent's IRSA role — see v2-preview/memledger-composition-policy.json
+  # for the policy template.
   # - name: OPENSEARCH_ENDPOINT
   #   value: "search-memledger-dev-xxxxx.us-west-2.es.amazonaws.com"
-  # - name: MEMLEDGER_DDB_TABLE
-  #   value: "memledger-memory"
 
 resources:
   requests:

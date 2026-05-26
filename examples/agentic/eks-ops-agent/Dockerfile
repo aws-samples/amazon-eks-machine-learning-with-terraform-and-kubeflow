@@ -12,12 +12,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean
 
 # memledger version + extras are configurable via build args so the same
-# Dockerfile builds both the v1 (OSS pgvector) and v2 (AWS composition) tracks.
+# Dockerfile builds both v1 and v2.0 tracks. v2.0 ships three backends —
+# Postgres + pgvector (OSS), Aurora + pgvector (IAM auth), and
+# OpenSearch (SigV4) — picked at runtime via MEMLEDGER_CONFIG_PATH or
+# direct backend config. DynamoDB + multi-backend composition land in
+# v2.1; the preview lives under v2-preview/ in this directory.
 #   v1 OSS:  --build-arg MEMLEDGER_VERSION=1.0.0 --build-arg MEMLEDGER_EXTRAS=pgvector,bedrock
-#   v2 OSS:  defaults below — pgvector still works (default composition file)
-#   v2 AWS:  defaults below + flip MEMLEDGER_CONFIG_PATH to memledger-composition-aws.yaml
+#   v2:      defaults below
 ARG MEMLEDGER_VERSION=2.0.0
-ARG MEMLEDGER_EXTRAS=aws,dynamodb,opensearch
+ARG MEMLEDGER_EXTRAS=aws,opensearch
 # MEMLEDGER_INDEX_ARGS lets you point pip/uv at Test PyPI for pre-prod
 # validation (memledger 2.0.0 lands on Test PyPI before the Wed May 27
 # prod publish). After May 27, leave this empty — the same wheel resolves
@@ -35,11 +38,11 @@ ARG MEMLEDGER_INDEX_ARGS=""
 COPY pyproject.toml .
 COPY src/ ./src/
 
-# Both composition configs ship in the image. The OSS pgvector config is the
-# default at /app/memledger-composition.yaml; the AWS config is alongside it.
-# Override MEMLEDGER_CONFIG_PATH on the pod to switch tracks.
+# The pgvector config (works for both in-cluster Postgres and Aurora via
+# MEMLEDGER_PG_IAM_AUTH=true) ships as the default at
+# /app/memledger-composition.yaml. The OpenSearch backend doesn't need a
+# config file — the agent passes its hosts/region directly via env vars.
 COPY memledger-composition-pgvector.yaml /app/memledger-composition-pgvector.yaml
-COPY memledger-composition-aws.yaml /app/memledger-composition-aws.yaml
 RUN ln -sf /app/memledger-composition-pgvector.yaml /app/memledger-composition.yaml
 
 # Install all dependencies at system level (no venv — container is the isolation).

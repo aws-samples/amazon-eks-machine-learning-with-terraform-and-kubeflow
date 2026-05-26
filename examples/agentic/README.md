@@ -7,9 +7,16 @@ agent framework) with an optional governed memory layer provided by
 versions are supported via build args:
 
 - **v1.x** — OSS track only: PostgreSQL + pgvector + Bedrock embeddings.
-- **v2.x** — OSS track (pgvector, with optional Aurora IAM auth) **and**
-  AWS-native composition (DynamoDB primary + OpenSearch search with the
-  faiss vector engine).
+- **v2.0** — three single-backend choices, picked one at a time per
+  agent. Validated end-to-end against the running cluster:
+    - PostgreSQL + pgvector (OSS, in-cluster)
+    - Aurora PostgreSQL + pgvector with IAM auth (no password)
+    - Amazon OpenSearch with SigV4 auth (vector + BM25 hybrid search)
+- **v2.1 (2026-06-15)** — adds DynamoDB and true multi-backend
+  composition. Preview artifacts live under
+  `eks-ops-agent/v2-preview/`. Don't wire these into production builds
+  yet — the v2.0 SDK does not have a multi-backend router and the
+  v2.0 DynamoDB backend has no `search()`.
 
 The eks-ops-agent's existing Redis-based Module 3 (user defaults) is
 unchanged; memledger is an opt-in addon that you layer on top of (or
@@ -35,18 +42,29 @@ This README covers, in order:
    evaluator suite.
 5. Phoenix observability — span inventory + sample attributes.
 6. Cluster integration procedure (Helm chart + agent image rebuilds +
-   smoke tests) — covers both **v1 (OSS)** and **v2 (OSS + AWS)** tracks.
+   smoke tests) — covers **v1** and **v2.0** tracks.
 
-> **Picking a track:**
-> - Workshop / laptop / OSS-only EKS cluster → **v1 OSS** or **v2 OSS**.
->   Both use the `memledger-composition-pgvector.yaml` config and only
->   require an in-cluster (or Aurora) PostgreSQL with pgvector. v2 is
->   recommended for new deployments.
-> - Production AWS deployment with managed services → **v2 AWS**.
->   Uses `memledger-composition-aws.yaml`: DynamoDB primary + OpenSearch
->   search + Aurora pgvector fallback via IAM auth. Provision with
->   `eks-ops-agent/setup-memledger-composition.sh` and the IAM template
->   in `eks-ops-agent/iam/memledger-composition-policy.json`.
+> **Picking a backend (memledger v2.0):**
+> - **PostgreSQL + pgvector (OSS, in-cluster)** — the workshop default.
+>   Uses `memledger-composition-pgvector.yaml`. Password auth via the
+>   `kagent-db-credentials` secret. No AWS resources beyond Bedrock for
+>   embeddings.
+> - **Aurora + pgvector with IAM auth** — same composition file, same
+>   schema. Set `MEMLEDGER_PG_IAM_AUTH=true` and point
+>   `MEMLEDGER_PG_DSN` at Aurora (no password in the DSN). The agent's
+>   IRSA role needs `rds-db:connect` on the Aurora dbuser. Recommended
+>   AWS-native path.
+> - **Amazon OpenSearch with SigV4** — set `OPENSEARCH_ENDPOINT` to the
+>   domain endpoint. The agent's IRSA role needs `es:ESHttp*` on the
+>   domain. Only backend that supports `search_hybrid()` (vector +
+>   BM25). See the IAM policy template in
+>   `eks-ops-agent/v2-preview/memledger-composition-policy.json`
+>   (use the `OpenSearchMemledger` statement; ignore the rest until
+>   v2.1).
+>
+> Backends are mutually exclusive — pick one. DynamoDB and
+> multi-backend composition are deferred to v2.1; see
+> `eks-ops-agent/v2-preview/README.md`.
 
 ---
 
@@ -554,7 +572,7 @@ memledger operations.
 This section describes deploying memledger to the cluster, rebuilding
 the three agent images against the SDK, and running the end-to-end
 smoke tests. The agent Dockerfiles take two build args so the same
-build script handles **both v1 and v2**:
+build script handles **both v1 and v2.0**:
 
 ```bash
 # v1 (OSS pgvector only)
@@ -563,13 +581,12 @@ docker build \
     --build-arg MEMLEDGER_EXTRAS=pgvector,bedrock \
     -t eks-ops-agent:v1 .
 
-# v2 OSS (default — pgvector still works)
+# v2.0 (default — pgvector + Aurora IAM + OpenSearch all in one image)
 docker build -t eks-ops-agent:v2 .
 
-# v2 AWS (override the composition file at run time, no rebuild needed)
-# kubectl set env deployment/eks-ops-agent \
-#   MEMLEDGER_CONFIG_PATH=/app/memledger-composition-aws.yaml \
-#   OPENSEARCH_ENDPOINT=... MEMLEDGER_DDB_TABLE=memledger-memory
+# Switch the running pod between backends without rebuilding:
+#   pgvector / Aurora IAM:  set MEMLEDGER_PG_DSN (+ MEMLEDGER_PG_IAM_AUTH=true for Aurora)
+#   OpenSearch:             set OPENSEARCH_ENDPOINT
 ```
 
 The `build-and-deploy.sh` scripts forward `MEMLEDGER_VERSION` and
@@ -823,7 +840,7 @@ helm rollback memledger 0
 
 The agent_memory schema is backward-compatible at the column level —
 existing v1 records remain readable from v2.0.0 SDK; new v2 governance
-columns (DynamoDB GSIs, faiss index) are populated lazily.
+columns are populated lazily.
 
 ### 6.8 Expected outputs cheat sheet
 
@@ -864,66 +881,47 @@ ENABLE_MCP_TOOLS=true ENABLE_MEMORY=true \
   ignored.
 - **Smoke test** (in-pod): the SDK script in §6.6.1 works as-is.
 
-#### v2 OSS — same backend, new SDK
+#### v2.0 — pick one of three backends
 
 ```bash
-# v2 OSS (same DSN, new wheel, governance fields populated)
+# v2.0 default (PostgreSQL + pgvector, in-cluster)
 cd examples/agentic/eks-ops-agent
 ENABLE_MCP_TOOLS=true ENABLE_MEMORY=true ./build-and-deploy.sh
 ```
 
-- **Backend**: PostgreSQL + pgvector. Aurora supported via IAM auth
-  (`MEMLEDGER_PG_IAM_AUTH=true`, no password in the DSN).
-- **Composition file**: `memledger-composition-pgvector.yaml` (default).
-- **Env vars**: `MEMLEDGER_PG_DSN` (required), optional
-  `MEMLEDGER_PG_IAM_AUTH=true` for Aurora.
-- **What's new vs v1**: SDK chain-resolved AWS region; pgvector backend
-  exposes the v2 governance columns (DynamoDB GSIs are unused in this
-  track); IAM auth on Aurora.
+Switch backends at deploy time without rebuilding:
 
-#### v2 AWS — DynamoDB + OpenSearch + Aurora fallback
+| Backend | Required env vars | IAM additions on the agent IRSA role |
+|---|---|---|
+| PostgreSQL + pgvector (in-cluster) | `MEMLEDGER_PG_DSN` (with password) | none |
+| Aurora + pgvector with IAM auth | `MEMLEDGER_PG_DSN` (no password), `MEMLEDGER_PG_IAM_AUTH=true` | `rds-db:connect` on the Aurora dbuser ARN |
+| Amazon OpenSearch with SigV4 | `OPENSEARCH_ENDPOINT=search-...es.amazonaws.com` | `es:ESHttpGet/Post/Put/Delete/Head` on `arn:aws:es:<region>:<account>:domain/<domain>/*` |
 
-```bash
-# Provision DDB + OpenSearch + IAM bindings (idempotent)
-cd examples/agentic/eks-ops-agent
-ACCOUNT_ID=<your-account> AWS_REGION=us-west-2 \
-bash setup-memledger-composition.sh
+The IAM statements live in `eks-ops-agent/v2-preview/memledger-composition-policy.json`.
+For v2.0, attach **only** the statement matching the backend you picked
+(`AuroraIAMAuth` or `OpenSearchMemledger`). Substitute `<REGION>`,
+`<ACCOUNT-ID>`, and `<DB-RESOURCE-ID>` (Aurora) before applying. The
+`DynamoDBMemledger` statement is for v2.1 — leave it off in v2.0.
 
-# Build + deploy with the AWS composition file
-ENABLE_MCP_TOOLS=true \
-ENABLE_MEMORY=true \
-ENABLE_COMPOSITION=true \
-OPENSEARCH_ENDPOINT=search-memledger-dev-xxxxx.us-west-2.es.amazonaws.com \
-MEMLEDGER_DDB_TABLE=memledger-memory \
-./build-and-deploy.sh
-```
+#### Smoke test (any v2.0 backend)
 
-- **Backend**: DynamoDB primary, OpenSearch (faiss) search, Aurora
-  pgvector fallback via IAM auth.
-- **Composition file**: `memledger-composition-aws.yaml`.
-- **Env vars**: `MEMLEDGER_CONFIG_PATH=/app/memledger-composition-aws.yaml`,
-  `OPENSEARCH_ENDPOINT`, `MEMLEDGER_DDB_TABLE`, plus `MEMLEDGER_PG_DSN`
-  if you want the Aurora fallback wired up. No passwords — IAM auth
-  throughout.
-- **IAM**: apply `iam/memledger-composition-policy.json` (substitute
-  `<REGION>`, `<ACCOUNT-ID>`, `<DB-RESOURCE-ID>`) or rely on the
-  `setup-memledger-composition.sh` script.
-
-#### Smoke test for both v2 tracks
-
-The §6.6.1 in-pod SDK smoke test works on both v2 OSS and v2 AWS — the
-SDK reads `MEMLEDGER_CONFIG_PATH` and connects to whichever backend the
-composition file declares. Expected: `records>=2`, `chain_depth>=2`,
-and `memledger.*` spans visible in Phoenix (§6.6.4).
+The §6.6.1 in-pod SDK smoke test works against all three backends. The
+SDK reads `MEMLEDGER_PG_DSN` (pgvector / Aurora) or `OPENSEARCH_ENDPOINT`
+(OpenSearch) at startup. Expected: `records>=2`, `chain_depth>=2`, and
+`memledger.*` spans visible in Phoenix (§6.6.4). Verified PASS results
+for all three backends are linked from the memledger docs site under
+*Evaluation → Backend Validation*.
 
 #### Compatibility matrix
 
-| Track | Redis | memledger v1 | memledger v2 |
-|-------|:-----:|:------------:|:------------:|
-| OSS (pgvector) | ✓ (existing Module 3) | ✓ | ✓ |
-| AWS (DDB + OpenSearch) | — | ✗ | ✓ |
+| Backend | memledger v1 | memledger v2.0 | memledger v2.1 |
+|---|:---:|:---:|:---:|
+| Postgres + pgvector | ✓ | ✓ | ✓ |
+| Aurora + pgvector (IAM auth) | — | ✓ | ✓ |
+| OpenSearch (SigV4) | — | ✓ | ✓ |
+| DynamoDB (k/v + composition) | — | — | ✓ (planned 2026-06-15) |
 
-Pick one; you don't need to run all three.
+Pick one backend per agent — they're mutually exclusive in v2.0.
 
 ---
 
@@ -932,9 +930,7 @@ Pick one; you don't need to run all three.
 | Path | What it is |
 |------|------------|
 | `triage-agent/`, `eks-ops-agent/`, `compliance-agent/` | Reference agent implementations |
-| `eks-ops-agent/memledger-composition-pgvector.yaml` | Default composition: PostgreSQL + pgvector (works with v1 and v2) |
-| `eks-ops-agent/memledger-composition-aws.yaml` | DynamoDB + OpenSearch composition (memledger v2 only) |
-| `eks-ops-agent/iam/` | IAM policy template for composition-mode IRSA |
-| `eks-ops-agent/setup-memledger-composition.sh` | Provisions DynamoDB + OpenSearch + IAM bindings |
+| `eks-ops-agent/memledger-composition-pgvector.yaml` | Default config: pgvector backend (Postgres OSS or Aurora IAM auth) |
+| `eks-ops-agent/v2-preview/` | v2.1 (2026-06-15) artifacts: DynamoDB + true multi-backend composition |
 | memledger SDK | <https://pypi.org/project/memledger/> |
 | memledger Helm chart | `charts/memledger/` in [memledger-core](https://github.com/memledger-ai/memledger-core) |
