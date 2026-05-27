@@ -38,11 +38,12 @@ ARG MEMLEDGER_INDEX_ARGS=""
 COPY pyproject.toml .
 COPY src/ ./src/
 
-# The pgvector config (works for both in-cluster Postgres and Aurora via
-# MEMLEDGER_PG_IAM_AUTH=true) ships as the default at
-# /app/memledger-composition.yaml. The OpenSearch backend doesn't need a
-# config file — the agent passes its hosts/region directly via env vars.
+# Backend config files. The pgvector file is the default and ships as
+# /app/memledger-composition.yaml (works for in-cluster Postgres and
+# Aurora-IAM via MEMLEDGER_PG_IAM_AUTH=true). The OpenSearch file is
+# baked in too — point MEMLEDGER_CONFIG_PATH at it to swap backends.
 COPY memledger-composition-pgvector.yaml /app/memledger-composition-pgvector.yaml
+COPY memledger-composition-opensearch.yaml /app/memledger-composition-opensearch.yaml
 RUN ln -sf /app/memledger-composition-pgvector.yaml /app/memledger-composition.yaml
 
 # Install all dependencies at system level (no venv — container is the isolation).

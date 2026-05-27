@@ -24,3 +24,7 @@ eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform.tfvars
 # not for committing. See examples/agentic/README.md §6 for the public test
 # procedure.
 examples/agentic/B9-RESULTS-*.md
+
+# Stray planning notes and terraform plan binaries — not for commit
+*_plan.md
+**/tfplan

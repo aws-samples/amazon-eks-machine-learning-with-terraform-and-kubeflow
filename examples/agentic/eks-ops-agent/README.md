@@ -10,7 +10,7 @@ The workshop is structured as three incremental modules:
 | 1 | Barebone Q&A agent with Amazon Bedrock |
 | 2 | Add 20+ cluster operations tools via EKS MCP Server |
 | 3 | Persistent user defaults with Redis memory |
-| 3+ (optional) | Swap Redis for memledger v1 (OSS pgvector) or v2 (AWS DynamoDB + OpenSearch). See [`../README.md`](../README.md) — section "Memledger as a Redis alternative". |
+| 3+ (optional) | Swap Redis for memledger. v2.0 ships three single-backend choices: Postgres + pgvector (OSS), Aurora + pgvector (IAM auth), or OpenSearch (SigV4). See [`../README.md`](../README.md) — section "Memledger as a Redis alternative". |
 
 ## Prerequisites
 

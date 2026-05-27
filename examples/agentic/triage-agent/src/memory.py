@@ -77,10 +77,9 @@ class MemoryService:
                     embedding_config=self._embedding_config,
                 )
                 logger.info("MemoryService initialized with memledger (pgvector)")
-            # v1 telemetry is opt-in — wrap the instance to emit memledger.* spans
             try:
-                from memledger.telemetry import instrument_engram
-                instrument_engram(self._ml)
+                from memledger.telemetry import instrument
+                instrument(self._ml)
                 logger.info("memledger OTEL instrumentation enabled")
             except Exception as e:
                 logger.warning(f"memledger OTEL instrumentation not available: {e}")

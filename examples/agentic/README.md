@@ -436,13 +436,13 @@ new agent, mirror this:
 2. **`memory.py:MemoryService._get_*()`** — lazy-create a `Memledger`
    instance with `EmbeddingConfig(provider='bedrock',
    model='amazon.titan-embed-text-v2:0', dimensions=1024)`, then call
-   `memledger.telemetry.instrument_engram(self._ml)`. v1's tracing is
-   **opt-in at the instance level** by design.
+   `memledger.telemetry.instrument(self._ml)`. Tracing is **opt-in at
+   the instance level** by design.
 
    ```python
    from memledger import Memledger
    from memledger.embeddings import EmbeddingConfig
-   from memledger.telemetry import instrument_engram
+   from memledger.telemetry import instrument
 
    self._ml = await Memledger.create(
        backend_name="pgvector",
@@ -453,7 +453,7 @@ new agent, mirror this:
            dimensions=1024,
        ),
    )
-   instrument_engram(self._ml)  # opt-in OTEL wrapping
+   instrument(self._ml)  # opt-in OTEL wrapping
    ```
 
 3. **`memory.py:remember_knowledge`** (the `@tool`) — accept and
@@ -852,7 +852,7 @@ columns are populated lazily.
 | 6.5 | `agent.kagent.dev/* configured` x3 | CRD missing → ensure kagent controller is up |
 | 6.6.1 | `records>=2 chain_depth>=2` | Import error → v2.0.0 wheel didn't make it into the image; re-build |
 | 6.6.2 | `status` shows connected + memory count; `get --chain` renders | CLI not on PATH → `pip install memledger==2.0.0` baked into image |
-| 6.6.4 | Phoenix shows `memledger.*` spans | No spans → `_init_otel()` not called; or `instrument_engram(self._ml)` missing |
+| 6.6.4 | Phoenix shows `memledger.*` spans | No spans → `_init_otel()` not called; or `instrument(self._ml)` missing |
 
 ### 6.9 Memledger as a Redis alternative — v1 vs v2
 

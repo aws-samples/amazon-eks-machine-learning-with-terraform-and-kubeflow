@@ -115,8 +115,8 @@ class MemoryService:
                 )
                 logger.info("MemoryService initialized with memledger (pgvector)")
             try:
-                from memledger.telemetry import instrument_engram
-                instrument_engram(self._ml)
+                from memledger.telemetry import instrument
+                instrument(self._ml)
                 logger.info("memledger OTEL instrumentation enabled")
             except Exception as e:
                 logger.warning(f"memledger OTEL instrumentation not available: {e}")

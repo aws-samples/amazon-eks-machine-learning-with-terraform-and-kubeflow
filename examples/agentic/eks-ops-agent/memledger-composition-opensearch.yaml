@@ -1,0 +1,23 @@
+version: "1.0"
+
+embeddings:
+  provider: bedrock
+  model: amazon.titan-embed-text-v2:0
+  dimensions: 1024
+
+conflict_threshold: 0.65
+auto_promote_threshold: 3
+
+default_backend: opensearch
+
+backends:
+  opensearch:
+    provider: opensearch
+    config:
+      hosts:
+        - https://${OPENSEARCH_ENDPOINT}
+      index_name: ${MEMLEDGER_OS_INDEX:memledger-memory}
+      auth_type: aws_sigv4
+      verify_certs: true
+      dimensions: 1024
+      vector_engine: faiss
