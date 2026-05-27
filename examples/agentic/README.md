@@ -832,6 +832,60 @@ After the cross-agent flow, Phoenix should show `memledger.memory.add`,
 `memledger.memory.search`, `memledger.get`, and (if you ran the
 evaluators) `evaluators.mai_*` spans. Filter by span kind `RETRIEVER`.
 
+#### 6.6.5 Deployed-agent backend swap (Aurora-IAM / OpenSearch)
+
+Beyond the in-pod SDK smoke (§6.6.1), validate that backend swaps
+work through the *running agent's* tool-call path — i.e. Memledger's
+lazy-init code path inside the live pod, exercising IRSA-bound auth
+end-to-end.
+
+The procedure is identical for either backend; only the Helm values
+change:
+
+```bash
+# Aurora + pgvector with IAM auth
+helm upgrade eks-ops-agent -n kagent \
+  charts/machine-learning/agentic/kagent-agent \
+  -f examples/agentic/eks-ops-agent/eks-ops-agent.yaml \
+  --set 'env[*].name=MEMLEDGER_CONFIG_PATH' \
+  --set 'env[*].value=/app/memledger-composition-pgvector.yaml' \
+  --set 'env[*].name=MEMLEDGER_PG_DSN' \
+  --set 'env[*].value=postgresql://<iam_user>@<aurora-host>:5432/<db>?sslmode=require' \
+  --set 'env[*].name=MEMLEDGER_PG_IAM_AUTH' --set 'env[*].value=true'
+
+# OpenSearch with SigV4
+helm upgrade eks-ops-agent -n kagent \
+  charts/machine-learning/agentic/kagent-agent \
+  -f examples/agentic/eks-ops-agent/eks-ops-agent.yaml \
+  --set 'env[*].name=MEMLEDGER_CONFIG_PATH' \
+  --set 'env[*].value=/app/memledger-composition-opensearch.yaml' \
+  --set 'env[*].name=OPENSEARCH_ENDPOINT' \
+  --set 'env[*].value=search-<domain>-<id>.<region>.es.amazonaws.com'
+```
+
+Then drive a write+recall through A2A:
+
+```bash
+kubectl port-forward -n kagent svc/eks-ops-agent 18002:8080 &
+curl -s http://localhost:18002/ -H 'Content-Type: application/json' -d @- <<'JSON'
+{"jsonrpc":"2.0","id":"1","method":"message/send","params":{"message":{
+  "kind":"message","messageId":"backend-swap-1","role":"user",
+  "parts":[{"kind":"text","text":"Use remember_knowledge content=BACKEND-SWAP-PROOF namespace=/eks-ops/tests/swap record_type=episodic confidence=0.95. Then recall_knowledge query=BACKEND-SWAP in same namespace. Return both memory IDs."}]
+}}}
+JSON
+```
+
+Pass criteria:
+
+- Agent startup log: `Memory enabled (memledger config: /app/memledger-composition-<backend>.yaml)`.
+- Tool calls return matching memory IDs (no `'NoneType' object has no attribute 'encode'` auth error).
+- Direct backend check (Aurora `psql`, OpenSearch `_search`) shows the
+  record with `agent_id=eks-ops-agent`.
+
+Validated 2026-05-27 against `kagents-mem-eks` for both backend swaps;
+results are linked from the memledger docs site under
+*Evaluation → Backend Validation*.
+
 ### 6.7 Rollback
 
 ```bash
@@ -853,6 +907,7 @@ columns are populated lazily.
 | 6.6.1 | `records>=2 chain_depth>=2` | Import error → v2.0.0 wheel didn't make it into the image; re-build |
 | 6.6.2 | `status` shows connected + memory count; `get --chain` renders | CLI not on PATH → `pip install memledger==2.0.0` baked into image |
 | 6.6.4 | Phoenix shows `memledger.*` spans | No spans → `_init_otel()` not called; or `instrument(self._ml)` missing |
+| 6.6.5 | Tool calls return memory IDs through deployed agent; row visible via direct backend query | Auth error → IRSA policy missing the dbuser/domain ARN; or YAML expects `${MEMLEDGER_PG_IAM_AUTH}`/`${OPENSEARCH_ENDPOINT}` env that wasn't set |
 
 ### 6.9 Memledger as a Redis alternative — v1 vs v2
 
@@ -931,6 +986,7 @@ Pick one backend per agent — they're mutually exclusive in v2.0.
 |------|------------|
 | `triage-agent/`, `eks-ops-agent/`, `compliance-agent/` | Reference agent implementations |
 | `eks-ops-agent/memledger-composition-pgvector.yaml` | Default config: pgvector backend (Postgres OSS or Aurora IAM auth) |
+| `eks-ops-agent/memledger-composition-opensearch.yaml` | OpenSearch SigV4 backend; activate by pointing `MEMLEDGER_CONFIG_PATH` at it |
 | `eks-ops-agent/v2-preview/` | v2.1 (2026-06-15) artifacts: DynamoDB + true multi-backend composition |
 | memledger SDK | <https://pypi.org/project/memledger/> |
 | memledger Helm chart | `charts/memledger/` in [memledger-core](https://github.com/memledger-ai/memledger-core) |
