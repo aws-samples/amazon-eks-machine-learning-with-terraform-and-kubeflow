@@ -693,7 +693,7 @@ ServiceAccount.
 ```bash
 export TF_DIR=/path/to/eks-cluster/terraform/aws-eks-cluster-and-nodegroup
 export REPO_DIR=/path/to/this/repo
-export MEMLEDGER_PG_DSN="postgresql://memledger:memledger-secret@memledger-pgvector:5432/memledger"
+export MEMLEDGER_PG_DSN="postgresql://memledger:<DB_PASSWORD>@memledger-pgvector:5432/memledger"
 
 # eks-ops-agent — pgvector mode with EKS MCP tools
 cd "$REPO_DIR/examples/agentic/eks-ops-agent"
@@ -882,7 +882,7 @@ Pass criteria:
 - Direct backend check (Aurora `psql`, OpenSearch `_search`) shows the
   record with `agent_id=eks-ops-agent`.
 
-Validated 2026-05-27 against `kagents-mem-eks` for both backend swaps;
+Validated 2026-05-27 against a test EKS cluster for both backend swaps;
 results are linked from the memledger docs site under
 *Evaluation → Backend Validation*.
 
