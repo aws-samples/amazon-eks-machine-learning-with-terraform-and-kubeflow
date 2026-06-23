@@ -130,19 +130,71 @@ These are bumped only if K8s 1.35 breaks them. None do, per their compat matrice
 
 7. **Submodule helm provider pin** (`istio/`, `kubeflow/`, `hyperpod/`, `kagent/`, `kmcp/`) — these submodules previously had no helm provider pin or a loose `>= 2.9`, both of which resolve to `helm@3.x` on a fresh `terraform init`. The `aws-ia/eks-blueprints-addon@1.1.1` they use is incompatible with helm v3 block syntax. Pinned all five to `~> 2.17.0` matching the root module to make `terraform validate` work on master. **Pre-existing failure on master** — would have broken anyone doing a fresh init. Side-effect benefit of this PR.
 
-## Validation plan (what should happen before merge)
+## Validation plan + results
 
-- [x] `terraform validate` passes on root module (warnings only — pre-existing `data.aws_region.name` deprecation, unrelated)
-- [x] `terraform validate` passes on `istio/`
-- [x] `terraform validate` passes on `kubeflow/`
-- [x] `terraform validate` passes on `slurm/`
-- [x] `terraform validate` passes on `mlflow/`
-- [x] `terraform validate` passes on `kagent/`
-- [x] `terraform validate` passes on `kmcp/`
-- [x] `terraform validate` passes on `hyperpod/`
+- [x] `terraform validate` passes on root + all 7 submodules (warnings only — pre-existing `data.aws_region.name` and `kubernetes_namespace` deprecations, unrelated to this PR)
 - [ ] `terraform fmt` pass
-- [ ] Manual smoke test on a non-production cluster: spin up `terraform apply`, exercise the demo scenarios from `examples/agentic/aws-devops-agent-demo` against the new cluster
-- [ ] Spot-check that ALB Controller, cert-manager, Istio, Karpenter all reconcile after install
+- [x] **Real `terraform apply` on a test cluster (`<YOUR_TEST_CLUSTER>`, us-west-2)** — see "Test results" below
+- [x] Smoke test: 10 phases all PASS — see "Test results" below
+
+## Test results — `<YOUR_TEST_CLUSTER>` apply 2026-06-23
+
+Greenfield bring-up against a fresh cluster (separate worktree, separate S3 backend, no shared state with any other cluster).
+
+### Apply summary
+
+- **Plan:** 140 to add, 0 to change, 0 to destroy.
+- **Apply attempt 1:** 137/140 created. 3 failures, all timing-related (downstream Helm releases tried to install before ALB controller webhook was Ready).
+- **Apply attempt 2 (idempotent retry):** 2 of the 3 reconciled cleanly. 1 remaining failure: `kubeflow-tensorboards`.
+- **Final state:** cluster ACTIVE on K8s 1.35, every K8s-coupled controller Running, 139/140 resources successfully managed.
+
+### Verified working at the bumped versions
+
+| Component | Pinned version | Live state |
+|---|---|---|
+| EKS control plane | 1.35 | ACTIVE |
+| System nodegroup | (AL2023_x86_64_STANDARD) | 8/8 nodes Ready |
+| EBS CSI managed addon | `v1.62.0-eksbuild.1` | ACTIVE |
+| AWS Load Balancer Controller | `1.17.1` chart | 2/2 Running |
+| AWS EFS CSI Driver | `3.4.1` chart | landed |
+| AWS FSx CSI Driver | `1.17.0` chart | landed |
+| cert-manager | `1.20.2` chart | Running |
+| Cluster Autoscaler | `9.58.0` chart + `v1.35.0` image override | Running with **image: `registry.k8s.io/autoscaling/cluster-autoscaler:v1.35.0`** ✓ matches cluster K8s minor |
+| Karpenter | `1.13.0` chart | 2/2 Running in `kube-system`, 4 NodePools registered |
+| Istio (base / istiod / cni / ingress) | `1.30.1` | istiod Running, CRDs present |
+| EKS Blueprints Addons module | `1.23.0` | rendered cleanly |
+| kube-prometheus-stack | `60.5.0` | rendered (operator + alertmanager) |
+| EKS EFA Device Plugin | `v0.5.29` chart | installed (no EFA-capable nodes yet, daemonset waiting) |
+| Kubeflow (training, katib, pipelines, notebooks, kuberay, mpi-operator, profiles, etc.) | various | 29 pods Running across the namespace |
+| kagent | `0.7.11` | 16 pods Running in `kagent` namespace |
+| Submodule helm provider pins (~> 2.17.0) | — | terraform init+plan+apply all clean |
+
+### Smoke test (`smoke-test-1.35.sh`)
+
+Ran in the worktree after apply. All 10 phases PASS:
+
+1. ✅ kubeconfig updated
+2. ✅ Control plane reachable, server reports `v1.35`
+3. ✅ 8/8 nodes Ready
+4. ✅ EBS CSI managed addon ACTIVE
+5. ✅ ALB controller, cert-manager, CA, Karpenter, istiod all Running
+6. ✅ CA image is `v1.35.0` (exact)
+7. ✅ Kubeflow namespace populated (29 pods)
+8. ✅ kagent namespace healthy (16 pods)
+9. ✅ Karpenter NodePools (4) registered
+10. ✅ CRDs present for cert-manager, ALB Controller, Karpenter, Istio
+
+### Issues found during the live apply
+
+| # | Issue | Root cause | Recommendation |
+|---|---|---|---|
+| 1 | `helm_release.prometheus` failed on first apply (webhook race) | ALB controller webhook not yet Ready when prometheus tried to install | Resolved by re-running `terraform apply`. Long-term: add explicit `depends_on aws_load_balancer_controller` to prometheus. Tracker for follow-up PR. |
+| 2 | `kubernetes_namespace.auth` failed on first apply | Same webhook race | Same as #1, resolved on retry. |
+| 3 | `kubeflow-tensorboards` chart fails apply, even on retry | Chart references `gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0` which **no longer exists upstream** (gcr.io pruned this image). Confirmed via `kubectl describe pod`. | **NOT caused by this PR.** Same chart on master against K8s 1.33 would hit the same error. Track as a separate follow-up — bump kubeflow-tensorboards chart to a version that uses a current rbac-proxy image (e.g. `registry.k8s.io/kube-rbac-proxy` or `quay.io/brancz/kube-rbac-proxy`). |
+
+### Helm-release versions in cluster (`helm list -A`)
+
+The full list from the live cluster confirmed every Helm release this PR touched landed at the expected version. The only `failed` row in `helm list` is `kubeflow-tensorboards` (issue #3 above).
 
 ## Rollback
 
