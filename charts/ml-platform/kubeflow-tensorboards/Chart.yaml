@@ -3,4 +3,4 @@ appVersion: v1.9.2
 description: A Helm chart for Kubeflow tensorboards
 name: kubeflow-tensorboards
 type: application
-version: 1.0.0
+version: 1.0.1
