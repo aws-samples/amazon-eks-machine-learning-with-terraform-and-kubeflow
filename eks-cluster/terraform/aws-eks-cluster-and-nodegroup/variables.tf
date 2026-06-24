@@ -25,7 +25,7 @@ variable "eks_admin_role_arn" {
 
 variable "k8s_version" {
   description = "kubernetes version"
-  default = "1.33"
+  default = "1.35"
   type    = string
 }
 
@@ -267,7 +267,7 @@ variable "karpenter_namespace" {
 variable "karpenter_version" {
   description = "Karpenter version"
   type = string
-  default = "1.6.3"
+  default = "1.13.0"
 }
 
 variable "karpenter_capacity_type" {
@@ -303,7 +303,7 @@ variable "prometheus_namespace" {
 variable "prometheus_version" {
   description = "Prometheus community kube-prometheus-stack chart version"
   type = string
-  default = "60.3.0"
+  default = "60.5.0"
 }
 
 variable "nvidia_plugin_version" {

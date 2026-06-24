@@ -322,7 +322,7 @@ resource "aws_fsx_data_repository_association" "this" {
 }
 
 locals {
-  use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.33" : var.k8s_version
+  use_k8s_version = substr(var.k8s_version, 0, 3) == "1.1" ? "1.35" : var.k8s_version
   s3_bucket       = split("/", substr(var.import_path, 5, -1))[0]
 }
 
@@ -432,7 +432,7 @@ module "ebs_csi_driver_irsa" {
 module "eks_blueprints_addons" {
 
   source  = "aws-ia/eks-blueprints-addons/aws"
-  version = "1.21.0"
+  version = "1.23.0"
 
   cluster_name      = aws_eks_cluster.eks_cluster.id
   cluster_endpoint  = aws_eks_cluster.eks_cluster.endpoint
@@ -446,7 +446,7 @@ module "eks_blueprints_addons" {
 
   aws_load_balancer_controller = {
     namespace     = "kube-system"
-    chart_version = "v1.13.2"
+    chart_version = "1.17.1"
     wait          = true
 
     set = [
@@ -459,17 +459,17 @@ module "eks_blueprints_addons" {
 
   aws_efs_csi_driver = {
     namespace     = "kube-system"
-    chart_version = "3.1.7"
+    chart_version = "3.4.1"
   }
 
   aws_fsx_csi_driver = {
     namespace     = "kube-system"
-    chart_version = "1.10.0"
+    chart_version = "1.17.0"
   }
 
   eks_addons = {
     aws-ebs-csi-driver = {
-      addon_version            = "v1.33.0-eksbuild.1"
+      addon_version            = "v1.62.0-eksbuild.1"
       service_account_role_arn = module.ebs_csi_driver_irsa.iam_role_arn
     }
   }
@@ -513,7 +513,7 @@ module "cert_manager" {
   namespace        = "cert-manager"
   create_namespace = true
   chart            = "cert-manager"
-  chart_version    = "1.13.3"
+  chart_version    = "1.20.2"
   repository       = "https://charts.jetstack.io"
 
   wait = true
@@ -628,7 +628,7 @@ resource "helm_release" "cluster-autoscaler" {
   name       = "cluster-autoscaler"
   repository = "https://kubernetes.github.io/autoscaler"
   chart      = "cluster-autoscaler"
-  version    = "9.46.6"
+  version    = "9.58.0"
   namespace  = "kube-system"
   timeout    = 300
   wait       = true
@@ -639,6 +639,8 @@ resource "helm_release" "cluster-autoscaler" {
       awsRegion: "${var.region}"
       autoDiscovery:
         clusterName: "${aws_eks_cluster.eks_cluster.id}"
+      image:
+        tag: "v1.35.0"
       extraArgs:
         skip-nodes-with-system-pods: "false"
         skip-nodes-with-local-storage: "false"
@@ -649,7 +651,7 @@ resource "helm_release" "cluster-autoscaler" {
       rbac:
         serviceAccount:
           annotations:
-            eks.amazonaws.com/role-arn: "${aws_iam_role.cluster_autoscaler.arn}" 
+            eks.amazonaws.com/role-arn: "${aws_iam_role.cluster_autoscaler.arn}"
     EOT
   ]
 
@@ -661,7 +663,7 @@ resource "helm_release" "aws-efa-k8s-device-plugin" {
   name       = "aws-efa-k8s-device-plugin"
   repository = "https://aws.github.io/eks-charts"
   chart      = "aws-efa-k8s-device-plugin"
-  version    = "v0.4.4"
+  version    = "v0.5.29"
   namespace  = "kube-system"
 
 
@@ -1269,7 +1271,7 @@ module "istio" {
 
 locals {
   istio_repo_url     = "https://istio-release.storage.googleapis.com/charts"
-  istio_repo_version = "1.26.0"
+  istio_repo_version = "1.30.1"
 }
 
 resource "kubernetes_namespace" "ingress" {

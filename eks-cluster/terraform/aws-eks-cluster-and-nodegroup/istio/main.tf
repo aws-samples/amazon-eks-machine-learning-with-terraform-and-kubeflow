@@ -1,6 +1,6 @@
 locals {
   istio_repo_url = "https://istio-release.storage.googleapis.com/charts"
-  istio_repo_version = "1.26.0"
+  istio_repo_version = "1.30.1"
 }
 
 module "istio_base" {
