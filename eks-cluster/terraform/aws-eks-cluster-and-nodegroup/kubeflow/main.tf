@@ -244,7 +244,7 @@ resource "helm_release" "kubeflow-tensorboards" {
 
   name       = "kubeflow-tensorboards"
   chart      = "${var.local_helm_repo}/ml-platform/kubeflow-tensorboards"
-  version  = "1.0.0"
+  version  = "1.0.1"
   namespace = var.kubeflow_namespace
 
   values = [
