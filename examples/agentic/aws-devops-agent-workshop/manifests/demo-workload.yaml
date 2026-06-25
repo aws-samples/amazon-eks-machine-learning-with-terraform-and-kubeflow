@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: devops-agent-demo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-frontend
+  namespace: devops-agent-demo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web-frontend
+  template:
+    metadata:
+      labels:
+        app: web-frontend
+    spec:
+      containers:
+        - name: nginx
+          image: public.ecr.aws/nginx/nginx:1.27
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-frontend
+  namespace: devops-agent-demo
+spec:
+  selector:
+    app: web-frontend
+  ports:
+    - port: 80
+      targetPort: 80
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dns-probe
+  namespace: devops-agent-demo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: dns-probe
+  template:
+    metadata:
+      labels:
+        app: dns-probe
+    spec:
+      containers:
+        - name: probe
+          image: public.ecr.aws/docker/library/busybox:1.37
+          command:
+            - /bin/sh
+            - -c
+            - |
+              while true; do
+                date
+                nslookup kubernetes.default.svc.cluster.local || echo "DNS LOOKUP FAILED"
+                sleep 10
+              done

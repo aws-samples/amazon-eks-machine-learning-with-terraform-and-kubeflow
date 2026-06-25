@@ -1,0 +1,8 @@
+scripts/env.sh
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/*.tfvars
+!terraform/*.tfvars.example
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/*.tfplan
