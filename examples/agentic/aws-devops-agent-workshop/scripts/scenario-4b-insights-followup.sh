@@ -9,7 +9,7 @@ source "$SCRIPT_DIR/_common.sh"
 banner "SCENARIO 4B: Container Insights follow-up"
 echo "Prereqs:"
 echo "  • scenario-4-cascading-failure-setup.sh has been run (batch-processor live)"
-echo "  • CloudWatch Observability EKS add-on installed (it is — verified 2026-06-22)"
+echo "  • CloudWatch Observability EKS add-on installed and ACTIVE"
 echo
 
 if ! kubectl get deploy batch-processor -n "$DEMO_NAMESPACE" >/dev/null 2>&1; then

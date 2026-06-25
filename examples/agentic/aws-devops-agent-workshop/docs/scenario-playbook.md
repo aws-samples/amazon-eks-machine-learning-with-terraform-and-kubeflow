@@ -4,7 +4,7 @@
 
 Show how **AWS DevOps Agent** acts as an autonomous SRE teammate for EKS — replacing dashboard-hopping and manual investigation with an intelligent agent that orchestrates across your entire observability stack. Two tracks:
 
-- **Track A — Foundation:** general SRE patterns that apply to any EKS workload (web services, microservices, batch). 6 scenarios.
+- **Track A — General SRE:** patterns that apply to any EKS workload (web services, microservices, batch). 6 scenarios.
 - **Track B — ML Inference Ops:** scenarios specific to multi-node ML inference on Ray Serve / KubeRay / GPU nodepools. 2 scenarios.
 
 > **Theme: "What if your on-call engineer woke up to answers instead of alerts?"**
@@ -52,23 +52,14 @@ The agent investigates Ray Serve, KubeRay, and GPU-nodepool failures the same wa
 
 ---
 
-## Status & maturity
+## Track B
 
-| Track | Implementation | Validation | Status |
-|---|---|---|---|
-| **Track A** | Scripts ported from a prior demo branch | Validated end-to-end against AWS DevOps Agent on a 1.35 cluster (June 2026) | ✅ Production-ready demo |
-| **Track B** | Scripts written; use lightweight mocks of real Ray Serve workloads | Validated against AWS DevOps Agent on the same 1.35 cluster (June 2026). Both scenarios produced Tier-1 agent responses on the first try — no custom Skill needed. | ✅ Production-ready demo |
+Both Track B scripts use lightweight stand-ins for the real Ray Serve inference workloads in `examples/inference/rayserve/`:
 
-### Why mocks for Track B?
-
-Both Track B scripts use **lightweight mocks** of the real Ray Serve inference workloads in `examples/inference/rayserve/`:
-
-- Scenario 7 deploys a placeholder RayCluster with a deliberately wrong toleration key.
+- Scenario 7 deploys a minimal RayCluster with a deliberately wrong toleration key.
 - Scenario 8 deploys a plain Deployment labeled like a Ray worker, allocating memory beyond its Helm-configured limit.
 
-The agent's investigation path on the mock is **identical** to what it would do on a real vLLM / Llama-3 / Qwen Ray Serve deployment — the `pod_memory_working_set` vs `resources.limits.memory` story is the same; only the absolute numbers change. We validated this in the live agent test: in Scenario 8, the agent autonomously extended its mock-workload recommendation to a *production-tier* recommendation for real `meta-llama3-8b-vllm` (12Gi request / 16Gi limit, citing "LLaMA-3 8B weights ~15GB FP16"). That demonstrates the agent generalizing without us providing model size context.
-
-Mocks let scenarios run in seconds against minimal CPU pods rather than 30+ minutes of GPU spin-up + model weight downloads + custom container builds. For customer demos where time matters, this is the right tradeoff. The playbook docs always point to the real example as the production reference.
+The agent's investigation path on these stand-ins is identical to what it would do on a real vLLM / Llama-3 / Qwen Ray Serve deployment — the `pod_memory_working_set` vs `resources.limits.memory` story is the same; only the absolute numbers change. This lets the scenarios run in seconds against minimal CPU pods rather than spinning up GPU nodes, pulling multi-GB containers, and downloading model weights. The playbook always points to the real example as the production reference.
 
 ---
 
@@ -76,44 +67,44 @@ Mocks let scenarios run in seconds against minimal CPU pods rather than 30+ minu
 
 ### Track A prereqs
 
-- Live EKS cluster on a recent K8s version (1.33+ recommended; this repo's TF stack is on 1.35).
-- AWS DevOps Agent Space created in the AWS console.
-- Custom MCP server for node-level diagnostics deployed once (see [aws-samples/sample-eks-node-diagnostics-mcp](https://github.com/aws-samples/sample-eks-node-diagnostics-mcp)).
-- CloudWatch Observability EKS add-on installed (provides `pod_memory_working_set`, `node_cpu_utilization`, etc. — required for Scenarios 2, 4, and 8).
+- A live EKS cluster you can reach with `kubectl`.
+- An AWS DevOps Agent Space created in the AWS console. Note its IAM role ARN — you'll need it below.
+- The custom MCP server for node-level diagnostics deployed into your account: see [aws-samples/sample-eks-node-diagnostics-mcp](https://github.com/aws-samples/sample-eks-node-diagnostics-mcp). Register the resulting MCP gateway URL as a Capability Provider in your Agent Space.
+- The CloudWatch Observability EKS add-on installed (provides `pod_memory_working_set`, `node_cpu_utilization`, etc.). Required for Scenarios 2, 4, and 8.
 
 ### Track B additional prereqs
 
-- **Karpenter** installed (Scenario 7 demonstrates a Karpenter NodePool taint mismatch). Note: customers running managed node groups instead of Karpenter will need to adapt Scenario 7 to use a node-group taint instead.
-- **GPU node availability** — at least one Karpenter NodePool capable of provisioning a GPU instance (e.g., `g5.xlarge`). Scenario scripts fail-fast with a friendly message if GPU capacity is unavailable.
-- **KubeRay operator** installed (this repo provisions it via the Kubeflow stack when `kubeflow_platform_enabled = true`).
-- A `RayService` deployed via this repo's `charts/machine-learning/serving/rayserve/` — Scenarios 7 and 8 break workers on the existing service rather than installing a fresh one each time.
+- **Karpenter** with at least one GPU NodePool tainted `nvidia.com/gpu=true:NoSchedule`. Clusters using managed node groups instead can adapt Scenario 7 to use a node-group taint.
+- **KubeRay operator** installed in the cluster.
 
-### Codified EKS wiring (replaces workshop Module 1 manual steps)
+Each scenario script deploys its own workload on demand into the `demo-app` namespace (Track A) or `ml-inference` namespace (Track B). The corresponding teardown script removes it. No long-running RayService or vLLM workload is required ahead of time.
 
-The workshop walks the EKS access-entry + IAM policy attachment through the console manually. This repo ships a Terraform module that does it in one apply:
+### Connect AWS DevOps Agent to your EKS cluster
+
+The Agent Space is created in the AWS DevOps Agent console — that step and the IAM role for the Agent Space are out of scope for the Terraform module here. What this module does:
+
+- Creates an EKS access entry for the Agent Space's IAM role on your cluster.
+- Attaches the AWS-managed `AmazonAIOpsAssistantPolicy` (an EKS cluster access policy) with cluster scope.
+
+That gives the agent read access to the cluster's Kubernetes API. The agent's own IAM permissions (CloudWatch, EKS describe, etc.) are managed by AWS as part of the Agent Space service.
 
 ```bash
 cd examples/agentic/aws-devops-agent-workshop/terraform
-# Set your Agent Space IAM role ARN as input.
-# The module creates an EKS access entry + attaches AmazonAIOpsAssistantPolicy.
-terraform apply -var="cluster_name=<your-cluster>" \
-                -var="agent_space_role_arn=<arn from Agent Space console>"
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with:
+#   cluster_name         = "<your cluster>"
+#   agent_space_role_arn = "<from Agent Space → Settings → IAM role>"
+terraform init
+terraform apply
 ```
 
-That replaces:
-- Navigate to EKS console → Access tab
-- Create access entry with Agent Space IAM role ARN
-- Attach `AmazonAIOpsAssistantPolicy` with cluster scope
-
-### Demo workloads
-
-Each scenario script in `scripts/` deploys its own workload on demand, into the `demo-app` namespace (Track A) or `ml-inference` namespace (Track B). Cleanup scripts revert each one.
+This is the codified version of the workshop's manual "EKS console → Access tab → Create access entry → Attach AmazonAIOpsAssistantPolicy" steps.
 
 ---
 
-# Track A — Foundation Scenarios
+# Track A — General SRE Scenarios
 
-General SRE patterns. Run in order; later scenarios build narrative continuity for Scenario 5 (Proactive Prevention).
+Run in order; later scenarios build narrative continuity for Scenario 5 (Proactive Prevention).
 
 ### Scenario 1: Morning Health Check — "The Agent Knows Your Environment"
 
@@ -200,7 +191,7 @@ Specific to multi-node ML inference on Ray Serve / KubeRay / GPU nodepools. Buil
 | **Shows** | Cross-layer correlation: scheduling event → NodePool taint → Helm values → toleration mismatch |
 | **Prereq** | This scenario assumes Karpenter is provisioning GPU nodes via a tainted NodePool. For clusters using managed node groups, the same fault can be reproduced by replacing the Karpenter step with a node-group taint mismatch — script comments call this out. |
 | **Outcome** | Agent surfaces `0/N nodes matched the toleration key …` from scheduling events, identifies the mismatch with the actual NodePool/node-group taint, and recommends the corrected `tolerations:` block to set in the Helm values |
-| **Key Message** | The agent reads scheduling events the way an SRE would. The recommendation is "change this YAML key in the Helm values" — actionable, not just descriptive. With Claude Code wired in as a code-fix agent, this becomes "ask the agent → get diagnosis → hand to Claude Code → re-deploy" in minutes. |
+| **Key Message** | The agent reads scheduling events the way an SRE would. The recommendation is "change this YAML key in the Helm values" — actionable, not just descriptive. |
 
 **What the agent should correlate:**
 
@@ -219,7 +210,7 @@ Specific to multi-node ML inference on Ray Serve / KubeRay / GPU nodepools. Buil
 | **Shows** | Container Insights memory time-series, pod termination reason, the gap between observed peak memory and the configured limit, Helm-values-targeted recommendation |
 | **Prereq** | CloudWatch Observability EKS add-on must be active and have populated metrics for at least 5 minutes (Container Insights is required for `pod_memory_working_set`). |
 | **Outcome** | Agent retrieves `lastState.terminated.reason: OOMKilled` (exit 137), plots `pod_memory_working_set` against the configured `resources.limits.memory` from the Helm release, identifies the gap, and recommends a higher limit value to set in the Helm values file with structured rationale (observed peak + headroom). |
-| **Key Message** | The agent's OOMKill investigation on a Ray Serve worker mirrors the Track-A OOMKill investigation, but the **recommended fix is targeted at the Helm chart values** — "set `resources.limits.memory: <value>` in the rayserve chart's worker spec" — not a generic `kubectl patch`. Hand to Claude Code as a Helm-chart authoring prompt to apply. |
+| **Key Message** | The agent's OOMKill investigation on a Ray Serve worker mirrors the Track-A OOMKill investigation, but the **recommended fix is targeted at the Helm chart values** — "set `resources.limits.memory: <value>` in the rayserve chart's worker spec" — not a generic `kubectl patch`. |
 
 **What the agent should correlate:**
 
@@ -227,7 +218,7 @@ Specific to multi-node ML inference on Ray Serve / KubeRay / GPU nodepools. Buil
 - 🔄 Pod termination reason: exit code 137 / `OOMKilled`
 - 🎯 Helm release values: current `resources.limits.memory` for the affected worker
 
-**Observed behavior in live validation:** The agent extended a mock-workload recommendation to a *production-tier* recommendation for the real `meta-llama3-8b-vllm` workload without prompting — citing the model size, Ray/Python overhead, and shared-memory needs explicitly. It also flagged a bonus issue (a head-pod readiness probe using `wget` against an image that doesn't have `wget`) that wasn't part of our designed fault but is exactly the kind of cross-cutting observation customers want from an autonomous investigator.
+A capable agent will extend the mock-workload recommendation to a production-tier recommendation for the real `meta-llama3-8b-vllm` workload — citing model size, Ray/Python overhead, and shared-memory needs. Cross-cutting findings (e.g., probe misconfigurations adjacent to the OOMKill) are the kind of bonus observation an autonomous investigator surfaces.
 
 ---
 
@@ -259,13 +250,4 @@ Estimated time = setup + agent investigation + narration. Add ~5 min for cleanup
 | **EKS Native** | Kubernetes API (pods, events, logs), EKS access entries, Karpenter NodePools |
 | **Node-Level Diagnostics** | Custom MCP server via SSM Automation (20+ node-level log sources). Deployed once via [aws-samples/sample-eks-node-diagnostics-mcp](https://github.com/aws-samples/sample-eks-node-diagnostics-mcp). |
 | **ML Platform** *(Track B)* | KubeRay operator, Ray Serve Helm chart from this repo's `charts/machine-learning/serving/rayserve/` |
-| **Code Fix** *(optional)* | Hand off agent diagnoses to Claude Code as a Helm-chart authoring agent |
-| **Extensibility** | Model Context Protocol (MCP) — open standard for connecting any tool |
 
----
-
-## Out of scope (deferred)
-
-- **S3 fault scenarios** — covered briefly in some workshops; deferred here pending firmer fault-injection patterns. Add as Scenario 9 in a future iteration.
-- **Multi-cluster fleet investigation** — single cluster only.
-- **Distributed training scenarios** (NCCL hangs, EFA misconfig, training-job preemption) — adjacent to Track B but a meaningfully different audience. Could be a future Track C.
