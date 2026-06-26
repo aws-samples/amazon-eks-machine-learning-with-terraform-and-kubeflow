@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars and fill in.
+# terraform.tfvars is gitignored.
+
+cluster_name         = "<your-eks-cluster>"
+agent_space_role_arn = "arn:aws:iam::<account>:role/<agent-space-role>"
+
+tags = {
+  Owner   = "<team>"
+  Project = "aws-devops-agent-workshop"
+}
