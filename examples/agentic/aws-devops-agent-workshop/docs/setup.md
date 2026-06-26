@@ -62,7 +62,22 @@ In the AWS console:
 
 1. Open **DevOps Agent** → **Create Agent Space**.
 2. Name it (e.g., `eks-workshop`) and choose your region.
-3. After creation, open the Agent Space → **Settings** → **IAM role**. Copy the role ARN — you'll need it for Step 6.
+3. Find the Agent Space's **runtime execution role** ARN — you'll need it for Step 6.
+
+> **Important:** an Agent Space has two associated IAM roles. The "Operator access" role shown under **Settings** is the *administrator* role used to set up and configure the Space — **not** the role the agent assumes when it investigates your cluster. The Terraform module in Step 6 needs the **runtime execution role**, otherwise the agent will report "kubectl access not configured" even after `terraform apply` succeeds.
+>
+> The most reliable way to find the runtime role is via CloudTrail after the agent makes its first call:
+>
+> 1. From the Agent Space chat, run any prompt that touches the cluster (e.g., "list pods in the default namespace").
+> 2. The agent will fail with an access error the first time — that's expected.
+> 3. Run:
+>    ```bash
+>    aws cloudtrail lookup-events \
+>      --lookup-attributes AttributeKey=EventName,AttributeValue=ListAccessEntries \
+>      --max-results 5
+>    ```
+>    Or look for any `eks:Describe*` / `eks:List*` event your Agent Space role attempted. The `userIdentity.arn` on those events is the runtime role.
+> 4. Use that ARN in Step 6.
 
 ## Step 5 — Register the MCP server as a Capability Provider
 
