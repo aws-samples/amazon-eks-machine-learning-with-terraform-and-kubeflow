@@ -1,0 +1,29 @@
+apiVersion: v2
+name: overture-api
+description: >
+  Deploys a self-contained Overture Maps API instance backed by a
+  pre-downloaded transportation theme parquet. Downloads the parquet from
+  the Overture Maps S3 release at install time, filters it to a configured
+  bounding box on a persistent FSx volume, and exposes a typed REST API
+  (segments / neighbors / bbox) for in-cluster agent queries.
+
+  Designed for use with AWS EKS clusters where:
+    - An FSx for Lustre PVC is pre-bound in the target namespace
+    - Istio sidecar injection is active in the namespace
+    - Outbound HTTPS access is available from pods (Istio sidecar disabled)
+
+  Install multiple releases with different bounding boxes / release tags
+  to host multiple Overture instances side by side.
+
+type: application
+version: 0.1.0
+appVersion: "2026.06.17"
+keywords:
+  - overture
+  - openstreetmap
+  - geospatial
+  - data-service
+  - parquet
+maintainers:
+  - name: aws-samples
+    url: https://github.com/aws-samples/amazon-eks-machine-learning-with-terraform-and-kubeflow
