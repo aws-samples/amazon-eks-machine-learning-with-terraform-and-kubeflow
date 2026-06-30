@@ -1,0 +1,30 @@
+---
+# Service: {{ .Release.Name }}
+#
+# ClusterIP service exposing the Overture wrapper API on port 80.
+#
+# DNS name inside the cluster:
+#   {{ include "overture-api.endpointURL" . }}
+#
+# Typed endpoints:
+#   GET  /api/segments/{record_id}
+#   GET  /api/neighbors/{connector_id}
+#   GET  /api/segments?bbox=minLon,minLat,maxLon,maxLat&limit=N
+#   GET  /api/status
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "overture-api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: overture-server
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: http
+  selector:
+    {{- include "overture-api.selectorLabels" . | nindent 4 }}

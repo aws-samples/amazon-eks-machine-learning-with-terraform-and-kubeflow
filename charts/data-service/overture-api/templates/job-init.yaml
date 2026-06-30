@@ -1,0 +1,99 @@
+---
+# Job: {{ .Release.Name }}-init
+#
+# Filters the raw Overture transportation parquet shards down to the
+# configured bounding box. Output is a single parquet file the serve
+# Deployment reads on startup.
+#
+# Idempotent: skips if the filtered parquet already exists.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-init
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "overture-api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: init-job
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ .Values.jobTimeouts.initSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "overture-api.labels" . | nindent 8 }}
+        app.kubernetes.io/component: init-job
+      annotations:
+        sidecar.istio.io/inject: "false"
+        karpenter.sh/do-not-disrupt: "true"
+    spec:
+      nodeSelector:
+        karpenter.sh/nodepool: cpu-compute
+      tolerations:
+      - key: compute-tier
+        operator: Equal
+        value: heavy-cpu
+        effect: NoSchedule
+      restartPolicy: Never
+      volumes:
+        - name: fsx
+          persistentVolumeClaim:
+            claimName: {{ .Values.pvc.fsx }}
+
+      initContainers:
+        # Wait for the download job to finish writing raw parquet shards.
+        - name: wait-for-raw
+          image: busybox:1.36
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          volumeMounts:
+            - name: fsx
+              mountPath: {{ .Values.fsx.mountPath }}
+          command:
+            - sh
+            - -c
+            - |
+              RAW_DIR="{{ include "overture-api.rawDir" . }}"
+              WAIT_LIMIT={{ .Values.jobTimeouts.parquetWaitSeconds }}
+              elapsed=0
+              until [ -n "$(ls -A ${RAW_DIR}/*.parquet 2>/dev/null)" ]; do
+                if [ ${elapsed} -ge ${WAIT_LIMIT} ]; then
+                  echo "ERROR: raw parquets not present at ${RAW_DIR} after ${WAIT_LIMIT}s"
+                  exit 1
+                fi
+                echo "  Waiting for raw parquet shards (elapsed ${elapsed}s)..."
+                sleep 15
+                elapsed=$((elapsed + 15))
+              done
+              echo "Raw parquet shards present:"
+              ls -lh ${RAW_DIR}
+
+      containers:
+        - name: filter
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.resources.init | nindent 12 }}
+          volumeMounts:
+            - name: fsx
+              mountPath: {{ .Values.fsx.mountPath }}
+          env:
+            - name: RAW_DIR
+              value: "{{ include "overture-api.rawDir" . }}"
+            - name: FILTERED_PATH
+              value: "{{ include "overture-api.filteredPath" . }}"
+            - name: OVERTURE_BBOX
+              value: {{ include "overture-api.bboxString" . | quote }}
+          command:
+            - python
+            - -m
+            - app.filter_to_bbox

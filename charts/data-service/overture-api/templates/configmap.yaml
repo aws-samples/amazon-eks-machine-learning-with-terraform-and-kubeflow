@@ -1,0 +1,33 @@
+---
+# ConfigMap: Overture API endpoint and metadata for this release.
+#
+# Agents and participant notebooks reference this ConfigMap to discover the
+# Overture endpoint URL rather than hardcoding it. Inject into agent pods via
+# envFrom:
+#
+#   envFrom:
+#     - configMapRef:
+#         name: {{ .Release.Name }}-endpoints
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-endpoints
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "overture-api.labels" . | nindent 4 }}
+  annotations:
+    overture-api/release: {{ .Values.overture.release | quote }}
+    overture-api/theme: {{ .Values.overture.theme | quote }}
+    overture-api/bbox: {{ include "overture-api.bboxString" . | quote }}
+data:
+  # Primary endpoint URL for typed REST queries.
+  OVERTURE_API_URL: {{ include "overture-api.endpointURL" . | quote }}
+
+  # Release name — useful for logging and agent tool configuration.
+  OVERTURE_RELEASE_NAME: {{ .Release.Name | quote }}
+
+  # Overture release tag this instance is built from.
+  OVERTURE_RELEASE_TAG: {{ .Values.overture.release | quote }}
+
+  # Bounding box this instance was filtered to.
+  OVERTURE_BBOX: {{ include "overture-api.bboxString" . | quote }}

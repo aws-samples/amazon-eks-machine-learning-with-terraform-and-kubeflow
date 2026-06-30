@@ -1,0 +1,67 @@
+# =============================================================================
+# overture-transportation-ingolstadt — example values
+# =============================================================================
+# Deploys an Overture Maps API instance filtered to the Ingolstadt urban core.
+#
+# Install:
+#   helm install overture-transportation-ingolstadt \
+#     ../../charts/data-service/overture-api \
+#     --namespace kubeflow-user-example-com \
+#     -f values.yaml
+#
+# Endpoint after install:
+#   http://overture-transportation-ingolstadt.kubeflow-user-example-com.svc.cluster.local
+# =============================================================================
+
+namespace: kubeflow-user-example-com
+
+overture:
+  release: "2026-06-17.0"
+  theme: "transportation"
+  type: "segment"
+  s3SourcePrefix: "s3://overturemaps-us-west-2/release"
+  # Ingolstadt urban core: ~50 km² area, ~5,000 transportation segments,
+  # filtered parquet ends up under ~20 MB.
+  bbox: [11.34, 48.69, 11.49, 48.80]
+
+image:
+  repository: overture-api
+  tag: "0.1.0"
+
+resources:
+  download:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  init:
+    requests:
+      memory: "4Gi"
+      cpu: "2"
+    limits:
+      memory: "6Gi"
+      cpu: "4"
+  serve:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1"
+
+probes:
+  readiness:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    failureThreshold: 12
+  liveness:
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    failureThreshold: 5
+
+jobTimeouts:
+  downloadSeconds: 600
+  initSeconds: 300
+  parquetWaitSeconds: 600
