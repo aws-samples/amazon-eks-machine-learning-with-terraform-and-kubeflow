@@ -1,0 +1,119 @@
+# =============================================================================
+# overture-api Helm chart — default values
+# =============================================================================
+# Deploys a single Overture Maps transportation-theme API instance.
+# Install multiple releases with different bounding boxes for parallel
+# instances per region.
+#
+# Minimum required overrides per release:
+#   overture.release  — pinned Overture release tag (e.g., "2026-06-17.0")
+#   overture.bbox     — bounding box [minLon, minLat, maxLon, maxLat]
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Target namespace.
+# All resources are created in this namespace.
+# -----------------------------------------------------------------------------
+namespace: kubeflow-user-example-com
+
+# -----------------------------------------------------------------------------
+# PVC configuration.
+# FSx PVC must be Bound in the target namespace before helm install.
+# -----------------------------------------------------------------------------
+pvc:
+  fsx: pv-fsx
+
+# -----------------------------------------------------------------------------
+# FSx mount path inside pods.
+# Each release gets its own subdirectory: <dbDir>/<Release.Name>/
+# -----------------------------------------------------------------------------
+fsx:
+  mountPath: /fsx
+  dbDir: home/overture-db
+
+# -----------------------------------------------------------------------------
+# Overture release configuration.
+#
+# release: the Overture Maps Foundation release tag, e.g., "2026-06-17.0".
+#   See https://docs.overturemaps.org/release/ for current releases.
+# theme/type: transportation/segment is the only combination this chart serves.
+# s3SourcePrefix: base S3 path for the Overture public bucket.
+# s3Region: region hosting the bucket (Overture publishes to us-west-2).
+# bbox: [minLon, minLat, maxLon, maxLat] for the area to filter to.
+#   The Ingolstadt urban core default keeps the filtered parquet under
+#   ~50 MB and the segment count around 5,000.
+# -----------------------------------------------------------------------------
+overture:
+  release: "2026-06-17.0"
+  theme: "transportation"
+  type: "segment"
+  s3SourcePrefix: "s3://overturemaps-us-west-2/release"
+  s3Region: "us-west-2"
+  bbox: [11.34, 48.69, 11.49, 48.80]
+
+# -----------------------------------------------------------------------------
+# Wrapper service image.
+# Build + push instructions:
+#   cd containers/overture-api/build_tools && ./build_and_push.sh <region>
+# The install.sh in examples/data-service/overture-transportation-ingolstadt/
+# invokes this automatically and passes the resulting ECR URI to helm.
+# -----------------------------------------------------------------------------
+image:
+  repository: overture-api
+  tag: "0.1.0"
+  # 'Always' — install.sh builds+pushes a fresh image with the same tag
+  # every time it runs. IfNotPresent would let nodes serve a cached older
+  # manifest of the same tag, which has bitten us before. Small pull cost
+  # per pod restart, guaranteed freshness.
+  pullPolicy: Always
+
+# -----------------------------------------------------------------------------
+# Resource profiles.
+#
+# init: DuckDB reads Overture parquet directly from S3 via httpfs, filters
+#   to the workshop bbox, and writes the result to FSx. Predicate pushdown
+#   means only ~50 MB of S3 read for a city-sized bbox on a ~66 GB source
+#   partition, so this is fast but does allocate DuckDB memory arenas.
+#
+# serve: the running Deployment that handles agent query traffic.
+#   Memory scales with filtered parquet size and concurrent agent requests.
+# -----------------------------------------------------------------------------
+resources:
+  init:
+    requests:
+      memory: "4Gi"
+      cpu: "2"
+    limits:
+      memory: "6Gi"
+      cpu: "4"
+  serve:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1"
+
+# -----------------------------------------------------------------------------
+# Readiness and liveness probe configuration.
+# The wrapper service is ready as soon as DuckDB can SELECT 1 against the
+# filtered parquet — typically within 5 seconds of pod start.
+# -----------------------------------------------------------------------------
+probes:
+  readiness:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    failureThreshold: 12
+  liveness:
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    failureThreshold: 5
+
+# -----------------------------------------------------------------------------
+# Job timeout configuration.
+# initSeconds: maximum time for the DuckDB S3-filter job. Actual runs
+#   complete in ~30-90 seconds for a city-sized bbox; 600s is conservative
+#   headroom for very large bboxes or slow S3 responses.
+# -----------------------------------------------------------------------------
+jobTimeouts:
+  initSeconds: 600

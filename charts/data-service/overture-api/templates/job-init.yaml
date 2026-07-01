@@ -1,0 +1,83 @@
+---
+# Job: {{ .Release.Name }}-init
+#
+# Uses DuckDB + httpfs to query the Overture transportation partition
+# directly from its public S3 bucket, applying a bbox filter with parquet
+# predicate pushdown. Only the row groups whose bbox stats overlap the
+# workshop bbox are actually fetched from S3 — for a city-sized filter
+# on a ~66 GB partition, actual read is under 100 MB and the job
+# completes in ~30-60 seconds.
+#
+# Writes a single filtered parquet to FSx; the serve Deployment reads it
+# on startup. Idempotent: skips if the filtered parquet already exists.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-init
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "overture-api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: init-job
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ .Values.jobTimeouts.initSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "overture-api.labels" . | nindent 8 }}
+        app.kubernetes.io/component: init-job
+      annotations:
+        sidecar.istio.io/inject: "false"
+        karpenter.sh/do-not-disrupt: "true"
+    spec:
+      nodeSelector:
+        karpenter.sh/nodepool: cpu-compute
+      tolerations:
+      - key: compute-tier
+        operator: Equal
+        value: heavy-cpu
+        effect: NoSchedule
+      restartPolicy: Never
+      volumes:
+        - name: fsx
+          persistentVolumeClaim:
+            claimName: {{ .Values.pvc.fsx }}
+
+      containers:
+        - name: filter
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Run as root: this Job creates directories under an FSx mount
+          # that's owned by root at the volume level. The Deployment stays
+          # non-root; the filter script chmods its output world-readable so
+          # the non-root serve pod can still read it.
+          securityContext:
+            runAsUser: 0
+          resources:
+            {{- toYaml .Values.resources.init | nindent 12 }}
+          volumeMounts:
+            - name: fsx
+              mountPath: {{ .Values.fsx.mountPath }}
+          env:
+            - name: S3_SOURCE_PREFIX
+              value: {{ .Values.overture.s3SourcePrefix | quote }}
+            - name: OVERTURE_RELEASE
+              value: {{ .Values.overture.release | quote }}
+            - name: OVERTURE_THEME
+              value: {{ .Values.overture.theme | quote }}
+            - name: OVERTURE_TYPE
+              value: {{ .Values.overture.type | quote }}
+            - name: OVERTURE_BBOX
+              value: {{ include "overture-api.bboxString" . | quote }}
+            - name: FILTERED_PATH
+              value: "{{ include "overture-api.filteredPath" . }}"
+            - name: AWS_REGION
+              value: {{ .Values.overture.s3Region | default "us-west-2" | quote }}
+          command:
+            - python
+            - -m
+            - app.filter_to_bbox
