@@ -14,7 +14,13 @@ spec:
         "kubernetes.io/cluster/{{ .Values.cluster_id }}": "owned"
 
   amiSelectorTerms:
-    - alias: al2023@v20251103
+    # NOTE: 'default' EC2NodeClass — used by the 'cpu-compute' and 'cuda' NodePools.
+    # Previously pinned to al2023@v20251103, but that dated AMI was never published for
+    # EKS 1.35 (AWS's earliest 1.35 AL2023 image is v20260114). Using @latest avoids
+    # the same failure the next time this repo bumps its EKS version. To repin to a
+    # specific dated version, first verify it exists at:
+    #   /aws/service/eks/optimized-ami/<k8s>/amazon-linux-2023/x86_64/standard/
+    - alias: al2023@latest
 
   role: "{{ .Values.role_name }}"
 
@@ -82,7 +88,11 @@ spec:
         "kubernetes.io/cluster/{{ .Values.cluster_id }}": "owned"
 
   amiSelectorTerms:
-    - alias: al2023@v20251103
+    # NOTE: 'neuron' EC2NodeClass — used by the 'neuron' NodePool for AWS Trainium /
+    # Inferentia workloads. Same alias-staleness issue as the 'default' class above.
+    # Neuron variant AMIs live under a different SSM path; when repinning, verify at:
+    #   /aws/service/eks/optimized-ami/<k8s>/amazon-linux-2023/x86_64/neuron/
+    - alias: al2023@latest
 
   role: "{{ .Values.role_name }}"
 
@@ -163,7 +173,11 @@ spec:
   {{- end }}
 
   amiSelectorTerms:
-    - alias: al2023@v20251103
+    # NOTE: 'cudaefa' EC2NodeClass — used by the 'cudaefa' NodePool for NVIDIA GPU +
+    # EFA workloads. Same alias-staleness issue as the 'default' class above. NVIDIA
+    # variant AMIs live under a different SSM path; when repinning, verify at:
+    #   /aws/service/eks/optimized-ami/<k8s>/amazon-linux-2023/x86_64/nvidia/
+    - alias: al2023@latest
 
   role: "{{ .Values.role_name }}"
 
