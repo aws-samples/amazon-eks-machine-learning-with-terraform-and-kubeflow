@@ -24,7 +24,14 @@ def get_conn() -> duckdb.DuckDBPyConnection:
         raise FileNotFoundError(f"filtered parquet not found at {FILTERED_PATH}")
 
     con = duckdb.connect(database=":memory:", read_only=False)
-    con.execute("INSTALL spatial; LOAD spatial;")
+
+    # Point DuckDB at the pre-installed extension cache baked into the image
+    # (so we don't need $HOME writable or network access to LOAD extensions).
+    ext_dir = os.environ.get("DUCKDB_EXTENSION_DIR")
+    if ext_dir:
+        con.execute(f"SET extension_directory='{ext_dir}';")
+    con.execute("LOAD spatial;")
+
     con.execute(f"""
         CREATE OR REPLACE VIEW segments AS
         SELECT * FROM read_parquet('{FILTERED_PATH}');

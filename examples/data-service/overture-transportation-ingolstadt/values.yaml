@@ -20,8 +20,9 @@ overture:
   theme: "transportation"
   type: "segment"
   s3SourcePrefix: "s3://overturemaps-us-west-2/release"
+  s3Region: "us-west-2"
   # Ingolstadt urban core: ~50 km² area, ~5,000 transportation segments,
-  # filtered parquet ends up under ~20 MB.
+  # filtered parquet ends up under ~50 MB.
   bbox: [11.34, 48.69, 11.49, 48.80]
 
 image:
@@ -29,13 +30,6 @@ image:
   tag: "0.1.0"
 
 resources:
-  download:
-    requests:
-      memory: "256Mi"
-      cpu: "250m"
-    limits:
-      memory: "512Mi"
-      cpu: "500m"
   init:
     requests:
       memory: "4Gi"
@@ -62,6 +56,4 @@ probes:
     failureThreshold: 5
 
 jobTimeouts:
-  downloadSeconds: 600
-  initSeconds: 300
-  parquetWaitSeconds: 600
+  initSeconds: 600

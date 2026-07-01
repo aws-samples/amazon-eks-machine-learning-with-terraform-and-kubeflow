@@ -14,6 +14,8 @@ Overture Maps transportation parquet via in-process DuckDB.
 
 ## Environment variables
 
+### Serve mode (default `uvicorn app.main:app`)
+
 | Variable | Required | Description |
 |---|---|---|
 | `FILTERED_PATH` | yes | Absolute path to the bbox-filtered parquet on the mounted FSx volume |
@@ -22,14 +24,30 @@ Overture Maps transportation parquet via in-process DuckDB.
 | `UVICORN_HOST` | no | Default `0.0.0.0` |
 | `UVICORN_PORT` | no | Default `80` |
 
+### Filter mode (`python -m app.filter_to_bbox`)
+
+| Variable | Required | Description |
+|---|---|---|
+| `S3_SOURCE_PREFIX` | yes | Overture release prefix, e.g. `s3://overturemaps-us-west-2/release` |
+| `OVERTURE_RELEASE` | yes | Release tag, e.g. `2026-06-17.0` |
+| `OVERTURE_THEME` | yes | Theme partition, e.g. `transportation` |
+| `OVERTURE_TYPE` | yes | Type partition, e.g. `segment` |
+| `OVERTURE_BBOX` | yes | Bounding box: `minLon,minLat,maxLon,maxLat` |
+| `FILTERED_PATH` | yes | Where to write the filtered parquet |
+| `AWS_REGION` | no | Bucket region; default `us-west-2` |
+
 ## How it's deployed
 
 This image is consumed by the `overture-api` Helm chart in two places:
 
-1. **The init Job** runs `python -m app.filter_to_bbox` to convert the raw
-   parquet shards on FSx into a single bbox-filtered parquet.
+1. **The init Job** runs `python -m app.filter_to_bbox`. This reads the
+   Overture transportation partition directly from S3 via DuckDB's `httpfs`
+   extension, applies a bbox filter (parquet predicate pushdown means only
+   the row groups whose bbox stats overlap the workshop bbox are fetched),
+   and writes a single filtered parquet to FSx. Typical runtime: 30–90 s.
 2. **The serve Deployment** uses the default `uvicorn app.main:app` command
-   to expose the four endpoints above on port 80.
+   to expose the four endpoints above on port 80, reading from the filtered
+   parquet on FSx.
 
 The same image, different commands.
 

@@ -111,19 +111,16 @@ cat <<EOF
 Next steps
 ============================================
 
-1. Monitor the download job (downloads Overture transportation parquet from S3):
-
-   kubectl logs -n ${NAMESPACE} job/${RELEASE_NAME}-download -f
-
-2. Monitor the init job (filters parquet to bbox, ~1-2 min):
+1. Monitor the init job (DuckDB reads Overture from S3, filters to bbox,
+   writes filtered parquet to FSx — typically ~30-90s):
 
    kubectl logs -n ${NAMESPACE} job/${RELEASE_NAME}-init -c filter -f
 
-3. Check overall status:
+2. Check overall status:
 
    kubectl get jobs,pods -n ${NAMESPACE} -l app.kubernetes.io/instance=${RELEASE_NAME}
 
-4. Once the pod is Running and Ready (1/1), smoke-test the instance:
+3. Once the pod is Running and Ready (1/1), smoke-test the instance:
 
    kubectl run smoke-test --rm -it --restart=Never \\
      --image=curlimages/curl:8.5.0 \\
@@ -134,7 +131,7 @@ Next steps
 
    Expected: JSON response with "ready": true and "segment_count" > 0.
 
-5. The endpoint URL for agent configuration:
+4. The endpoint URL for agent configuration:
 
    http://${RELEASE_NAME}.${NAMESPACE}.svc.cluster.local
 

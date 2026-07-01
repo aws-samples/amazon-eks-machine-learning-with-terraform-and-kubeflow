@@ -1,11 +1,15 @@
 ---
 # Job: {{ .Release.Name }}-init
 #
-# Filters the raw Overture transportation parquet shards down to the
-# configured bounding box. Output is a single parquet file the serve
-# Deployment reads on startup.
+# Uses DuckDB + httpfs to query the Overture transportation partition
+# directly from its public S3 bucket, applying a bbox filter with parquet
+# predicate pushdown. Only the row groups whose bbox stats overlap the
+# workshop bbox are actually fetched from S3 — for a city-sized filter
+# on a ~66 GB partition, actual read is under 100 MB and the job
+# completes in ~30-60 seconds.
 #
-# Idempotent: skips if the filtered parquet already exists.
+# Writes a single filtered parquet to FSx; the serve Deployment reads it
+# on startup. Idempotent: skips if the filtered parquet already exists.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -16,7 +20,7 @@ metadata:
     app.kubernetes.io/component: init-job
   annotations:
     "helm.sh/hook": post-install,post-upgrade
-    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-weight": "0"
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   backoffLimit: 0
@@ -43,56 +47,36 @@ spec:
           persistentVolumeClaim:
             claimName: {{ .Values.pvc.fsx }}
 
-      initContainers:
-        # Wait for the download job to finish writing raw parquet shards.
-        - name: wait-for-raw
-          image: busybox:1.36
-          imagePullPolicy: IfNotPresent
-          resources:
-            requests:
-              memory: "64Mi"
-              cpu: "50m"
-            limits:
-              memory: "128Mi"
-              cpu: "100m"
-          volumeMounts:
-            - name: fsx
-              mountPath: {{ .Values.fsx.mountPath }}
-          command:
-            - sh
-            - -c
-            - |
-              RAW_DIR="{{ include "overture-api.rawDir" . }}"
-              WAIT_LIMIT={{ .Values.jobTimeouts.parquetWaitSeconds }}
-              elapsed=0
-              until [ -n "$(ls -A ${RAW_DIR}/*.parquet 2>/dev/null)" ]; do
-                if [ ${elapsed} -ge ${WAIT_LIMIT} ]; then
-                  echo "ERROR: raw parquets not present at ${RAW_DIR} after ${WAIT_LIMIT}s"
-                  exit 1
-                fi
-                echo "  Waiting for raw parquet shards (elapsed ${elapsed}s)..."
-                sleep 15
-                elapsed=$((elapsed + 15))
-              done
-              echo "Raw parquet shards present:"
-              ls -lh ${RAW_DIR}
-
       containers:
         - name: filter
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Run as root: this Job creates directories under an FSx mount
+          # that's owned by root at the volume level. The Deployment stays
+          # non-root; the filter script chmods its output world-readable so
+          # the non-root serve pod can still read it.
+          securityContext:
+            runAsUser: 0
           resources:
             {{- toYaml .Values.resources.init | nindent 12 }}
           volumeMounts:
             - name: fsx
               mountPath: {{ .Values.fsx.mountPath }}
           env:
-            - name: RAW_DIR
-              value: "{{ include "overture-api.rawDir" . }}"
-            - name: FILTERED_PATH
-              value: "{{ include "overture-api.filteredPath" . }}"
+            - name: S3_SOURCE_PREFIX
+              value: {{ .Values.overture.s3SourcePrefix | quote }}
+            - name: OVERTURE_RELEASE
+              value: {{ .Values.overture.release | quote }}
+            - name: OVERTURE_THEME
+              value: {{ .Values.overture.theme | quote }}
+            - name: OVERTURE_TYPE
+              value: {{ .Values.overture.type | quote }}
             - name: OVERTURE_BBOX
               value: {{ include "overture-api.bboxString" . | quote }}
+            - name: FILTERED_PATH
+              value: "{{ include "overture-api.filteredPath" . }}"
+            - name: AWS_REGION
+              value: {{ .Values.overture.s3Region | default "us-west-2" | quote }}
           command:
             - python
             - -m

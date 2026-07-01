@@ -2,10 +2,13 @@ apiVersion: v2
 name: overture-api
 description: >
   Deploys a self-contained Overture Maps API instance backed by a
-  pre-downloaded transportation theme parquet. Downloads the parquet from
-  the Overture Maps S3 release at install time, filters it to a configured
-  bounding box on a persistent FSx volume, and exposes a typed REST API
-  (segments / neighbors / bbox) for in-cluster agent queries.
+  bbox-filtered snapshot of a transportation theme release. At install
+  time, a Job reads the Overture partition directly from S3 via DuckDB's
+  httpfs extension (parquet predicate pushdown ⇒ only relevant row groups
+  are fetched, ~50 MB not 66 GB), filters to the configured bounding box,
+  and writes the result to a persistent FSx volume. A companion Deployment
+  exposes a typed REST API (segments / neighbors / bbox / status) over
+  the filtered snapshot for in-cluster agent queries.
 
   Designed for use with AWS EKS clusters where:
     - An FSx for Lustre PVC is pre-bound in the target namespace

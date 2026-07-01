@@ -25,22 +25,9 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-S3 source path for the Overture parquet partition.
-Resolves to: <prefix>/<release>/theme=<theme>/type=<type>/
-*/}}
-{{- define "overture-api.s3SourcePath" -}}
-{{ .Values.overture.s3SourcePrefix }}/{{ .Values.overture.release }}/theme={{ .Values.overture.theme }}/type={{ .Values.overture.type }}
-{{- end }}
-
-{{/*
-Local FSx path where the raw downloaded parquet shards are staged.
-*/}}
-{{- define "overture-api.rawDir" -}}
-{{ .Values.fsx.mountPath }}/{{ .Values.fsx.dbDir }}/{{ .Release.Name }}/raw
-{{- end }}
-
-{{/*
 Local FSx path to the bbox-filtered parquet file the serve container reads.
+The init job's DuckDB job reads Overture data directly from S3 via httpfs
+and writes the bbox-filtered result to this path.
 */}}
 {{- define "overture-api.filteredPath" -}}
 {{ .Values.fsx.mountPath }}/{{ .Values.fsx.dbDir }}/{{ .Release.Name }}/filtered/segments.parquet

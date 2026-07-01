@@ -7,8 +7,7 @@ Ingolstadt urban core. Backs the AI agents workshop (v2).
 
 | Resource | Role |
 |---|---|
-| `overture-transportation-ingolstadt-download` Job | One-shot `aws s3 cp --no-sign-request` pull of the Overture transportation segment partition (~5 GB raw) to FSx |
-| `overture-transportation-ingolstadt-init` Job | One-shot DuckDB filter of the raw shards to the configured bbox (~10–20 MB filtered output) |
+| `overture-transportation-ingolstadt-init` Job | DuckDB reads the Overture transportation partition **directly from S3** via `httpfs`, applies a bbox filter with parquet predicate pushdown, writes the filtered result (~10–50 MB) to FSx. Runs in ~30–90 seconds. |
 | `overture-transportation-ingolstadt` Deployment | The `overture-api` wrapper service exposing typed REST endpoints over the filtered parquet |
 | `overture-transportation-ingolstadt` Service | ClusterIP, port 80, four endpoints |
 | `overture-transportation-ingolstadt-endpoints` ConfigMap | `OVERTURE_API_URL` and metadata for agent pods to consume |

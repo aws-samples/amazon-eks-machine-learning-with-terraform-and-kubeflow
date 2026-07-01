@@ -39,14 +39,24 @@ aws ecr describe-repositories --region "${region}" --repository-names "${image}"
 aws ecr-public get-login-password --region us-east-1 \
     | docker login --username AWS --password-stdin public.ecr.aws
 
-# Build from the container directory (parent of build_tools/).
-docker build -t "${image}:${tag}" "$DIR/.."
-docker tag "${image}:${tag}" "${fullname}"
-
-# Login to the per-account ECR and push.
+# Login to the per-account ECR before buildx --push.
 aws ecr get-login-password --region "${region}" \
     | docker login --username AWS --password-stdin "${account}.dkr.ecr.${region}.amazonaws.com"
 
-docker push "${fullname}"
+# Build+push explicitly targeting linux/amd64. EKS nodes on standard/CPU
+# NodePools run amd64 regardless of the developer machine architecture,
+# so building without --platform on an ARM64 workstation (e.g. Apple Silicon)
+# produces an unpullable image. `docker buildx --push` is the modern
+# invocation that handles this correctly; we ensure a buildx builder exists
+# and target linux/amd64 unambiguously.
+docker buildx inspect overture-api-builder >/dev/null 2>&1 \
+    || docker buildx create --name overture-api-builder --driver docker-container >/dev/null
+
+docker buildx build \
+    --builder overture-api-builder \
+    --platform linux/amd64 \
+    --tag "${fullname}" \
+    --push \
+    "$DIR/.."
 
 echo "Amazon ECR URI: ${fullname}"
