@@ -19,3 +19,4 @@ eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform.tfvars
 /dataSources.local.xml
 /.idea/*
 /docs/eks-agent.md
+.claude/
