@@ -1,0 +1,63 @@
+# Ray Serve + vLLM Helm chart values for Module 1's GPU-quota-blocked scenario.
+#
+# The chart requests GPU nodes via nodeSelector. In a Workshop Studio account,
+# EC2 refuses RunInstances for GPU instance families, so Karpenter creates
+# NodeClaims that never launch. Ray head + workers stay Pending forever.
+#
+# The agent's job is to correlate:
+#   - the pod-level FailedScheduling event
+#   - the Karpenter NodeClaim.Launched=False condition
+#   - the RunInstances denial in Karpenter controller logs (CloudWatch)
+#   - the account-level GPU quota being zero (Service Quotas API)
+#
+# ...and correctly identify this as a `requires_account_change` failure, not a
+# cluster-level bug.
+
+image:
+  repository: rayproject/ray
+  # Small image good enough to demonstrate scheduling — the workload never
+  # actually runs in this scenario.
+  tag: "2.9.0"
+
+head:
+  resources:
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+      nvidia.com/gpu: 1
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+      nvidia.com/gpu: 1
+  # This is the label Karpenter's 'cuda' NodePool taints its nodes with.
+  # A well-configured Karpenter cluster would provision a matching GPU node.
+  # In Workshop Studio, RunInstances is denied — so no node ever appears.
+  nodeSelector:
+    karpenter.sh/nodepool: cuda
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+
+worker:
+  replicas: 2
+  resources:
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+      nvidia.com/gpu: 1
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+      nvidia.com/gpu: 1
+  nodeSelector:
+    karpenter.sh/nodepool: cuda
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+
+service:
+  type: ClusterIP
