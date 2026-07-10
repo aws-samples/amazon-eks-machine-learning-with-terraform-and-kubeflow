@@ -76,11 +76,6 @@ if ! grep -q 'HOME/.local/bin' "${HOME}/.bashrc" 2>/dev/null; then
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> "${HOME}/.bashrc"
 fi
 
-# ─── MCP server preflight (warms uvx cache; non-fatal on failure) ───────────
-export PATH="${HOME}/.local/bin:${PATH}"
-uvx awslabs.eks-mcp-server@latest --help >/dev/null 2>&1 || true
-uvx awslabs.cloudwatch-mcp-server@latest --help >/dev/null 2>&1 || true
-
 # ─── Ownership ──────────────────────────────────────────────────────────────
 chown -R ubuntu:ubuntu "${DEST_WORKSHOP}" "${DEST_AGENT}" 2>/dev/null || true
 

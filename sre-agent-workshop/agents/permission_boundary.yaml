@@ -1,0 +1,35 @@
+# Permission boundary for the SRE agent's write operations.
+#
+# This file is loaded by the Module 2 agent at start-up and enforced BEFORE
+# any tool call that would mutate cluster state reaches the MCP server.
+# Participants inspect and adjust it as an exercise in Module 2, Section 2.1.
+#
+# Design principles:
+#   - Enforced in code, not in a prompt. No amount of clever wording from the
+#     model can bypass it.
+#   - Rejection is a structured error the agent can read and reason about.
+#   - Snapshot before every change. Rollback requires knowing prior state.
+#   - Human approval on every write. No autopilot.
+
+allowed_verbs:
+  - patch
+  - apply
+
+allowed_resources:
+  - group: karpenter.sh
+    version: v1
+    kind: NodePool
+  - group: apps
+    version: v1
+    kind: Deployment
+
+forbidden_namespaces:
+  - kube-system
+  - karpenter
+  - kube-public
+  - amazon-cloudwatch
+
+require_human_approval: true
+require_snapshot_before_patch: true
+max_patch_size_bytes: 4096
+verify_timeout_seconds: 120
