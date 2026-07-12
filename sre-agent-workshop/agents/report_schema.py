@@ -4,7 +4,8 @@ Keep this file readable — participants inspect it in Part A to understand
 what shape the agent's output takes and why enums (rather than free-text
 strings) are used for critical fields.
 
-The report is emitted as JSON to /mnt/efs/sre-agent/<scenario>.json.
+The report is emitted as JSON to ~/sre-agent/reports/<scenario>.json and
+printed to stdout so it's visible inline when Claude Code runs the agent.
 """
 from __future__ import annotations
 
@@ -53,7 +54,7 @@ class RootCauseReport(TypedDict):
 
 
 def validate_report(payload: dict) -> None:
-    """Minimal validator run before writing the report to EFS.
+    """Minimal validator run before writing the report to disk.
 
     Extend this as the workshop progresses — Module 2 adds mitigation_plan_execution;
     Module 3 adds correlated_alarms. Kept intentionally small in Module 1.

@@ -58,7 +58,7 @@ from tools.describe_service_quota import describe_service_quota  # noqa: E402
 
 WORKSHOP_CLUSTER = os.environ.get("SRE_CLUSTER_NAME", "sre-agent-workshop")
 REGION = os.environ.get("AWS_REGION", "us-east-1")
-EFS_REPORTS_DIR = Path("/mnt/efs/sre-agent")
+REPORTS_DIR = Path.home() / "sre-agent" / "reports"
 MODEL_ID = os.environ.get(
     "SRE_AGENT_MODEL",
     "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
@@ -304,7 +304,12 @@ def save_report(report: dict, path: Path) -> None:
         "model": MODEL_ID,
     }
     path.write_text(json.dumps(report, indent=2))
-    print(f"\n[OK] report written to {path}", file=sys.stderr)
+    # Print the report to stdout so it's visible inline when Claude Code
+    # (or a participant) runs the agent — no need to cat the file afterward.
+    print("\n===== ROOT CAUSE REPORT =====")
+    print(json.dumps(report, indent=2))
+    print("=============================")
+    print(f"[OK] report also written to {path}", file=sys.stderr)
 
 
 # ── Main agentic loop ─────────────────────────────────────────────────────
@@ -401,7 +406,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Explicit report output path. Defaults to "
-            "/mnt/efs/sre-agent/<scenario>.json."
+            "~/sre-agent/reports/<scenario>.json."
         ),
     )
     return p.parse_args()
@@ -410,7 +415,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     report_path = Path(args.report_path) if args.report_path else (
-        EFS_REPORTS_DIR / f"{args.scenario}.json"
+        REPORTS_DIR / f"{args.scenario}.json"
     )
     asyncio.run(run(args.scenario, args.prompt, report_path))
 
