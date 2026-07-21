@@ -18,20 +18,30 @@ DEST_AGENT="/home/ubuntu/sre-agent"
 
 echo "[sre-bootstrap] starting at $(date -u +%FT%TZ)"
 
-# ─── Copy workshop code into expected paths ─────────────────────────────────
-# The workshop's content pages reference:
-#   ~/sre-agent-workshop/lab/scenarios/module-N-.../*.sh
-#   ~/sre-agent/sre_agent_v*.py
-# Populate both from the sibling repo.
+# ─── Copy lab scripts into expected paths ───────────────────────────────────
+# Participants BUILD the agent themselves with Claude Code — we do NOT ship or
+# copy any agent Python code onto the desktop. The only thing we deliver is the
+# lab-scenario scripts (the fault injectors), which are environment tooling the
+# participant runs but does not author.
+#
+# Content pages reference:
+#   ~/sre-agent-workshop/lab/scenarios/module-N-.../*.sh   (delivered here)
+#   ~/sre-agent/...                                        (participant-created)
 
 if [[ ! -d "${SRE_DIR}" ]]; then
     echo "[sre-bootstrap] WARNING: ${SRE_DIR} does not exist; the sibling repo may not include SRE workshop code yet."
     exit 0
 fi
 
-mkdir -p "${DEST_WORKSHOP}" "${DEST_AGENT}"
-cp -rn "${SRE_DIR}/." "${DEST_WORKSHOP}/"
-cp -rn "${SRE_DIR}/agents/." "${DEST_AGENT}/"
+# ~/sre-agent/ is the participant's own workspace — create it empty (with a
+# reports/ subdir) but do NOT populate it with any pre-written agent code.
+mkdir -p "${DEST_AGENT}/reports"
+
+# Deliver only the lab scenarios to ~/sre-agent-workshop/lab/.
+mkdir -p "${DEST_WORKSHOP}/lab"
+if [[ -d "${SRE_DIR}/lab" ]]; then
+    cp -rn "${SRE_DIR}/lab/." "${DEST_WORKSHOP}/lab/"
+fi
 
 # ─── Python dependencies for the SRE agent ──────────────────────────────────
 # The desktop's .bashrc runs `conda activate` at startup, so participants land
