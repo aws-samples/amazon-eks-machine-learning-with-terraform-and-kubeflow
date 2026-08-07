@@ -316,8 +316,8 @@ resource "aws_fsx_data_repository_association" "this" {
   }
 
   timeouts {
-    create = "30m"  # Increase from default 10m to 30m
-    delete = "30m"  # Optional: also increase delete timeout
+    create = "30m" # Increase from default 10m to 30m
+    delete = "30m" # Optional: also increase delete timeout
   }
 }
 
@@ -338,7 +338,7 @@ resource "aws_eks_cluster" "eks_cluster" {
 
   # Required for SageMaker HyperPod integration
   access_config {
-    authentication_mode = "API_AND_CONFIG_MAP"
+    authentication_mode                         = "API_AND_CONFIG_MAP"
     bootstrap_cluster_creator_admin_permissions = true
   }
 
@@ -357,10 +357,10 @@ resource "aws_eks_cluster" "eks_cluster" {
 # Users can specify their IAM role ARN via variable, or it will be auto-detected from assumed-role
 locals {
   # Extract role name from assumed-role ARN: arn:aws:sts::ACCOUNT:assumed-role/ROLE_NAME/session
-  caller_arn_parts     = split("/", data.aws_caller_identity.current.arn)
-  caller_is_assumed    = length(local.caller_arn_parts) > 1 && contains(split(":", data.aws_caller_identity.current.arn), "assumed-role")
-  detected_role_name   = local.caller_is_assumed ? local.caller_arn_parts[1] : ""
-  detected_role_arn    = local.detected_role_name != "" ? "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.detected_role_name}" : ""
+  caller_arn_parts   = split("/", data.aws_caller_identity.current.arn)
+  caller_is_assumed  = length(local.caller_arn_parts) > 1 && contains(split(":", data.aws_caller_identity.current.arn), "assumed-role")
+  detected_role_name = local.caller_is_assumed ? local.caller_arn_parts[1] : ""
+  detected_role_arn  = local.detected_role_name != "" ? "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.detected_role_name}" : ""
   # Use variable if provided, otherwise use detected role
   terraform_admin_role = var.eks_admin_role_arn != "" ? var.eks_admin_role_arn : local.detected_role_arn
 }
@@ -429,6 +429,36 @@ module "ebs_csi_driver_irsa" {
 
 }
 
+# IRSA for the CloudWatch Observability addon's cloudwatch-agent service account.
+# The addon deploys the CloudWatch agent + Fluent Bit as a DaemonSet, which ships
+# Container Insights metrics and pod/application logs to CloudWatch.
+module "cloudwatch_observability_irsa" {
+  source  = "aws-ia/eks-blueprints-addon/aws"
+  version = "1.1.1"
+
+  # Disable helm release
+  create_release = false
+
+  # IAM role for service account (IRSA)
+  create_role   = true
+  create_policy = false
+  role_name     = substr("${aws_eks_cluster.eks_cluster.id}-cw-observability", 0, 38)
+  role_policies = {
+    CloudWatchAgentServerPolicy = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+  }
+
+  oidc_providers = {
+    this = {
+      provider_arn    = aws_iam_openid_connect_provider.eks_oidc_provider.arn
+      namespace       = "amazon-cloudwatch"
+      service_account = "cloudwatch-agent"
+    }
+  }
+
+  tags = var.tags
+
+}
+
 module "eks_blueprints_addons" {
 
   source  = "aws-ia/eks-blueprints-addons/aws"
@@ -471,6 +501,12 @@ module "eks_blueprints_addons" {
     aws-ebs-csi-driver = {
       addon_version            = "v1.62.0-eksbuild.1"
       service_account_role_arn = module.ebs_csi_driver_irsa.iam_role_arn
+    }
+    amazon-cloudwatch-observability = {
+      # CloudWatch Container Insights: CloudWatch agent + Fluent Bit DaemonSet.
+      # Ships pod/application logs to /aws/containerinsights/<cluster>/application
+      # and Container Insights metrics. IRSA grants CloudWatchAgentServerPolicy.
+      service_account_role_arn = module.cloudwatch_observability_irsa.iam_role_arn
     }
   }
 
@@ -1525,7 +1561,7 @@ module "kubeflow-components" {
   kubeflow_user_profile       = "kubeflow-user-example-com"
   kubeflow_platform_enabled   = var.kubeflow_platform_enabled
   # Disable Kubeflow Training Operator when HyperPod is enabled (HyperPod provides its own)
-  enable_training_operator    = !var.hyperpod_enabled
+  enable_training_operator = !var.hyperpod_enabled
 
   efs_fs_id = aws_efs_file_system.fs.id
   fsx = {
