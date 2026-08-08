@@ -502,15 +502,36 @@ module "eks_blueprints_addons" {
       addon_version            = "v1.62.0-eksbuild.1"
       service_account_role_arn = module.ebs_csi_driver_irsa.iam_role_arn
     }
-    amazon-cloudwatch-observability = {
-      # CloudWatch Container Insights: CloudWatch agent + Fluent Bit DaemonSet.
-      # Ships pod/application logs to /aws/containerinsights/<cluster>/application
-      # and Container Insights metrics. IRSA grants CloudWatchAgentServerPolicy.
-      service_account_role_arn = module.cloudwatch_observability_irsa.iam_role_arn
-    }
   }
 
   depends_on = [helm_release.cluster-autoscaler]
+}
+
+# CloudWatch Container Insights (CloudWatch agent + Fluent Bit DaemonSet).
+# Ships pod/application logs to /aws/containerinsights/<cluster>/application
+# and Container Insights metrics. IRSA grants CloudWatchAgentServerPolicy.
+#
+# Kept as a STANDALONE addon (not in the eks_blueprints_addons.eks_addons map
+# above) and sequenced AFTER that module completes. Reason: the module enables
+# aws-load-balancer-controller, which registers a cluster-wide mutating webhook
+# on Service objects (mservice.elbv2.k8s.aws). This addon creates Services for
+# the CloudWatch agent; if it races ahead of the LB-controller webhook pods
+# becoming Ready, admission fails with "no endpoints available for service
+# aws-load-balancer-webhook-service" and the addon goes CREATE_FAILED. The
+# LB-controller helm release uses wait = true, so depending on the whole module
+# guarantees the webhook has live endpoints before this addon's Services are
+# admitted.
+resource "aws_eks_addon" "cloudwatch_observability" {
+  cluster_name             = aws_eks_cluster.eks_cluster.id
+  addon_name               = "amazon-cloudwatch-observability"
+  service_account_role_arn = module.cloudwatch_observability_irsa.iam_role_arn
+
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  depends_on = [module.eks_blueprints_addons]
+
+  tags = var.tags
 }
 
 data "aws_iam_policy_document" "cert_manager" {
