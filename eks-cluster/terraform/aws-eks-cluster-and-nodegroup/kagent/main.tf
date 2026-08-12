@@ -318,6 +318,51 @@ resource "helm_release" "kagent" {
     }
   }
 
+  # UI startup probe - relaxed defaults to tolerate OTEL auto-instrumentation latency.
+  # When OpenTelemetry Operator injects init containers and NODE_OPTIONS, the Next.js
+  # process behind nginx needs additional time to start serving on port 8080.
+  # These defaults allow up to ~155s total startup time (initialDelay + period * failureThreshold).
+  # Supported natively in kagent chart >= 0.9.x via .Values.ui.startupProbe.
+  dynamic "set" {
+    for_each = var.enable_ui ? [1] : []
+    content {
+      name  = "ui.startupProbe.httpGet.path"
+      value = "/health"
+    }
+  }
+
+  dynamic "set" {
+    for_each = var.enable_ui ? [1] : []
+    content {
+      name  = "ui.startupProbe.httpGet.port"
+      value = "http"
+    }
+  }
+
+  dynamic "set" {
+    for_each = var.enable_ui ? [1] : []
+    content {
+      name  = "ui.startupProbe.initialDelaySeconds"
+      value = var.ui_startup_probe_initial_delay
+    }
+  }
+
+  dynamic "set" {
+    for_each = var.enable_ui ? [1] : []
+    content {
+      name  = "ui.startupProbe.periodSeconds"
+      value = var.ui_startup_probe_period
+    }
+  }
+
+  dynamic "set" {
+    for_each = var.enable_ui ? [1] : []
+    content {
+      name  = "ui.startupProbe.failureThreshold"
+      value = var.ui_startup_probe_failure_threshold
+    }
+  }
+
   # Additional Helm values
   values = var.additional_helm_values != "" ? [var.additional_helm_values] : []
 

@@ -179,6 +179,24 @@ variable "ui_memory_limit" {
   default     = "256Mi"
 }
 
+variable "ui_startup_probe_initial_delay" {
+  description = "Initial delay seconds for kagent UI startup probe. Increased default to tolerate OTEL auto-instrumentation injection latency."
+  type        = number
+  default     = 5
+}
+
+variable "ui_startup_probe_period" {
+  description = "Period seconds for kagent UI startup probe. Increased default to tolerate OTEL auto-instrumentation injection latency."
+  type        = number
+  default     = 5
+}
+
+variable "ui_startup_probe_failure_threshold" {
+  description = "Failure threshold for kagent UI startup probe. Allows up to ~155s total startup time to accommodate OTEL auto-instrumentation overhead."
+  type        = number
+  default     = 30
+}
+
 #---------------------------------------------------------------
 # Istio Ingress Configuration
 #---------------------------------------------------------------
