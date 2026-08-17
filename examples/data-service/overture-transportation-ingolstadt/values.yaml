@@ -16,7 +16,7 @@
 namespace: kubeflow-user-example-com
 
 overture:
-  release: "2026-06-17.0"
+  release: "2026-07-22.0"
   theme: "transportation"
   type: "segment"
   s3SourcePrefix: "s3://overturemaps-us-west-2/release"
