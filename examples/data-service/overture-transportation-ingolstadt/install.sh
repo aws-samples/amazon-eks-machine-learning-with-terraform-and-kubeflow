@@ -3,7 +3,8 @@
 # install.sh — overture-transportation-ingolstadt
 # =============================================================================
 # Installs the Overture Maps API instance filtered to the Ingolstadt urban
-# core using the 2026-06-17.0 transportation theme release.
+# core. Automatically resolves the latest Overture release from the STAC
+# catalog at deploy time, falling back to the pinned tag in values.yaml.
 #
 # Steps:
 #   1) Pre-flight: verify kubectl context + PVC bindings.
@@ -89,6 +90,26 @@ IMAGE_TAG="${ECR_URI##*:}"
 echo "Resolved image: ${IMAGE_REPOSITORY}:${IMAGE_TAG}"
 echo ""
 
+# ── Resolve latest Overture release ────────────────────────────────────────────
+# Overture Maps applies a 60-day S3 lifecycle expiration to release data, so
+# any pinned tag in values.yaml may expire. Query the STAC catalog for the
+# latest available release and override via --set. Falls back to the pinned
+# value in values.yaml if the lookup fails.
+
+STAC_URL="https://stac.overturemaps.org/catalog.json"
+echo "Resolving latest Overture release from STAC catalog..."
+OVERTURE_RELEASE=$(curl -sf "${STAC_URL}" | jq -r '.latest // empty' 2>/dev/null || true)
+
+OVERTURE_RELEASE_SET=()
+if [ -n "${OVERTURE_RELEASE}" ]; then
+  echo "Using latest Overture release: ${OVERTURE_RELEASE}"
+  OVERTURE_RELEASE_SET=(--set "overture.release=${OVERTURE_RELEASE}")
+else
+  echo "WARNING: Could not resolve latest Overture release from STAC catalog."
+  echo "         Falling back to pinned release in values.yaml."
+fi
+echo ""
+
 # ── Install ───────────────────────────────────────────────────────────────────
 
 echo "Running helm install..."
@@ -98,6 +119,7 @@ helm install "${RELEASE_NAME}" \
   --values "${SCRIPT_DIR}/${VALUES_FILE}" \
   --set image.repository="${IMAGE_REPOSITORY}" \
   --set image.tag="${IMAGE_TAG}" \
+  "${OVERTURE_RELEASE_SET[@]}" \
   --timeout 15m
 
 echo ""
