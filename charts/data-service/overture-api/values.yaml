@@ -6,7 +6,7 @@
 # instances per region.
 #
 # Minimum required overrides per release:
-#   overture.release  — pinned Overture release tag (e.g., "2026-06-17.0")
+#   overture.release  — pinned Overture release tag (e.g., "2026-07-22.0")
 #   overture.bbox     — bounding box [minLon, minLat, maxLon, maxLat]
 # =============================================================================
 
@@ -34,8 +34,11 @@ fsx:
 # -----------------------------------------------------------------------------
 # Overture release configuration.
 #
-# release: the Overture Maps Foundation release tag, e.g., "2026-06-17.0".
+# release: the Overture Maps Foundation release tag, e.g., "2026-07-22.0".
 #   See https://docs.overturemaps.org/release/ for current releases.
+#   NOTE: Overture applies a 60-day S3 lifecycle expiration to release data,
+#   so any pinned tag stops resolving ~60 days after publication. Bump this to
+#   a current release, or mirror the data into a bucket you control.
 # theme/type: transportation/segment is the only combination this chart serves.
 # s3SourcePrefix: base S3 path for the Overture public bucket.
 # s3Region: region hosting the bucket (Overture publishes to us-west-2).
@@ -44,7 +47,7 @@ fsx:
 #   ~50 MB and the segment count around 5,000.
 # -----------------------------------------------------------------------------
 overture:
-  release: "2026-06-17.0"
+  release: "2026-07-22.0"
   theme: "transportation"
   type: "segment"
   s3SourcePrefix: "s3://overturemaps-us-west-2/release"
