@@ -33,7 +33,7 @@ set -euo pipefail
 
 RELEASE_NAME="overture-transportation-ingolstadt"
 NAMESPACE="${NAMESPACE:-kubeflow-user-example-com}"
-REGION="${AWS_REGION:-us-east-1}"
+REGION="${AWS_REGION:-$(kubectl config current-context | awk -F: '{print $4}')}"
 VALUES_FILE="./values.yaml"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHART_DIR="${SCRIPT_DIR}/../../../charts/data-service/overture-api"
