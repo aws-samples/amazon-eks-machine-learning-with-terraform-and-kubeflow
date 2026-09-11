@@ -53,26 +53,28 @@ Parameters:
 
 Mappings:
   UbuntuPro2404LTS:
-    us-east-1:
-      AMI: ami-0b6c6ebed2801a5cb
-    us-east-2:
-      AMI: ami-06e3c045d79fd65d9
-    us-west-2:
-      AMI: ami-0786adace1541ca80
-    eu-west-1:
-      AMI: ami-03446a3af42c5e74e
-    eu-central-1:
-      AMI: ami-01f79b1e4a5c64257
-    ap-southeast-1:
-      AMI: ami-08d59269edddde222
-    ap-southeast-2:
-      AMI: ami-0ba8d27d35e9915fb
-    ap-south-1:
-      AMI: ami-019715e0d74f695be
-    ap-northeast-1:
-      AMI: ami-0f65fc8c24ec8d2a1
-    ap-northeast-2:
-      AMI: ami-0130d8d35bcd2d433
+   us-east-1:
+     AMI: ami-0f8a61b66d1accaee
+   us-east-2:
+     AMI: ami-0ea1cddefe0c4aed5
+   us-west-2:
+     AMI: ami-096f5760b00bcd95c
+   eu-west-3:
+     AMI: ami-0e207c18bb303cc68
+   eu-west-1:
+     AMI: ami-04df7d76c1b804451
+   eu-central-1:
+     AMI: ami-042dc8681de073ac4
+   ap-southeast-1:
+     AMI: ami-03acbba64aef9bf5c
+   ap-southeast-2:
+     AMI: ami-020728ad6199d7fa0
+   ap-south-1:
+     AMI: ami-006f82a1d5a27da54
+   ap-northeast-1:
+     AMI: ami-05f4eb3328c0dabc5
+   ap-northeast-2:
+     AMI: ami-0e4ab31f1847c850c
 
 Resources:
 

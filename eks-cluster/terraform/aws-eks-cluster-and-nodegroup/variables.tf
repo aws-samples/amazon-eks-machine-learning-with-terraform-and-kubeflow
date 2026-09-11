@@ -199,10 +199,10 @@ variable "system_instances" {
     "m5a.xlarge", 
     "m5a.2xlarge", 
     "m5a.4xlarge", 
-    "m7a.large", 
-    "m7a.xlarge", 
-    "m7a.2xlarge",
-    "m7a.4xlarge"
+    "m7i.large", 
+    "m7i.xlarge", 
+    "m7i.2xlarge",
+    "m7i.4xlarge"
   ]
 }
 
