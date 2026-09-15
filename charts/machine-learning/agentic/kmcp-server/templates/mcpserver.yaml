@@ -1,0 +1,50 @@
+{{- include "kmcp-server.validateRequired" . -}}
+{{- include "kmcp-server.validateName" . -}}
+apiVersion: kagent.dev/v1alpha1
+kind: MCPServer
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "kmcp-server.labels" . | nindent 4 }}
+    {{- if .Values.disableKagentDiscovery }}
+    kagent.dev/discovery: disabled
+    {{- end }}
+spec:
+  transportType: {{ .Values.transportType | quote }}
+  {{- if eq .Values.transportType "stdio" }}
+  stdioTransport: {}
+  {{- end }}
+  deployment:
+    image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+    port: {{ .Values.deployment.port }}
+    {{- if .Values.deployment.cmd }}
+    cmd: {{ .Values.deployment.cmd | quote }}
+    {{- end }}
+    {{- if .Values.deployment.args }}
+    args:
+      {{- range .Values.deployment.args }}
+      - {{ . | quote }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.env }}
+    env:
+      {{- range $key, $value := .Values.env }}
+      {{ $key }}: {{ $value | quote }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.secretRefs }}
+    secretRefs:
+      {{- range .Values.secretRefs }}
+      - name: {{ . | quote }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.serviceAccountAnnotations }}
+    serviceAccount:
+      annotations:
+        {{- toYaml .Values.serviceAccountAnnotations | nindent 8 }}
+    {{- end }}
+    {{- if .Values.resources }}
+    resources:
+      {{- toYaml .Values.resources | nindent 6 }}
+    {{- end }}

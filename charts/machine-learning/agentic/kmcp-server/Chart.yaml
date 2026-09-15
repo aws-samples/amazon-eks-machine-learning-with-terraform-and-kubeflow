@@ -1,0 +1,6 @@
+apiVersion: v2
+name: kmcp-server
+description: Helm chart for deploying an MCP server on kmcp (Kubernetes MCP controller)
+type: application
+version: 0.1.1
+appVersion: "0.1.1"

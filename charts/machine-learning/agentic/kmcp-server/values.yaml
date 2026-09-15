@@ -1,0 +1,69 @@
+# kmcp MCP Server - Default Values
+#
+# Required fields:
+#   name             - MCP server name (must end in "-mcp")
+#   image.repository - Container image URI (without tag)
+#
+# The kmcp controller (installed separately) watches MCPServer resources
+# (kagent.dev/v1alpha1) and manages the Deployment + Service lifecycle for the
+# MCP server. This chart only renders the MCPServer custom resource.
+
+# MCP server identity
+name: ""
+namespace: kmcp
+
+# Container image (built and pushed by the kmcp build workflow, e.g. to ECR)
+image:
+  repository: ""
+  tag: "0.1.1"
+
+# How the kmcp controller launches the server process inside the container and
+# how it fronts the server. Maps to spec.deployment / spec.transportType.
+#   - For a FastMCP (Python) project scaffolded by `kmcp init python`, the entry
+#     point is typically cmd "python", args ["src/main.py"].
+#   - transportType "stdio" makes the controller run the process over stdio and
+#     front it with Streamable HTTP at http://<service>:<port>/mcp.
+deployment:
+  port: 3000
+  cmd: "python"
+  args:
+    - "src/main.py"
+
+# Transport type: "stdio" or "http" (CRD enum). "stdio" is the common case for a
+# kmcp-scaffolded server; the controller exposes Streamable HTTP on the port.
+transportType: "stdio"
+
+# Environment variables for the MCP server container. This is a MAP
+# (spec.deployment.env is additionalProperties:string in the CRD), not a list.
+# The phase-script tools reach the data APIs over cluster-internal DNS, so those
+# endpoints are supplied here rather than as localhost port-forwards.
+env: {}
+  # OVERPASS_API_URL: "http://overpass-bayern-latest.kubeflow-user-example-com.svc.cluster.local/api/interpreter"
+  # OVERTURE_API_URL: "http://overture-transportation-ingolstadt.kubeflow-user-example-com.svc.cluster.local"
+
+# Kubernetes Secrets to mount into the MCP server container
+# (spec.deployment.secretRefs). Create them with `kmcp secrets sync` or out of
+# band; each must be in the same namespace as the MCP server. List of names.
+secretRefs: []
+  # - my-mcp-secrets
+
+# IRSA: annotations added to the ServiceAccount the kmcp controller creates for
+# this MCP server (spec.deployment.serviceAccount.annotations). Use this to bind
+# an IAM role if the phase tools need AWS access. Left empty by default because
+# the phase scripts only call the in-cluster data APIs.
+serviceAccountAnnotations: {}
+  # eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/my-mcp-role"
+
+# Resource requests and limits for the MCP server container.
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "500m"
+
+# When true, add the kagent.dev/discovery=disabled label so kagent does not
+# auto-discover this MCP server (use when routing agent-tool traffic through
+# agentgateway instead). Leave false for direct in-cluster access.
+disableKagentDiscovery: false
