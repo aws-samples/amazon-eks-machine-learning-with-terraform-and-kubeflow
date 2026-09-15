@@ -27,6 +27,10 @@ spec:
       - {{ . | quote }}
       {{- end }}
     {{- end }}
+    {{- if .Values.podAnnotations }}
+    annotations:
+      {{- toYaml .Values.podAnnotations | nindent 6 }}
+    {{- end }}
     {{- if .Values.env }}
     env:
       {{- range $key, $value := .Values.env }}
