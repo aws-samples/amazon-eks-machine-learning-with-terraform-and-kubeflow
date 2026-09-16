@@ -62,6 +62,19 @@ env:
     value: "us.anthropic.claude-sonnet-4-6"
   # - name: HDMAP_MCP_URL
   #   value: "http://hdmap-quality-mcp.kubeflow-user-example-com.svc.cluster.local:3000/mcp"
+  # Point the plugin's hook state dir at a mounted PVC path so artifacts survive the pod.
+  # The hook scripts honor HDMAP_STATE_DIR (falling back to ${CLAUDE_PLUGIN_DATA} when unset).
+  # - name: HDMAP_STATE_DIR
+  #   value: "/efs/hdmap-quality"
+
+# Persistent volume claims to mount into the Job pod. A Job pod's own filesystem is
+# ephemeral, so anything the plugin's hooks write (audit log, phase markers, quality summary)
+# is lost when the pod completes. Mount a shared PVC (e.g. the cluster's pv-efs) and point the
+# hooks' state dir at it (see HDMAP_STATE_DIR in env below) so the artifacts are durable and
+# retrievable after the Job finishes.
+pvc: []
+  # - name: pv-efs
+  #   mount_path: /efs
 
 # One assessment, one attempt — do not silently retry.
 backoffLimit: 0

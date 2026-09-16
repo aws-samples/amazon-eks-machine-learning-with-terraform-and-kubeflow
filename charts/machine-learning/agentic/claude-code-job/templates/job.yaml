@@ -28,9 +28,24 @@ spec:
     spec:
       restartPolicy: Never
       serviceAccountName: {{ include "claude-code-job.serviceAccountName" . }}
+      {{- if .Values.pvc }}
+      volumes:
+      {{- range $i, $v := .Values.pvc }}
+      - name: pvc-{{ add $i 1 }}
+        persistentVolumeClaim:
+          claimName: {{ $v.name }}
+      {{- end }}
+      {{- end }}
       containers:
       - name: claude-code
         image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        {{- if .Values.pvc }}
+        volumeMounts:
+        {{- range $i, $v := .Values.pvc }}
+        - name: pvc-{{ add $i 1 }}
+          mountPath: {{ $v.mount_path }}
+        {{- end }}
+        {{- end }}
         command:
         - claude
         - -p
