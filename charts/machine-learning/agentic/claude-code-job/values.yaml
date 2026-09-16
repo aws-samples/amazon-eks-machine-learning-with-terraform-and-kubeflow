@@ -1,0 +1,76 @@
+# Claude Code Job - Default Values
+#
+# Runs Claude Code headless (`claude -p`) with a bundled plugin as a Kubernetes Job.
+# This is the "tool as a batch workload" deployment shape: Claude Code is a
+# general-purpose tool run as a plain Job, in contrast to a bespoke agent managed
+# by a platform (kagent). One Job runs one task and exits.
+#
+# Required fields:
+#   name             - Job name (must end in "-job")
+#   image.repository - Container image URI (Claude Code CLI + plugin baked in)
+#   task             - The natural-language task / command passed to `claude -p`,
+#                      e.g. "/hdmap-quality:assess 11.42,48.75,11.44,48.76"
+
+# Job identity
+name: ""
+namespace: kubeflow-user-example-com
+
+# Container image: Claude Code CLI installed, plugin copied into the image (see pluginDir).
+image:
+  repository: ""
+  tag: "0.1.1"
+
+# The prompt/command handed to `claude -p`. For this workshop's plugin, a slash command
+# like "/hdmap-quality:assess <minlon,minlat,maxlon,maxlat>".
+task: ""
+
+# Absolute path to the plugin directory inside the image (passed as --plugin-dir).
+pluginDir: "/app/plugin"
+
+# Tools pre-authorized for the headless run (passed as --allowedTools). Headless has no
+# interactive approver, so the MCP tools the run will call MUST be allow-listed here or the
+# run stalls waiting for a permission prompt. Use the scoped plugin tool names.
+allowedTools:
+  - "mcp__plugin_hdmap-quality_pipeline__run_phase1_decomposition"
+  - "mcp__plugin_hdmap-quality_pipeline__run_phase2_extraction"
+  - "mcp__plugin_hdmap-quality_pipeline__run_phase3_matching"
+  - "mcp__plugin_hdmap-quality_pipeline__run_phase4_quality"
+
+# Pass --verbose to the headless run so phase execution is visible in the pod logs.
+verbose: true
+
+# ServiceAccount for Bedrock access via IRSA. The Job authenticates to Bedrock with the
+# pod's IAM role, not static credentials. Provide the name of a ServiceAccount bound to a
+# role with bedrock:InvokeModel, or set serviceAccountAnnotations to have the chart create
+# and annotate one.
+serviceAccountName: ""
+# When serviceAccountName is empty and these annotations are set, the chart creates a
+# ServiceAccount (named after the Job) with these annotations (IRSA role-arn).
+serviceAccountAnnotations: {}
+  # eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/claude-code-job"
+
+# Environment variables for the Claude Code container.
+# Bedrock defaults are set below; override AWS_REGION/ANTHROPIC_MODEL as needed, and set
+# the plugin's MCP endpoint to the in-cluster service DNS (the only value that differs from
+# a desktop/port-forward run).
+env:
+  - name: CLAUDE_CODE_USE_BEDROCK
+    value: "1"
+  - name: AWS_REGION
+    value: "us-east-1"
+  - name: ANTHROPIC_MODEL
+    value: "us.anthropic.claude-sonnet-4-6"
+  # - name: HDMAP_MCP_URL
+  #   value: "http://hdmap-quality-mcp.kubeflow-user-example-com.svc.cluster.local:3000/mcp"
+
+# One assessment, one attempt — do not silently retry.
+backoffLimit: 0
+
+# Resource requests and limits for the Claude Code container.
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "500m"

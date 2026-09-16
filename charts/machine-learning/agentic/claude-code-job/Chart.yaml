@@ -1,0 +1,6 @@
+apiVersion: v2
+name: claude-code-job
+description: Helm chart for running Claude Code headless with a plugin as a Kubernetes Job
+type: application
+version: 0.1.1
+appVersion: "0.1.1"

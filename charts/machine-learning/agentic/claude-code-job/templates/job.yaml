@@ -1,0 +1,57 @@
+{{- include "claude-code-job.validateRequired" . -}}
+{{- include "claude-code-job.validateName" . -}}
+{{- if and (not .Values.serviceAccountName) .Values.serviceAccountAnnotations }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "claude-code-job.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.serviceAccountAnnotations | nindent 4 }}
+---
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "claude-code-job.labels" . | nindent 4 }}
+spec:
+  backoffLimit: {{ .Values.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "claude-code-job.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "claude-code-job.serviceAccountName" . }}
+      containers:
+      - name: claude-code
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        command:
+        - claude
+        - -p
+        - {{ .Values.task | quote }}
+        - --plugin-dir
+        - {{ .Values.pluginDir | quote }}
+        {{- if .Values.allowedTools }}
+        - --allowedTools
+        - {{ join "," .Values.allowedTools | quote }}
+        {{- end }}
+        {{- if .Values.verbose }}
+        - --verbose
+        {{- end }}
+        {{- if .Values.env }}
+        env:
+          {{- range .Values.env }}
+        - name: {{ .name }}
+          value: {{ .value | quote }}
+          {{- end }}
+        {{- end }}
+        {{- if .Values.resources }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        {{- end }}
