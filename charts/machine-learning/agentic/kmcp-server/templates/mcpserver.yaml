@@ -43,6 +43,14 @@ spec:
       - name: {{ . | quote }}
       {{- end }}
     {{- end }}
+    {{- if .Values.volumes }}
+    volumes:
+      {{- toYaml .Values.volumes | nindent 6 }}
+    {{- end }}
+    {{- if .Values.volumeMounts }}
+    volumeMounts:
+      {{- toYaml .Values.volumeMounts | nindent 6 }}
+    {{- end }}
     {{- if .Values.serviceAccountAnnotations }}
     serviceAccount:
       annotations:

@@ -47,6 +47,23 @@ env: {}
 secretRefs: []
   # - my-mcp-secrets
 
+# Volumes to make available to the MCP server pod (spec.deployment.volumes) and
+# the mounts that attach them to the server container (spec.deployment.volumeMounts).
+# The kmcp controller passes these through to the Deployment it generates, so this
+# is how you mount a PersistentVolumeClaim (e.g. shared EFS) into the server — useful
+# when the tools keep a durable, run-scoped artifact store that must survive pod
+# restarts and be visible across replicas. Both default to empty (no extra volumes),
+# so existing servers are unaffected.
+#
+# Each entry is a standard Kubernetes Volume / VolumeMount object.
+volumes: []
+  # - name: run-store
+  #   persistentVolumeClaim:
+  #     claimName: pv-efs
+volumeMounts: []
+  # - name: run-store
+  #   mountPath: /efs
+
 # IRSA: annotations added to the ServiceAccount the kmcp controller creates for
 # this MCP server (spec.deployment.serviceAccount.annotations). Use this to bind
 # an IAM role if the phase tools need AWS access. Left empty by default because
