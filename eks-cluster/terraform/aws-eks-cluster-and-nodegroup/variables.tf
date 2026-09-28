@@ -421,6 +421,28 @@ variable fsx_storage_capacity {
   type = number
 }
 
+variable "dynamo_enabled" {
+  # The NVIDIA Dynamo inference platform: the Kubernetes operator that reconciles
+  # DynamoGraphDeployment resources into frontend, router, prefill and decode pods.
+  #
+  # This installs the control plane only. It reserves no GPUs and schedules nothing onto
+  # them -- the operator is a single ~1 CPU / 2Gi pod on a CPU node, and GPUs are consumed
+  # only when a DynamoGraphDeployment is applied (see examples/inference/dynamo/).
+  #
+  # Off by default all the same, matching kserve_enabled and every other optional serving
+  # platform here: an inference stack nobody asked for should not appear in a cluster, and
+  # the six CRDs it registers are cluster-scoped. Set it to true to run the examples.
+  description = "Install the NVIDIA Dynamo inference platform (operator + CRDs)"
+  type        = bool
+  default     = false
+}
+
+variable "dynamo_namespace" {
+  description = "Namespace for the NVIDIA Dynamo operator"
+  type        = string
+  default     = "dynamo-system"
+}
+
 variable "dcgm_exporter_enabled" {
   # The NVIDIA dcgm-exporter helm release, scraped by kube-prometheus-stack via a
   # ServiceMonitor. Pinned field list including the DCGM_FI_PROF_* profiling fields. Default

@@ -1,0 +1,41 @@
+apiVersion: v2
+name: dynamo-platform
+description: A Helm chart for the NVIDIA Dynamo Kubernetes operator
+type: application
+# Chart version is this repository's, independent of the Dynamo release it deploys.
+version: 1.0.0
+# The Dynamo release vendored here. Also the default operator image tag, via
+# .Chart.AppVersion in templates/deployment.yaml.
+appVersion: "1.5.0"
+# Generated Dynamo CRDs use optionalOldSelf, which needs CRD validation ratcheting
+# (on by default from 1.30).
+kubeVersion: ">=1.30.0-0"
+home: https://github.com/ai-dynamo/dynamo
+maintainers:
+  - name: NVIDIA, Inc.
+    url: https://www.nvidia.com
+#
+# Vendored from ai-dynamo/dynamo v1.5.0, deploy/helm/charts/platform, Apache-2.0.
+#
+# Deliberately NO dependencies. Upstream's platform chart declares five conditional
+# subcharts -- nats, etcd, kai-scheduler, grove and snapshot -- and every one of them
+# defaults to install: false. Dynamo 1.5.0 defaults to discoveryBackend: "kubernetes"
+# (Kubernetes API service discovery) with TCP and ZMQ request and event planes, so
+# neither NATS nor etcd is required. Dropping the dependency list keeps this chart
+# installable straight from the local charts directory with no `helm dependency build`
+# and no reachable chart repository, which is what lets Terraform install it.
+#
+# Upstream's operator subchart is flattened into templates/ here rather than nested,
+# because a file:// dependency would still require a built charts/ directory. The
+# templates read only three global keys -- global.etcd.install, global.nats.install and
+# global.grove.{install,enabled} -- all defined in values.yaml.
+#
+# The CRDs are NOT in this chart, by design. There is no crds/ directory and there
+# should not be one: templates/deployment.yaml runs a crd-apply initContainer from the
+# operator image, which server-side-applies the CRDs baked into it at
+# /opt/dynamo-operator/crds/. That matters because nvidia.com_dynamographdeployments
+# is ~1.6MB of generated schema -- far past the 262144-byte ceiling on the
+# kubectl.kubernetes.io/last-applied-configuration annotation that client-side apply
+# writes. Helm's crds/ directory is also install-only and never upgraded, and the
+# conversion webhook service has to be patched into each CRD at install time. Adding a
+# crds/ directory here would break all three.

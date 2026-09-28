@@ -1,0 +1,77 @@
+# Aggregated serving at a 4-GPU budget, for benchmarking against dgd-disagg.yaml.
+#
+# The counterpart to ../dgd-disagg.yaml, and the cleanest comparison available: both occupy
+# one 4-GPU node, both shard at TP=2, both set the same memory target and the same per-replica
+# resources. The only difference is the split:
+#
+#   this file            2 aggregated workers at TP=2, each doing its own prefill and decode
+#   ../dgd-disagg.yaml   1 prefill worker at TP=2 + 1 decode worker at TP=2, KV over NIXL
+#
+# Same node means identical GPUs and no cross-AZ hop, so neither GPU heterogeneity nor
+# inter-zone networking can be blamed for the result. See README.md.
+image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
+image_pull_policy: IfNotPresent
+backend_framework: vllm
+
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+
+gpu_tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+components:
+  Frontend:
+    type: frontend
+    replicas: 1
+    args:
+      - -m
+      - dynamo.frontend
+      - --http-port
+      - "8000"
+    resources:
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 8Gi
+
+  VllmWorker:
+    type: worker
+    # 2 replicas x 2 GPUs = the whole 4-GPU node, matching dgd-disagg.yaml's total.
+    replicas: 2
+    # ONE instance type, and it must match the type dgd-disagg.yaml lands on. Comparing across
+    # instance types would measure the GPUs rather than the topology.
+    node_types:
+      - g5.12xlarge
+    shared_memory_size: 16Gi
+    args:
+      - -m
+      - dynamo.vllm
+      - --model
+      - /fsx/pretrained-models/Qwen/Qwen3-8B
+      - --served-model-name
+      - qwen3-8b
+      - --max-model-len
+      - "16384"
+      - --tensor-parallel-size
+      - "2"
+      # Matched to dgd-disagg.yaml rather than left at the default, so the two arms give vLLM
+      # the same memory budget. See the comment there for why the default overruns a 24GB card
+      # at TP=2.
+      - --gpu-memory-utilization
+      - "0.80"
+    resources:
+      requests:
+        cpu: "8"
+        memory: 64Gi
+        nvidia.com/gpu: "2"
+      limits:
+        cpu: "12"
+        memory: 96Gi
+        nvidia.com/gpu: "2"

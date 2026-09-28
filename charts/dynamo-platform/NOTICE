@@ -1,0 +1,26 @@
+This chart is vendored from the NVIDIA Dynamo project.
+
+    Source:  https://github.com/ai-dynamo/dynamo
+    Release: v1.5.0
+    Path:    deploy/helm/charts/platform
+    License: Apache License 2.0
+
+Copyright (c) NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+these files except in compliance with the License. A copy of the License is in
+the LICENSE file at the root of this repository, which is licensed under the
+same terms. You may also obtain a copy at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+Modifications made when vendoring, all documented in Chart.yaml:
+  - the five conditional subcharts (nats, etcd, kai-scheduler, grove, snapshot)
+    and the chart dependency list were removed, so the chart installs from a
+    local path with no chart repository and no `helm dependency build`
+  - the nested operator subchart was flattened into templates/
