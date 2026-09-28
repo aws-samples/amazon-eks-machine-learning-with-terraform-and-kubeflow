@@ -1,4 +1,4 @@
-image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.9.0-neuronx-py312-sdk2.28.0-ubuntu24.04'
+image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.9.0-neuronx-py312-sdk2.30.0-ubuntu24.04'
 backoff_limit: 2000
 ebs:
   storage: 200Gi
@@ -20,7 +20,7 @@ tolerations:
 git:
   repo_url: "https://github.com/aws-neuron/neuronx-distributed.git"
   branch: main
-  commit: 22cadad34418fb8b5939bd8cdfc7a376eede9981
+  commit: fbac349b61a3adbb123c2983835af692840ff62f
 pre_script: 
   - pip3 install --upgrade pip
   - SCRIPT_DIR=$GIT_CLONE_DIR/examples/training/tp_dp_gpt_neox_hf_pretrain/tp_dp_gpt_neox_20b_hf_pretrain

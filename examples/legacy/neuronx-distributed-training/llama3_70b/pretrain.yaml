@@ -1,4 +1,4 @@
-image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.9.0-neuronx-py312-sdk2.28.0-ubuntu24.04'
+image: 'public.ecr.aws/neuron/pytorch-training-neuronx:2.9.0-neuronx-py312-sdk2.30.0-ubuntu24.04'
 backoff_limit: 2000
 ebs:
   storage: 200Gi
@@ -25,8 +25,8 @@ pre_script:
   - pip install 'numpy>=1.24,<2.0' --force-reinstall
   - git clone https://github.com/aws-neuron/neuronx-distributed.git /tmp/neuronx-distributed
   - cd /tmp/neuronx-distributed
-  - git fetch origin 22cadad34418fb8b5939bd8cdfc7a376eede9981
-  - git reset --hard 22cadad34418fb8b5939bd8cdfc7a376eede9981
+  - git fetch origin fbac349b61a3adbb123c2983835af692840ff62f
+  - git reset --hard fbac349b61a3adbb123c2983835af692840ff62f
   - cd $GIT_CLONE_DIR/examples
   - cp /tmp/neuronx-distributed/examples/training/llama/tp_pp_llama_hf_pretrain/70B_config_llama3/config.json config.json
   - LOGS_DIR=$LOG_ROOT/$PET_NODE_RANK
