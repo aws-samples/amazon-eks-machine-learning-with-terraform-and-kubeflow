@@ -1,0 +1,68 @@
+# Runtime image for every component. The vllm-runtime image ships the dynamo.frontend and
+# dynamo.vllm entrypoints; use sglang-runtime or tensorrtllm-runtime with the matching
+# backend_framework below. Anonymously pullable from nvcr.io, so no imagePullSecret.
+#
+# Note the asymmetry: the backend_framework value is trtllm, but the image is named
+# tensorrtllm-runtime. There is no trtllm-runtime repository on nvcr.io.
+image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
+image_pull_policy: IfNotPresent
+
+# Backend engine. One of vllm, sglang, trtllm -- the DynamoGraphDeployment CRD enforces
+# the enum, so a typo fails at apply time rather than at pod start. The image above has to
+# match: each runtime image ships only its own backend's entrypoint module.
+backend_framework: vllm
+
+# Shared storage mounted into every component, following the convention used by the
+# rayserve and hf-snapshot charts. Model weights are read from /fsx.
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+
+# Applied to components that request a GPU. The cuda NodePool taints its nodes
+# nvidia.com/gpu=true:NoSchedule.
+gpu_tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+# Each entry becomes one element of spec.components. Keys are the component names Dynamo
+# uses for discovery and for the pod label nvidia.com/dynamo-component-type; Helm iterates
+# the map in key order, so rendering is deterministic.
+#
+# Per-component fields:
+#   type          frontend | worker | prefill | decode | planner | epp (CRD enum)
+#   replicas      component replica count
+#   args          argv passed to python3; the entrypoint and all engine flags live here
+#                 rather than being synthesized by the template, so what runs is exactly
+#                 what the values file says
+#   node_types    list of permitted node.kubernetes.io/instance-type values, as a required
+#                 node affinity. Set this on every GPU component: the cuda NodePool admits
+#                 g4dn.xlarge (T4, 16GB) through g6e.48xlarge, and Karpenter picks the
+#                 cheapest instance that satisfies the pod, which for a bare
+#                 "nvidia.com/gpu: 1" request is a T4 that most models will not fit on.
+#                 Prefer a list of same-VRAM-class types over a single type, so the
+#                 deployment survives InsufficientInstanceCapacity on any one of them.
+#   node_type     single instance type, as a nodeSelector. Ignored if node_types is set.
+#   shared_memory_size
+#                 size of the tmpfs the operator mounts at /dev/shm. Omit for the operator
+#                 default of 8Gi, set "0" to disable. vLLM needs this for its worker IPC.
+#   node_count    for multinode components; total GPUs is node_count x GPU request
+#   env           extra environment variables
+components:
+  Frontend:
+    type: frontend
+    replicas: 1
+    args:
+      - -m
+      - dynamo.frontend
+      - --http-port
+      - "8000"
+    resources:
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 8Gi

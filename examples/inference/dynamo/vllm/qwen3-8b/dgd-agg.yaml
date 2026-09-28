@@ -1,0 +1,85 @@
+image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
+image_pull_policy: IfNotPresent
+backend_framework: vllm
+
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+
+gpu_tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+components:
+  # OpenAI-compatible HTTP endpoint. No GPU, so it lands on a CPU node and is not
+  # tainted out of the default NodePool.
+  Frontend:
+    type: frontend
+    replicas: 1
+    args:
+      - -m
+      - dynamo.frontend
+      - --http-port
+      - "8000"
+    resources:
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 8Gi
+
+  # Aggregated worker: prefill and decode in the same process on the same GPU. This is
+  # dynamo.vllm's default, so no --disaggregation-mode flag is needed.
+  VllmWorker:
+    type: worker
+    replicas: 1
+    # Single-GPU instances with at least 24GB of VRAM and 32GiB of system memory.
+    # Qwen3-8B is ~16GB in bf16, so 24GB leaves room for the KV cache at 16k context.
+    #
+    # Constraining this is not optional. The cuda NodePool also admits g4dn.xlarge, whose
+    # T4 has 16GB -- enough for the weights and nothing else, so vLLM fails to allocate a
+    # KV cache and the pod crash-loops. Karpenter picks the cheapest instance satisfying
+    # "nvidia.com/gpu: 1", which is that T4.
+    #
+    # A list rather than a single type on purpose: g6e.xlarge is the best fit on paper, but
+    # newer GPU families run at InsufficientInstanceCapacity often enough that pinning to
+    # one type turns a transient AWS condition into a deployment that never schedules.
+    # Each size is its own EC2 capacity pool, so listing several sizes per family matters
+    # as much as listing several families.
+    node_types:
+      - g6e.xlarge      # 1x L40S 48GB,  4 vCPU /  32GiB
+      - g6e.2xlarge     # 1x L40S 48GB,  8 vCPU /  64GiB
+      - g6e.4xlarge     # 1x L40S 48GB, 16 vCPU / 128GiB
+      - g6e.8xlarge     # 1x L40S 48GB, 32 vCPU / 256GiB
+      - g6.2xlarge      # 1x L4   24GB,  8 vCPU /  32GiB
+      - g6.4xlarge      # 1x L4   24GB, 16 vCPU /  64GiB
+      - g6.8xlarge      # 1x L4   24GB, 32 vCPU / 128GiB
+      - g5.2xlarge      # 1x A10G 24GB,  8 vCPU /  32GiB
+      - g5.4xlarge      # 1x A10G 24GB, 16 vCPU /  64GiB
+      - g5.8xlarge      # 1x A10G 24GB, 32 vCPU / 128GiB
+      - g7.2xlarge      # 1x RTX PRO 6000 96GB
+      - g7e.2xlarge     # 1x RTX PRO 6000 96GB
+    # vLLM needs the shm for its worker IPC.
+    shared_memory_size: 8Gi
+    args:
+      - -m
+      - dynamo.vllm
+      - --model
+      - /fsx/pretrained-models/Qwen/Qwen3-8B
+      - --served-model-name
+      - qwen3-8b
+      - --max-model-len
+      - "16384"
+    resources:
+      requests:
+        cpu: "2"
+        memory: 16Gi
+        nvidia.com/gpu: "1"
+      limits:
+        cpu: "3"
+        memory: 24Gi
+        nvidia.com/gpu: "1"

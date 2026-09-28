@@ -1,0 +1,9 @@
+apiVersion: v2
+name: dynamo
+description: A Helm chart for serving models with NVIDIA Dynamo
+type: application
+version: 1.0.0
+# The Dynamo release this chart targets. Must match the operator installed by
+# charts/dynamo-platform, because the DynamoGraphDeployment schema and the runtime
+# images are versioned together.
+appVersion: "1.5.0"

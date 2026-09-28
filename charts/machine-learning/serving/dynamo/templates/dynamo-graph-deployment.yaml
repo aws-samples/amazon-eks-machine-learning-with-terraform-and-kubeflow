@@ -1,0 +1,107 @@
+apiVersion: nvidia.com/v1beta1
+kind: DynamoGraphDeployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  backendFramework: {{ .Values.backend_framework }}
+  components:
+  {{- range $name, $c := .Values.components }}
+  - name: {{ $name }}
+    type: {{ $c.type }}
+    replicas: {{ $c.replicas | default 1 }}
+    {{- if $c.shared_memory_size }}
+    sharedMemorySize: {{ $c.shared_memory_size | quote }}
+    {{- end }}
+    {{- if $c.node_count }}
+    multinode:
+      nodeCount: {{ $c.node_count }}
+    {{- end }}
+    podTemplate:
+      metadata:
+        annotations:
+          karpenter.sh/do-not-disrupt: "true"
+          sidecar.istio.io/inject: 'false'
+          app.kubernetes.io/instance: {{ $.Release.Name }}
+          app.kubernetes.io/managed-by: {{ $.Release.Service }}
+      spec:
+        {{- /* node_types (a list) is preferred over node_type (a single type): pinning to
+               exactly one instance type makes a deployment fail outright when that type is
+               at InsufficientInstanceCapacity in every subnet the cluster has, which is
+               common for the newest GPU families. A list of types with comparable VRAM
+               keeps the guard against undersized GPUs while letting Karpenter fall back. */}}
+        {{- if $c.node_types }}
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
+                    - key: node.kubernetes.io/instance-type
+                      operator: In
+                      values:
+                      {{- range $t := $c.node_types }}
+                        - {{ $t }}
+                      {{- end }}
+        {{- else if $c.node_type }}
+        nodeSelector:
+          node.kubernetes.io/instance-type: {{ $c.node_type }}
+        {{- end }}
+        {{- /* Tolerate the cuda NodePool taint only for components that ask for a GPU. */}}
+        {{- if and $.Values.gpu_tolerations (dig "requests" "nvidia.com/gpu" "" ($c.resources | default dict)) }}
+        tolerations:
+        {{- range $t := $.Values.gpu_tolerations }}
+          - key: {{ $t.key }}
+            {{- if $t.operator }}
+            operator: "{{ $t.operator }}"
+            {{- end }}
+            {{- if $t.effect }}
+            effect: "{{ $t.effect }}"
+            {{- end }}
+        {{- end }}
+        {{- end }}
+        containers:
+        {{- /* The operator keys off a container named "main" when it injects the
+               discovery and metrics environment into the pod. */}}
+        - name: main
+          image: {{ $.Values.image }}
+          imagePullPolicy: {{ $.Values.image_pull_policy }}
+          command: ["python3"]
+          args:
+          {{- range $a := $c.args }}
+            - {{ $a | quote }}
+          {{- end }}
+          {{- if $c.env }}
+          env:
+          {{- range $v := $c.env }}
+            - name: {{ $v.name }}
+              value: "{{ tpl $v.value $ }}"
+          {{- end }}
+          {{- end }}
+          volumeMounts:
+          {{- $pv_index := 1 }}
+          {{- range $pv := $.Values.pvc }}
+            - mountPath: {{ $pv.mount_path }}
+              name: pv-{{ $pv_index }}
+            {{- $pv_index = add $pv_index 1 }}
+          {{- end }}
+          resources:
+            requests:
+            {{- range $k, $v := (($c.resources | default dict).requests | default dict) }}
+              {{ $k }}: {{ $v | quote }}
+            {{- end }}
+            limits:
+            {{- range $k, $v := (($c.resources | default dict).limits | default dict) }}
+              {{ $k }}: {{ $v | quote }}
+            {{- end }}
+        volumes:
+        {{- $pv_index := 1 }}
+        {{- range $pv := $.Values.pvc }}
+          - name: pv-{{ $pv_index }}
+            persistentVolumeClaim:
+              claimName: {{ $pv.name }}
+          {{- $pv_index = add $pv_index 1 }}
+        {{- end }}
+  {{- end }}

@@ -1181,8 +1181,45 @@ resource "helm_release" "prometheus" {
   timeout          = 300
   wait             = true
 
+  # Discover monitoring resources from any chart, not only from this Helm release.
+  #
+  # Each of these five toggles defaults to true, which makes kube-prometheus-stack set the
+  # corresponding selector to {matchLabels: {release: prometheus}} instead of {}. A chart that
+  # ships its own ServiceMonitor, PodMonitor, Probe, PrometheusRule or ScrapeConfig does not
+  # carry this release's name as a label, so Prometheus ignores it. The failure mode is the bad
+  # kind: the resource is created, `kubectl get podmonitor -A` lists it, and Prometheus simply
+  # has no such target -- there is no error anywhere to notice.
+  #
+  # dynamo-platform is the first chart here to hit it. It creates five PodMonitors by default
+  # (frontend, worker, router, planner, epp) carrying only app.kubernetes.io/managed-by, and
+  # those are how Dynamo publishes its TTFT and inter-token-latency histograms. Only the
+  # PodMonitor toggle is strictly needed for that chart, but the trap is identical on all five,
+  # so all five are set rather than waiting to be bitten once per resource kind. The narrower
+  # alternative -- labelling Dynamo's PodMonitors release=prometheus through the chart's
+  # dynamo.metrics.podMonitors.labels -- would hardcode this release's name into the dynamo
+  # install, and would have to be repeated in every future chart.
   set {
     name  = "prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues"
+    value = false
+  }
+
+  set {
+    name  = "prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues"
+    value = false
+  }
+
+  set {
+    name  = "prometheus.prometheusSpec.probeSelectorNilUsesHelmValues"
+    value = false
+  }
+
+  set {
+    name  = "prometheus.prometheusSpec.ruleSelectorNilUsesHelmValues"
+    value = false
+  }
+
+  set {
+    name  = "prometheus.prometheusSpec.scrapeConfigSelectorNilUsesHelmValues"
     value = false
   }
 
@@ -2048,6 +2085,42 @@ check "single_dcgm_exporter" {
       "set cloudwatch_dcgm_exporter_enabled = false.",
     ])
   }
+}
+
+resource "helm_release" "dynamo_platform" {
+  count = var.dynamo_enabled ? 1 : 0
+
+  name             = "dynamo-platform"
+  chart            = "${var.local_helm_repo}/dynamo-platform"
+  version          = "1.0.0"
+  namespace        = var.dynamo_namespace
+  create_namespace = true
+  cleanup_on_fail  = true
+  timeout          = 600
+  wait             = true
+
+  # A local chart, deliberately: no `repository` line and no chart dependencies. The vendored
+  # chart under charts/dynamo-platform is self-contained, so this install needs no reachable
+  # chart repository and no `helm dependency build`. See that chart's Chart.yaml for why the
+  # upstream nats / etcd / kai-scheduler / grove / snapshot subcharts are dropped rather than
+  # merely disabled -- all five already default to install: false upstream, and Dynamo's
+  # default discoveryBackend of "kubernetes" needs none of them.
+  #
+  # Helm applies no CRDs here. The operator Deployment runs a crd-apply initContainer that
+  # server-side-applies the six CRDs baked into the operator image. That is what the timeout
+  # is sized for: before the readiness probe passes, the pod has to pull the operator image,
+  # apply those CRDs, and then have the built-in cert-controller mint webhook certificates and
+  # patch the caBundle into four Mutating and four Validating webhook configurations. 600s
+  # rather than the default 300s for that reason.
+
+  # Ordered after cluster-autoscaler to match every other release in this file, and after
+  # prometheus as well, even though nothing here creates a ServiceMonitor by default (the
+  # operator's ServiceMonitor is off -- verified by rendering the chart, not assumed). It is
+  # listed because enabling that toggle would create one, and a ServiceMonitor cannot be
+  # created before monitoring.coreos.com/v1 is registered by kube-prometheus-stack: the exact
+  # failure already paid for by helm_release.dcgm_exporter above. The ordering costs nothing
+  # when prometheus_enabled = false, since that release is then count = 0.
+  depends_on = [helm_release.cluster-autoscaler, helm_release.prometheus]
 }
 
 module "slurm" {

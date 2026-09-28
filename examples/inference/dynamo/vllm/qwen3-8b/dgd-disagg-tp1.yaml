@@ -1,0 +1,147 @@
+# Disaggregated serving on two single-GPU nodes: prefill and decode each get one GPU at
+# tensor-parallel-size 1, and the KV cache crosses the network between them over NIXL.
+#
+# Use this instead of dgd-disagg.yaml when 4-GPU instances (g5/g6/g6e/g7/g7e .12xlarge) are
+# unavailable -- at time of writing every one of them was at InsufficientInstanceCapacity in
+# all three of the cluster's AZs, while single-GPU shapes launched without trouble. It is
+# also the stricter test of disaggregation: on a 4-GPU node the two workers exchange KV over
+# the host, whereas here the transfer is genuinely pod-to-pod across nodes.
+image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
+image_pull_policy: IfNotPresent
+backend_framework: vllm
+
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+
+gpu_tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+components:
+  Frontend:
+    type: frontend
+    replicas: 1
+    args:
+      - -m
+      - dynamo.frontend
+      - --http-port
+      - "8000"
+    resources:
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 8Gi
+
+  VllmPrefillWorker:
+    type: prefill
+    replicas: 1
+    # Single-GPU types with at least 24GB of VRAM, so never a 16GB T4. Karpenter always
+    # picks the cheapest type that fits, so the larger shapes at the end cost nothing when
+    # the small ones are available and are what keeps the deployment schedulable when they
+    # are not.
+    #
+    # The xlarge shapes have only 16GiB of system memory, which is why the requests below
+    # are trimmed to fit them: they are the highest-volume GPU pools in the fleet and were
+    # the only ones with capacity when this example was verified. vLLM mmaps the safetensors
+    # shards rather than reading them into anonymous memory, so a 15GiB checkpoint loads
+    # comfortably under a 14Gi limit.
+    node_types:
+      - g5.xlarge
+      - g6.xlarge
+      - g6e.xlarge
+      - g6e.2xlarge
+      - g6e.4xlarge
+      - g6e.8xlarge
+      - g6e.16xlarge
+      - g6.2xlarge
+      - g6.4xlarge
+      - g6.8xlarge
+      - g6.16xlarge
+      - g5.2xlarge
+      - g5.4xlarge
+      - g5.8xlarge
+      - g5.16xlarge
+      - g7.2xlarge
+      - g7.4xlarge
+      - g7.8xlarge
+      - g7e.2xlarge
+      - g7e.4xlarge
+      - g7e.8xlarge
+    shared_memory_size: 8Gi
+    args:
+      - -m
+      - dynamo.vllm
+      - --model
+      - /fsx/pretrained-models/Qwen/Qwen3-8B
+      - --served-model-name
+      - qwen3-8b
+      - --max-model-len
+      - "16384"
+      - --disaggregation-mode
+      - prefill
+      - --kv-transfer-config
+      - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+    resources:
+      requests:
+        cpu: "2"
+        memory: 11Gi
+        nvidia.com/gpu: "1"
+      limits:
+        cpu: "3"
+        memory: 14Gi
+        nvidia.com/gpu: "1"
+
+  VllmDecodeWorker:
+    type: decode
+    replicas: 1
+    node_types:
+      - g5.xlarge
+      - g6.xlarge
+      - g6e.xlarge
+      - g6e.2xlarge
+      - g6e.4xlarge
+      - g6e.8xlarge
+      - g6e.16xlarge
+      - g6.2xlarge
+      - g6.4xlarge
+      - g6.8xlarge
+      - g6.16xlarge
+      - g5.2xlarge
+      - g5.4xlarge
+      - g5.8xlarge
+      - g5.16xlarge
+      - g7.2xlarge
+      - g7.4xlarge
+      - g7.8xlarge
+      - g7e.2xlarge
+      - g7e.4xlarge
+      - g7e.8xlarge
+    shared_memory_size: 8Gi
+    args:
+      - -m
+      - dynamo.vllm
+      - --model
+      - /fsx/pretrained-models/Qwen/Qwen3-8B
+      - --served-model-name
+      - qwen3-8b
+      - --max-model-len
+      - "16384"
+      - --disaggregation-mode
+      - decode
+      - --kv-transfer-config
+      - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+    resources:
+      requests:
+        cpu: "2"
+        memory: 11Gi
+        nvidia.com/gpu: "1"
+      limits:
+        cpu: "3"
+        memory: 14Gi
+        nvidia.com/gpu: "1"

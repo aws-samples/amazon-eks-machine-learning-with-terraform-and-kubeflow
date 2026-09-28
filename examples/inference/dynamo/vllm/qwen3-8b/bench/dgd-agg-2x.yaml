@@ -1,0 +1,73 @@
+# Aggregated serving with two replicas, for benchmarking against dgd-disagg-tp1.yaml.
+#
+# This exists only to make the comparison fair. Measuring disaggregation on 2 GPUs against
+# aggregation on 1 GPU measures the second GPU, not Dynamo. Both this file and
+# dgd-disagg-tp1.yaml occupy two single-GPU nodes with identical resource requests and an
+# identical node_types list, so the only difference is the serving topology:
+#
+#   this file             2 aggregated workers, each doing its own prefill and decode
+#   dgd-disagg-tp1.yaml   1 prefill worker + 1 decode worker, KV cache sent over NIXL
+#
+# The frontend load-balances across both registered workers here, so the two replicas are
+# independent full-stack engines rather than a split pipeline.
+image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
+image_pull_policy: IfNotPresent
+backend_framework: vllm
+
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+
+gpu_tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+components:
+  Frontend:
+    type: frontend
+    replicas: 1
+    args:
+      - -m
+      - dynamo.frontend
+      - --http-port
+      - "8000"
+    resources:
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 8Gi
+
+  VllmWorker:
+    type: worker
+    replicas: 2
+    # ONE instance type, unlike the example files which list many for capacity resilience,
+    # and it must be the SAME type dgd-disagg-2x.yaml pins to. The comparison is only valid
+    # if every worker runs on an identical GPU: a run that happened to place one worker on
+    # an L40S and the other on an L4 would be measuring the GPUs, not the topology.
+    # g6.xlarge is an L4 24GB with 4 vCPU and 16GiB of system memory.
+    node_types:
+      - g6.xlarge
+    shared_memory_size: 8Gi
+    args:
+      - -m
+      - dynamo.vllm
+      - --model
+      - /fsx/pretrained-models/Qwen/Qwen3-8B
+      - --served-model-name
+      - qwen3-8b
+      - --max-model-len
+      - "16384"
+    resources:
+      requests:
+        cpu: "2"
+        memory: 11Gi
+        nvidia.com/gpu: "1"
+      limits:
+        cpu: "3"
+        memory: 14Gi
+        nvidia.com/gpu: "1"

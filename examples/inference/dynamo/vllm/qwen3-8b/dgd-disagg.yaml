@@ -1,0 +1,128 @@
+image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
+image_pull_policy: IfNotPresent
+backend_framework: vllm
+
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+
+gpu_tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+components:
+  Frontend:
+    type: frontend
+    replicas: 1
+    args:
+      - -m
+      - dynamo.frontend
+      - --http-port
+      - "8000"
+    resources:
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 8Gi
+
+  # Prefill-only worker. Computes the KV cache for the prompt and hands it to the decode
+  # worker over NIXL, so the two phases stop competing for the same SMs.
+  #
+  # --kv-transfer-config is mandatory here, not merely advisable: dynamo.vllm raises
+  # "When using --disaggregation-mode prefill, you must explicitly provide
+  # --kv-transfer-config" and exits. The older --connector flag is rejected outright in
+  # 1.5.0, so examples written against Dynamo 0.x will not run.
+  VllmPrefillWorker:
+    type: prefill
+    replicas: 1
+    # 4-GPU nodes; this worker takes 2 GPUs and the decode worker the other 2. Listed as a
+    # set for the same capacity reason as the aggregated example -- see dgd-agg.yaml.
+    node_types:
+      - g6e.12xlarge    # 4x L40S 48GB
+      - g6.12xlarge     # 4x L4   24GB
+      - g5.12xlarge     # 4x A10G 24GB
+      - g7.12xlarge     # 4x RTX PRO 6000 96GB
+      - g7e.12xlarge    # 4x RTX PRO 6000 96GB
+    shared_memory_size: 16Gi
+    args:
+      - -m
+      - dynamo.vllm
+      - --model
+      - /fsx/pretrained-models/Qwen/Qwen3-8B
+      - --served-model-name
+      - qwen3-8b
+      - --max-model-len
+      - "16384"
+      - --tensor-parallel-size
+      - "2"
+      # vLLM's default memory target leaves no headroom at TP=2 on a 24GB card. Sharding the
+      # weights across two GPUs shrinks them to 7.6GiB per rank, so vLLM grows the KV cache to
+      # fill the default fraction -- and then CUDA graph capture plus the NIXL registration
+      # buffers push past it. Both workers died with "CUDA out of memory. Tried to allocate
+      # 150.00 MiB. GPU 0 has a total capacity of 22.30 GiB of which 100.69 MiB is free" at
+      # 99.5% occupancy. 0.80 still leaves ~10GiB of KV cache per rank.
+      - --gpu-memory-utilization
+      - "0.80"
+      - --disaggregation-mode
+      - prefill
+      - --kv-transfer-config
+      - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+    resources:
+      requests:
+        cpu: "8"
+        memory: 64Gi
+        nvidia.com/gpu: "2"
+      limits:
+        cpu: "12"
+        memory: 96Gi
+        nvidia.com/gpu: "2"
+
+  # Decode-only worker. Needs the same connector configured to receive the KV cache the
+  # prefill worker sends.
+  VllmDecodeWorker:
+    type: decode
+    replicas: 1
+    node_types:
+      - g6e.12xlarge
+      - g6.12xlarge
+      - g5.12xlarge
+      - g7.12xlarge
+      - g7e.12xlarge
+    shared_memory_size: 16Gi
+    args:
+      - -m
+      - dynamo.vllm
+      - --model
+      - /fsx/pretrained-models/Qwen/Qwen3-8B
+      - --served-model-name
+      - qwen3-8b
+      - --max-model-len
+      - "16384"
+      - --tensor-parallel-size
+      - "2"
+      # vLLM's default memory target leaves no headroom at TP=2 on a 24GB card. Sharding the
+      # weights across two GPUs shrinks them to 7.6GiB per rank, so vLLM grows the KV cache to
+      # fill the default fraction -- and then CUDA graph capture plus the NIXL registration
+      # buffers push past it. Both workers died with "CUDA out of memory. Tried to allocate
+      # 150.00 MiB. GPU 0 has a total capacity of 22.30 GiB of which 100.69 MiB is free" at
+      # 99.5% occupancy. 0.80 still leaves ~10GiB of KV cache per rank.
+      - --gpu-memory-utilization
+      - "0.80"
+      - --disaggregation-mode
+      - decode
+      - --kv-transfer-config
+      - '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+    resources:
+      requests:
+        cpu: "8"
+        memory: 64Gi
+        nvidia.com/gpu: "2"
+      limits:
+        cpu: "12"
+        memory: 96Gi
+        nvidia.com/gpu: "2"

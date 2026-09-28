@@ -163,7 +163,69 @@ def wait_for_rayservice_ready(release_name:str,
     print(f"Timeout waiting for RayService to be Running and Healthy")
     return False
 
-def find_k8s_service(service_name:str, 
+def wait_for_dynamo_ready(release_name:str,
+                          namespace:str='kubeflow-user-example-com',
+                          interval:float=60,
+                          timeout:float=1800) -> bool:
+    """Wait for a DynamoGraphDeployment to be ready and all its components available"""
+    print(f"Waiting for DynamoGraphDeployment '{release_name}' to be ready...")
+    start_time = time.time()
+
+    while time.time() - start_time < timeout:
+        try:
+            dgds = custom_api.list_namespaced_custom_object(
+                group="nvidia.com",
+                version="v1beta1",
+                namespace=namespace,
+                plural="dynamographdeployments"
+            )
+
+            matching_dgd = None
+            for dgd in dgds['items']:
+                if (dgd.get('metadata', {}).get('labels', {}).get('app.kubernetes.io/instance') == release_name):
+                    matching_dgd = dgd
+                    break
+
+            if not matching_dgd:
+                print(f"No DynamoGraphDeployment found for release: {release_name}, waiting...")
+                time.sleep(interval)
+                continue
+
+            dgd_name = matching_dgd['metadata']['name']
+            status = matching_dgd.get('status', {})
+            state = status.get('state', 'initializing')
+
+            # Per-component replica counts, so a single worker stuck Pending on GPU capacity is
+            # visible here rather than only in `kubectl describe pod`.
+            components = status.get('components', {})
+            for name, component in components.items():
+                print(f"  {dgd_name}/{name}: "
+                      f"ready={component.get('readyReplicas', 0)}/{component.get('replicas', 0)} "
+                      f"gpus_per_replica={component.get('gpusPerReplica', 0)}")
+
+            conditions = status.get('conditions', [])
+            ready_condition = next((c for c in conditions if c.get("type") == "Ready"), None)
+            ready = ready_condition.get('status') if ready_condition else 'Unknown'
+            print(f"DynamoGraphDeployment {dgd_name}: state={state}, Ready={ready}")
+
+            if state == 'failed':
+                message = ready_condition.get('message', '') if ready_condition else ''
+                print(f"DynamoGraphDeployment {dgd_name} failed! {message}")
+                return False
+
+            if state == 'successful' and ready == 'True':
+                print(f"DynamoGraphDeployment {dgd_name} in namespace {namespace} is Ready!")
+                return True
+
+        except Exception as e:
+            print(f"Error checking DynamoGraphDeployment: {e}")
+
+        time.sleep(interval)
+
+    print(f"Timeout waiting for DynamoGraphDeployment to be Ready")
+    return False
+
+def find_k8s_service(service_name:str,
                      namespace:str='kubeflow-user-example-com') -> str:
 
     target_service = ""
