@@ -14,7 +14,7 @@
 # -- Container image configuration
 # vLLM backend example (CUDA):
 #   image:
-#     name: nvcr.io/nvidia/tritonserver:25.10-vllm-python-py3
+#     name: nvcr.io/nvidia/tritonserver:26.08-vllm-python-py3
 # Neuron example (image built from custom container):
 #   image:
 #     name:

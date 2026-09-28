@@ -17,7 +17,7 @@ inline_script:
   - |+
     cat > /tmp/hf_to_trtllm.sh <<'EOF'
     #!/bin/bash
-    set -xe
+    set -xeo pipefail
     mkdir -p $LOG_ROOT
     TP_SIZE=8
     PP_SIZE=1
@@ -31,19 +31,19 @@ inline_script:
   - |+
     cat > /tmp/trtllm_engine.sh <<'EOF'
     #!/bin/bash
-    set -xe
+    set -xeo pipefail
     mkdir -p $LOG_ROOT
     TP_SIZE=8
     PP_SIZE=1
     OUTPUT_LOG=$LOG_ROOT/build_trtllm.log
     CKPT_PATH=/tmp/ckpt
     ENGINE_DIR=/tmp/engine
-    trtllm-build --checkpoint_dir ${CKPT_PATH} --max_num_tokens 8192 --gpus_per_node 8 --remove_input_padding enable --paged_kv_cache enable --context_fmha enable --output_dir ${ENGINE_DIR} --max_batch_size 4 2>&1 | tee $OUTPUT_LOG
+    trtllm-build --checkpoint_dir ${CKPT_PATH} --max_num_tokens 8192 --remove_input_padding enable --paged_kv_cache enable --context_fmha enable --output_dir ${ENGINE_DIR} --max_batch_size 4 2>&1 | tee $OUTPUT_LOG
     EOF
   - |+
     cat > /tmp/triton_model.sh <<'EOF'
     #!/bin/bash
-    set -xe
+    set -xeo pipefail
     SCRIPT_DIR=TensorRT-LLM/triton_backend
     cd $SCRIPT_DIR
     mkdir -p $LOG_ROOT
@@ -69,9 +69,20 @@ inline_script:
     python3 ${FILL_TEMPLATE_SCRIPT} -i ${MODEL_REPO}/tensorrt_llm/config.pbtxt triton_max_batch_size:${MAX_BATCH_SIZE},decoupled_mode:${DECOUPLED_MODE},engine_dir:${ENGINE_DIR},max_queue_delay_microseconds:${MAX_QUEUE_DELAY_MS},batching_strategy:inflight_fused_batching,encoder_input_features_data_type:${ENCODER_INPUT_DATA_TYPE},triton_backend:tensorrtllm 2>&1 | tee -a $OUTPUT_LOG
     sed -i 's/${logits_datatype}/TYPE_FP32/g' ${MODEL_REPO}/ensemble/config.pbtxt
     sed -i 's/${logits_datatype}/TYPE_FP32/g' ${MODEL_REPO}/tensorrt_llm/config.pbtxt
+    sed -i 's/${prompt_embedding_table_data_type}/TYPE_FP16/g' ${MODEL_REPO}/tensorrt_llm/config.pbtxt
     sed -i 's/${logits_datatype}/TYPE_FP32/g' ${MODEL_REPO}/tensorrt_llm_bls/config.pbtxt
+    sed -i 's/${prompt_embedding_table_data_type}/TYPE_FP16/g' ${MODEL_REPO}/tensorrt_llm_bls/config.pbtxt
     EOF
-pre_script: 
+pre_script:
+  # /etc/shinit_v2 in the NGC base image exports NCCL_NET_PLUGIN=ofi whenever the EFA
+  # driver is visible under /sys, which it is on any EFA-capable instance type even when
+  # no EFA device is allocated to the pod. aws-ofi-nccl then fails to initialize and NCCL
+  # calls through its null plugin function table, segfaulting every rank right after the
+  # engines load. The image re-sources shinit_v2 through BASH_ENV, so a container env var
+  # cannot override it; it has to be exported here. Tensor parallelism stays within one
+  # host, so no network plugin is needed. Drop these when the pod requests EFA devices.
+  - export NCCL_NET_PLUGIN=none
+  - export NCCL_TUNER_PLUGIN=none
   - set -xe
   - bash /tmp/hf_to_trtllm.sh
   - bash /tmp/trtllm_engine.sh

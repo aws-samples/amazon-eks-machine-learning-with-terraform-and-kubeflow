@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
   - name: test-gpu 
-    image: 'nvcr.io/nvidia/tritonserver:25.08-vllm-python-py3'
+    image: 'nvcr.io/nvidia/tritonserver:26.08-vllm-python-py3'
     command: ["/bin/bash"]
     securityContext:
       privileged: true

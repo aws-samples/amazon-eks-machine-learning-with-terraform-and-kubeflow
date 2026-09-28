@@ -8,6 +8,7 @@ logs/*
 *.log
 aloasi.txt
 eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform.tfvars
+eks-cluster/terraform/**/backend.tf
 /shelf/
 /workspace.xml
 # Editor-based HTTP Client requests

@@ -12,7 +12,7 @@
 # -- Container image configuration
 # Example:
 #   image:
-#     name: nvcr.io/nvidia/tritonserver:25.10-vllm-python-py3
+#     name: nvcr.io/nvidia/tritonserver:26.08-vllm-python-py3
 #     pull_policy: Always
 image:
   name:

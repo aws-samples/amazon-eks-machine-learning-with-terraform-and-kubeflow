@@ -146,21 +146,24 @@ def start_ray_cluster(args):
         "--allow-run-as-root",
     ]
 
+    # Open MPI 5 (base image 26.08 and later) is stricter than Open MPI 4 in two ways:
+    # long options must use the double-dash form, and a global process count cannot be
+    # combined with the per-app-context "-n 1" below -- doing so over-subscribes the
+    # one slot per host and fails with "All nodes ... are already filled". The process
+    # count is therefore left to the per-context "-n" arguments.
     cmd_args += [
         "--report-bindings",
-        "-map-by",
+        "--map-by",
         "slot",
-        "-mca",
+        "--mca",
         "btl_tcp_if_exclude",
         "lo,docker0",
-        "-mca",
+        "--mca",
         "oob_tcp_if_exclude",
         "lo,docker0",
-        "-mca",
+        "--mca",
         "plm_rsh_agent",
         "kubessh",
-        "-np",
-        f"{num_workers}",
         "--host",
         ",".join(workers_with_mpi_slots),
     ]

@@ -98,6 +98,17 @@ server:
       value: /efs/home/{{ .Release.Name }}/model_repository
     - name: MODEL_PATH
       value: /fsx/pretrained-models/mistralai/Mixtral-8x22B-Instruct-v0.1
+    # The raylet prestarts one idle python worker per CPU. On a node this large that fork
+    # storm means none of them register inside the default 60s, and the vLLM driver's own
+    # raylet registration reply is lost too, so ray.init() blocks forever. Both knobs are
+    # needed: cap the CPU count ray start autodetects (32 is ample for
+    # tensor_parallel_size x pipeline_parallel_size actors), and allow enough time for
+    # interpreter startup, which is slow in this image. RAY_OVERRIDE_RESOURCES is escaped
+    # because the chart renders env values inside double quotes.
+    - name: RAY_OVERRIDE_RESOURCES
+      value: '{\"CPU\": 32}'
+    - name: RAY_worker_register_timeout_seconds
+      value: "600"
   command:
     - python3
   args:
