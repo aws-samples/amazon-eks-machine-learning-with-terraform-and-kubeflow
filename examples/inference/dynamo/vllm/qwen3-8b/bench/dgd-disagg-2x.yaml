@@ -1,11 +1,8 @@
-# Disaggregated serving, pinned to a single instance type, for benchmarking against
-# bench/dgd-agg-2x.yaml. Identical to ../dgd-disagg-tp1.yaml except that node_types is one
-# type rather than a list.
+# Disaggregated serving pinned to a single instance type, for benchmarking against
+# dgd-agg-2x.yaml. Identical to ../dgd-disagg-tp1.yaml except that node_types is one type.
 #
-# The pin is the point: the comparison is only valid if both configurations run on identical
-# GPUs. The example file lists many types so it stays schedulable under capacity pressure,
-# but that means a run can get an L40S for one worker and an L4 for the other, which would
-# measure the GPUs rather than the serving topology.
+# The pin is the point: the example file's list of types can place an L40S for one worker and an
+# L4 for the other, which would measure the GPUs rather than the serving topology.
 image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
 image_pull_policy: IfNotPresent
 backend_framework: vllm
@@ -41,16 +38,11 @@ components:
   VllmPrefillWorker:
     type: prefill
     replicas: 1
-    # ONE instance type, unlike the example files which list many for capacity resilience.
-    # The comparison is only valid if every worker runs on an identical GPU: a run that
-    # happened to place one worker on an L40S and the other on an L4 would be measuring the
-    # GPUs, not the topology. g6.xlarge is an L4 24GB with 4 vCPU and 16GiB of system memory
-    # -- the highest-volume single-GPU pool with enough VRAM for Qwen3-8B plus a KV cache.
+    # ONE instance type, and the SAME one dgd-agg-2x.yaml pins to: mixed GPUs across workers
+    # would measure the GPUs rather than the topology. g6.xlarge is an L4 24GB, 4 vCPU / 16GiB.
     #
-    # Pinning trades capacity resilience for comparability, and that trade is real: g6e
-    # was exhausted in all three of the cluster's AZs while this was being measured, which
-    # is why the pin is g6 and not g6e. If the pods stay Pending, repoint the pin -- but
-    # repoint it in BOTH bench files, or the numbers stop meaning anything.
+    # Pinning trades schedulability for comparability. If the pods stay Pending, repoint the pin
+    # -- but repoint it in BOTH bench files, or the numbers stop meaning anything.
     node_types:
       - g6.xlarge
     shared_memory_size: 8Gi
@@ -80,7 +72,7 @@ components:
   VllmDecodeWorker:
     type: decode
     replicas: 1
-    # Same pin as the prefill worker above, for the reason given there.
+    # Same pin as the prefill worker, for the reason given there.
     node_types:
       - g6.xlarge
     shared_memory_size: 8Gi

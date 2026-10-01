@@ -429,6 +429,10 @@ variable "dynamo_enabled" {
   # them -- the operator is a single ~1 CPU / 2Gi pod on a CPU node, and GPUs are consumed
   # only when a DynamoGraphDeployment is applied (see examples/inference/dynamo/).
   #
+  # This also installs Volcano, in volcano.tf, because the operator will not enable its
+  # multi-node (LeaderWorkerSet) code path unless the scheduling.volcano.sh API group exists.
+  # See that file for why it is tied to this flag rather than carrying one of its own.
+  #
   # Off by default all the same, matching kserve_enabled and every other optional serving
   # platform here: an inference stack nobody asked for should not appear in a cluster, and
   # the six CRDs it registers are cluster-scoped. Set it to true to run the examples.

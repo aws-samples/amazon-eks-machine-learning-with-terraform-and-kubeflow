@@ -184,6 +184,16 @@ spec:
           - "p5.48xlarge"
           - "p5e.48xlarge"
           - "p5en.48xlarge"
+          # g6e (L40S) sizes that both support EFA and clear the 100 Gbps floor above. Only these
+          # three qualify: g6e.8xlarge and g6e.16xlarge are EFA-capable but rated 25 and 35 Gbps,
+          # so the bandwidth requirement excludes them, and g6e.xlarge--4xlarge have no EFA at
+          # all. Any size added here must also be listed under `supportedInstanceLabels` on the
+          # aws-efa-k8s-device-plugin release in main.tf, or the node launches into this pool and
+          # never advertises vpc.amazonaws.com/efa -- leaving pods that request it unschedulable
+          # with no indication that the nodepool was the wrong half of the fix.
+          - "g6e.12xlarge"
+          - "g6e.24xlarge"
+          - "g6e.48xlarge"
       taints:
       - key: nvidia.com/gpu
         value: "true"

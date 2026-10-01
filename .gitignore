@@ -21,3 +21,21 @@ eks-cluster/terraform/**/backend.tf
 /.idea/*
 /docs/eks-agent.md
 .claude/
+
+# Terraform variable files are not committed, templates included. They pin a region, a set of
+# AZs and a cluster name, and the bucket names they reference commonly carry the AWS account ID
+# -- none of which belongs in a public fork, and all of which is wrong for anyone else's account.
+# Keep working copies outside any checkout (~/clusters/<cluster>/) and document the *choices* in
+# a README rather than shipping a file that hardcodes them.
+#
+# `*.tfvars` does not match `foo.tfvars.example`, hence the second pattern. The two upstream
+# terraform.tfvars.example files predate this rule and are left tracked deliberately: they are
+# not ours to remove, and the negations below keep them working.
+*.tfvars
+*.tfvars.example
+!eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform.tfvars.example
+!examples/agentic/aws-devops-agent-workshop/terraform/terraform.tfvars.example
+
+# Per-cluster environment files (TF_VAR_* exports, bucket names)
+env.sh
+*.env

@@ -14,7 +14,7 @@ All three have been run end to end and served real completions.
 
 [`serve.ipynb`](serve.ipynb) walks through the aggregated and disaggregated topologies in one pass and is the quickest way to try this example; the steps below are the same thing outside a notebook.
 
-**If you are here to decide whether to serve disaggregated, read [bench/README.md](bench/README.md) first.** At a fixed GPU budget on identical GPUs, aggregated with two replicas was 34% faster on output throughput and 2–6× better on time-to-first-token. Disaggregation's win is decode smoothness under mixed load, where it held p99 inter-token latency 21× lower. Which one you want depends on what you are optimising.
+**If you are here to decide whether to serve disaggregated, read [bench/README.md](bench/README.md) first.** At a fixed GPU budget on identical GPUs, aggregated with two replicas won on both output throughput and time-to-first-token. Disaggregation's win is decode smoothness under mixed load, where it held p99 inter-token latency dramatically lower. Which one you want depends on what you are optimising.
 
 Before proceeding, complete the [Prerequisites](../../../../../README.md#prerequisites) and [Getting started](../../../../../README.md#getting-started). See [What is in the YAML file](../../../../../README.md#yaml-recipes) to understand the common fields in the Helm values files.
 
@@ -100,7 +100,7 @@ Then pick one of the two topologies.
         charts/machine-learning/serving/dynamo/ \
         -f examples/inference/dynamo/vllm/qwen3-8b/dgd-disagg-tp1.yaml -n kubeflow-user-example-com
 
-**Four GPUs, two per worker** ([`dgd-disagg.yaml`](dgd-disagg.yaml)). Each worker runs at `TP=2`, both on one 4-GPU node, so the transfer stays on the host. Worth knowing before you assume that makes it fast: on a `g5.12xlarge` the intra-node transfer measured only ~1.8× the cross-AZ network rate, because `g5`'s A10Gs have no NVLink and peer transfers fall back to PCIe. "Same node" is not the same as "GPU fabric":
+**Four GPUs, two per worker** ([`dgd-disagg.yaml`](dgd-disagg.yaml)). Each worker runs at `TP=2`, both on one 4-GPU node, so the transfer stays on the host. Worth knowing before you assume that makes it fast: on a `g5.12xlarge` the intra-node transfer measured the same order of magnitude as the cross-AZ network rate, because `g5`'s A10Gs have no NVLink and peer transfers fall back to PCIe. "Same node" is not the same as "GPU fabric":
 
     helm install --debug dyn-qwen3-8b \
         charts/machine-learning/serving/dynamo/ \
@@ -145,25 +145,25 @@ With the UUIDs in hand, in Grafana or the Prometheus expression browser:
 | How big did the KV cache get? | `DCGM_FI_DEV_FB_USED` |
 | Is the GPU moving anything over the bus? | `DCGM_FI_PROF_PCIE_TX_BYTES`, `..._RX_BYTES` — but see below, this does **not** isolate the KV transfer |
 
-A working disaggregation looks *asymmetric*, but only the decode half of that asymmetry is legible from DCGM, and only under real load. Measured here on a two-node `TP=1` deployment (prefill on an A10G, decode on an L4) serving one chat-shaped request with a ~32-token prompt, sampling every 5 s:
+A working disaggregation looks *asymmetric*, but only the decode half of that asymmetry is legible from DCGM, and only under real load. Observed on a two-node `TP=1` deployment (prefill on an A10G, decode on an L4) serving one chat-shaped request with a short prompt, sampling every 5 s:
 
 | | prefill (A10G) | decode (L4) |
 | --- | --- | --- |
-| `GR_ENGINE_ACTIVE` peak | 0.007 | **0.9998** |
-| `DRAM_ACTIVE` peak | 0.006 | **0.953** |
-| `PIPE_TENSOR_ACTIVE` peak | 0.001 | 0.002 |
-| `PCIE_RX_BYTES` peak | 0.3 MB/s | 1.1 MB/s |
+| `GR_ENGINE_ACTIVE` peak | floor | **essentially saturated** |
+| `DRAM_ACTIVE` peak | floor | **tracks the engine almost 1:1** |
+| `PIPE_TENSOR_ACTIVE` peak | floor | floor |
+| `PCIE_RX_BYTES` peak | negligible | negligible |
 
 Decode behaves exactly as the theory says: engine essentially saturated, DRAM activity tracking it almost one-to-one, tensor pipes idle. That is memory-bandwidth-bound autoregressive decode, and it is visible from a single stream.
 
-**Prefill is invisible at this scale, and that is not a fault.** A 32-token prefill is a few milliseconds of compute against a 5 s collection interval, so it never lands in a sample. Neither do the tensor pipes on either GPU — at batch size 1, decode is GEMV, which barely touches them. To see prefill on a GPU trace you need long prompts and sustained concurrency, which means [`bench/loadgen.py`](bench/loadgen.py) with something like `--prompt-tokens 4000 --concurrency 16`, not a single chat request.
+**Prefill is invisible at this scale, and that is not a fault.** A short prefill is a few milliseconds of compute against a 5 s collection interval, so it never lands in a sample. Neither do the tensor pipes on either GPU — at batch size 1, decode is GEMV, which barely touches them. To see prefill on a GPU trace you need long prompts and sustained concurrency, which means [`bench/loadgen.py`](bench/loadgen.py) with something like `--prompt-tokens 4000 --concurrency 16`, not a single chat request.
 
-**Do not try to read the KV transfer off the PCIe counters.** The same request moved 4.5 MB in 40.4 ms — 111 MB/s instantaneous — but smeared across a 5 s window that is under 1 MB/s, indistinguishable from idle bus chatter. On a two-node deployment the transfer also goes GPU → host → NIC → network → host → GPU, so the PCIe counter mixes it with ordinary host traffic rather than isolating it. The authoritative source is the decode worker's own `KV Transfer metrics` log line, which is what the notebook asserts on:
+**Do not try to read the KV transfer off the PCIe counters.** A single chat request's transfer completes in tens of milliseconds, so smeared across a 5 s window it is indistinguishable from idle bus chatter. On a two-node deployment the transfer also goes GPU → host → NIC → network → host → GPU, so the PCIe counter mixes it with ordinary host traffic rather than isolating it. The authoritative source is the decode worker's own `KV Transfer metrics` log line, which is what the notebook asserts on:
 
-    KV Transfer metrics: Num successful transfers=1, Avg xfer time (ms)=40.362,
-    Avg MB per transfer=4.5, Throughput (MB/s)=111.491, Avg number of descriptors=72.0
+    KV Transfer metrics: Num successful transfers=1, Avg xfer time (ms)=...,
+    Avg MB per transfer=..., Throughput (MB/s)=..., Avg number of descriptors=...
 
-That 4.5 MB is its own consistency check: at 144 KiB per prompt token it implies ~32 prompt tokens, which is what was sent. Two DCGM traces that look alike tell you very little at low load; a decode worker reporting zero transfers tells you the split is nominal.
+The MB figure is its own consistency check: divide it by 144 KiB per prompt token and you should recover the prompt length you sent. Two DCGM traces that look alike tell you very little at low load; a decode worker reporting zero transfers tells you the split is nominal.
 
 Two practical notes. `dcgm-exporter` is a DaemonSet selecting `karpenter.k8s.aws/instance-gpu-manufacturer=nvidia`, so it has **zero pods until Karpenter provisions a GPU node** — an empty `kubectl get pods -n kube-system -l app.kubernetes.io/name=dcgm-exporter` before you deploy is expected, not a broken exporter. And its `--collect-interval=5000` is what makes the `DCGM_FI_PROF_*` fields refresh faster than a measurement batch; at the exporter's own 30 s default, SM_ACTIVE returns the byte-identical value for consecutive scrapes and looks like a stuck metric.
 
@@ -200,7 +200,7 @@ That label is reverted by the next `dynamo-platform` upgrade, so it is a bridge,
 
     kubectl get pods -n kubeflow-user-example-com --show-labels | grep metrics-enabled
 
-For a *comparison* rather than a spot reading, use [`bench/loadgen.py`](bench/loadgen.py), which times the streaming response client-side and reports mean and p99 TTFT and ITL per concurrency level. That is where every number in [bench/README.md](bench/README.md) comes from. It and the frontend histogram agree on the mean; the histogram excludes the network hop out to your client, and `loadgen.py` includes it, which is one more reason to generate load from inside the cluster.
+For a *comparison* rather than a spot reading, use [`bench/loadgen.py`](bench/loadgen.py), which times the streaming response client-side and reports mean and p99 TTFT and ITL per concurrency level. That is the instrument behind the findings in [bench/README.md](bench/README.md). It and the frontend histogram agree on the mean; the histogram excludes the network hop out to your client, and `loadgen.py` includes it, which is one more reason to generate load from inside the cluster.
 
 ## Stop Service
 
@@ -214,11 +214,11 @@ Karpenter deprovisions the GPU node once the pods are gone, after the
 
 **Constrain the instance type.** Every GPU component sets `node_types`, a list rendered as a required node affinity. The `cuda` NodePool admits all 42 GPU instance types from `g4dn.xlarge` upward, and Karpenter picks the cheapest that satisfies the pod. For a bare `nvidia.com/gpu: 1` request that is a `g4dn.xlarge`, whose T4 has 16GB — enough for Qwen3-8B's weights in bf16 and almost nothing left for a KV cache, so vLLM fails to allocate and the pod crash-loops. Constraining the type is the difference between a working deployment and a confusing OOM.
 
-A *list* rather than a single type, because GPU capacity in a given AZ is frequently exhausted. Each instance type *and size* is its own EC2 capacity pool, so listing several sizes per family helps as much as listing several families. Verifying this example, every 4-GPU type and then all 19 of the larger single-GPU types were simultaneously at `InsufficientInstanceCapacity` in all three of the cluster's AZs. Pinning to one type turns that transient condition into a deployment that never schedules. If everything stays `Pending`, the reason is in the Karpenter log:
+A *list* rather than a single type, because a given AZ's GPU capacity is finite and pinning to one type turns any shortage of it into a deployment that never schedules. Each instance type *and size* is its own EC2 capacity pool, so listing several sizes per family helps as much as listing several families. If everything stays `Pending`, the reason is in the Karpenter log:
 
     kubectl logs -n kube-system -l app.kubernetes.io/name=karpenter --tail=200 | grep -i insufficient
 
-Note also that AWS suggests AZs it has capacity in, which may include one the cluster has no subnet for — those suggestions are not actionable without a VPC change.
+Note also that an AZ named in that output may be one the cluster has no subnet for — such a suggestion is not actionable without a VPC change.
 
 **Changing a worker spec leaves the previous generation running.** The operator names each `DynamoComponentDeployment` with a hash of the component spec, so editing anything about a worker — resources, `node_types` — makes `helm upgrade` create a new `...-<newhash>` deployment while the old one keeps its pods and its GPU. A two-worker deployment briefly wants four GPUs, and on a constrained cluster the new pods sit `Pending` behind the old ones forever. `helm uninstall` does clean up correctly, because the component deployments are garbage-collected with their owning `DynamoGraphDeployment`; it is only the upgrade path that strands them. Either uninstall and reinstall, or delete the stale generation explicitly:
 
@@ -229,4 +229,4 @@ Note also that AWS suggests AZs it has capacity in, which may include one the cl
 
 **`--kv-transfer-config` is mandatory for prefill workers.** Dynamo 1.5.0 rejects the old `--connector` flag outright and refuses to start a `--disaggregation-mode prefill` worker without an explicit `--kv-transfer-config`. Both disaggregated workers set `NixlConnector` with `kv_role: kv_both`.
 
-**Set `--gpu-memory-utilization` explicitly at `TP>1`.** Counter-intuitively, tensor parallelism makes a 24GB card *more* likely to OOM, not less. Sharding shrinks the weights per rank, so vLLM grows the KV cache to fill the default fraction, and CUDA graph capture plus the NIXL registration buffers then have no room — both 4-GPU workers died at 99.5% occupancy, 150 MiB short. [`dgd-disagg.yaml`](dgd-disagg.yaml) sets `0.80`.
+**Set `--gpu-memory-utilization` explicitly at `TP>1`.** Counter-intuitively, tensor parallelism makes a 24GB card *more* likely to OOM, not less. Sharding shrinks the weights per rank, so vLLM grows the KV cache to fill the default fraction, and CUDA graph capture plus the NIXL registration buffers then have no room — both 4-GPU workers died at near-full occupancy, a little short of what capture needed. [`dgd-disagg.yaml`](dgd-disagg.yaml) sets `0.80`.

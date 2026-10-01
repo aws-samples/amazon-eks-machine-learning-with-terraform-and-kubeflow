@@ -1,0 +1,142 @@
+# Qwen3-32B, tensor-parallel across two nodes: TP=8 over 2x g6e.12xlarge (4x L40S each).
+#
+# The operator turns node_count: 2 into a LeaderWorkerSet and injects the cross-node launch
+# flags; see README.md.
+#
+# Expect this to be SLOWER than dgd-singlenode-tp4.yaml. Both fit the model, but this one puts
+# every layer's TP collective on a 100 Gbps network instead of the local bus. Run both.
+
+image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0-efa
+image_pull_policy: IfNotPresent
+backend_framework: vllm
+
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+
+gpu_tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+components:
+  # OpenAI-compatible HTTP endpoint. No GPU, so it lands on a CPU node.
+  Frontend:
+    type: frontend
+    replicas: 1
+    args:
+      - -m
+      - dynamo.frontend
+      - --http-port
+      - "8000"
+    resources:
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 8Gi
+
+  # One aggregated engine whose tensor parallelism crosses a node boundary. Aggregated and
+  # multinode are independent choices; nothing here is disaggregated.
+  VllmWorker:
+    type: worker
+    replicas: 1
+
+    # The multinode switch: the operator creates a LeaderWorkerSet of size 2. Total GPUs is
+    # node_count x the GPU request below, which --tensor-parallel-size must equal.
+    #
+    # roles is left unset on purpose -- its providerOverride is Grove-only, and Grove is not
+    # installed.
+    node_count: 2
+
+    # One type, not a list. The two pods schedule independently, so a list of differing GPU
+    # counts would abort vLLM during distributed init. Mixing sizes with equal GPU counts is
+    # safe but still unwanted here, since this file exists to be measured and the sizes differ
+    # in bandwidth and EFA interface count.
+    #
+    # cudaefa resolves to one subnet, so that AZ's capacity for this type is the whole story
+    # and widening node_types does not help. See README.md.
+    node_types:
+      - g6e.12xlarge    # 4x L40S 48GB, 48 vCPU / 384GiB, 100 Gbps, 1 EFA interface
+
+    # Pin the pool, not just the type. EFA is not routed between subnets and the multi-AZ cuda
+    # pool would let the two pods land in different AZs, leaving the fabric silently dead and
+    # falling back to TCP with no error. cudaefa is single-AZ by construction.
+    #
+    # Requires the cudaefa NodePool to admit the g6e sizes and the EFA device plugin to
+    # advertise on them; neither is true by default. See README.md.
+    node_selector:
+      karpenter.sh/nodepool: cudaefa
+
+    # Set explicitly: unset, the operator picks between vLLM native multiprocessing and Ray
+    # from a version gate, so the same file could launch different topologies on different
+    # clusters. With mp the leader runs the engine and workers join over torch.distributed.
+    annotations:
+      nvidia.com/vllm-distributed-executor-backend: "mp"
+
+    shared_memory_size: 16Gi
+
+    args:
+      - -m
+      - dynamo.vllm
+      - --model
+      - /fsx/pretrained-models/Qwen/Qwen3-32B
+      - --served-model-name
+      - qwen3-32b
+      - --max-model-len
+      - "16384"
+      # 8 = node_count x GPUs per node. The operator only injects the multinode launch flags
+      # when TP x PP exceeds the per-container GPU request; at 4 it would quietly build a
+      # single-node engine on the leader and leave the second node idle.
+      - --tensor-parallel-size
+      - "8"
+      # 0.85 rather than the default 0.9: vLLM grows the KV cache to fill whatever fraction it
+      # is given, and CUDA graph capture plus NIXL buffers have to fit on top. Still leaves
+      # ~30GiB of KV cache per rank here.
+      - --gpu-memory-utilization
+      - "0.85"
+      # Mandatory for a multinode group without NVLink, which is every g6e. vLLM 0.28.0 logs
+      # that the group does not support MNNVL multicast, then calls _init_mnnvl_buffer()
+      # anyway and blocks forever in the symmetric-memory rendezvous. It reads like a slow
+      # load, not a hang: no safetensors progress bar, flat rchar, GPUs at 0%.
+      #
+      # Nothing is lost. Custom all-reduce needs NVLink or working P2P, which L40S lacks, so
+      # the collectives went over NCCL either way.
+      - --disable-custom-all-reduce
+
+    # FI_PROVIDER=efa decides whether the TP collectives use the fabric at all; without it
+    # libfabric falls back to sockets and the deployment works at TCP speed. Set NCCL_DEBUG to
+    # INFO on a first run to confirm NCCL selected the EFA provider.
+    env:
+      - name: FI_PROVIDER
+        value: "efa"
+      - name: FI_EFA_USE_DEVICE_RDMA
+        value: "1"
+      - name: FI_EFA_FORK_SAFE
+        value: "1"
+      - name: RDMAV_FORK_SAFE
+        value: "1"
+      - name: NCCL_SOCKET_IFNAME
+        value: "^lo,docker0"
+      - name: NCCL_DEBUG
+        value: "WARN"
+      # Uncomment together with NCCL_DEBUG=INFO to see provider selection and ring construction:
+      # - name: NCCL_DEBUG_SUBSYS
+      #   value: "INIT,NET,ENV"
+
+    resources:
+      requests:
+        cpu: "16"
+        memory: 128Gi
+        nvidia.com/gpu: "4"
+        # Requesting it is what makes Karpenter attach the device and the plugin advertise it.
+        # g6e.12xlarge exposes exactly 1.
+        vpc.amazonaws.com/efa: "1"
+      limits:
+        cpu: "40"
+        memory: 320Gi
+        nvidia.com/gpu: "4"
+        vpc.amazonaws.com/efa: "1"

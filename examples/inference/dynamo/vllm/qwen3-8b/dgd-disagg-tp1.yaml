@@ -1,11 +1,9 @@
-# Disaggregated serving on two single-GPU nodes: prefill and decode each get one GPU at
-# tensor-parallel-size 1, and the KV cache crosses the network between them over NIXL.
+# Disaggregated serving on two single-GPU nodes: prefill and decode each get one GPU at TP=1,
+# and the KV cache crosses the network between them over NIXL.
 #
-# Use this instead of dgd-disagg.yaml when 4-GPU instances (g5/g6/g6e/g7/g7e .12xlarge) are
-# unavailable -- at time of writing every one of them was at InsufficientInstanceCapacity in
-# all three of the cluster's AZs, while single-GPU shapes launched without trouble. It is
-# also the stricter test of disaggregation: on a 4-GPU node the two workers exchange KV over
-# the host, whereas here the transfer is genuinely pod-to-pod across nodes.
+# Use this instead of dgd-disagg.yaml when 4-GPU instances are unavailable to you and single-GPU
+# shapes are. It is also the stricter test of disaggregation: on a 4-GPU node the two workers
+# exchange KV over the host, whereas here the transfer is genuinely pod-to-pod.
 image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
 image_pull_policy: IfNotPresent
 backend_framework: vllm
@@ -41,16 +39,13 @@ components:
   VllmPrefillWorker:
     type: prefill
     replicas: 1
-    # Single-GPU types with at least 24GB of VRAM, so never a 16GB T4. Karpenter always
-    # picks the cheapest type that fits, so the larger shapes at the end cost nothing when
-    # the small ones are available and are what keeps the deployment schedulable when they
-    # are not.
+    # Single-GPU types with at least 24GB of VRAM, so never a 16GB T4. Karpenter picks the
+    # cheapest type that fits, so the larger shapes at the end cost nothing when the small ones
+    # are available and keep the deployment schedulable when they are not.
     #
-    # The xlarge shapes have only 16GiB of system memory, which is why the requests below
-    # are trimmed to fit them: they are the highest-volume GPU pools in the fleet and were
-    # the only ones with capacity when this example was verified. vLLM mmaps the safetensors
-    # shards rather than reading them into anonymous memory, so a 15GiB checkpoint loads
-    # comfortably under a 14Gi limit.
+    # The xlarge shapes have only 16GiB of system memory, which is why the requests below are
+    # trimmed to fit them. vLLM mmaps the safetensors shards rather than reading them into
+    # anonymous memory, so a 15GiB checkpoint loads comfortably under a 14Gi limit.
     node_types:
       - g5.xlarge
       - g6.xlarge

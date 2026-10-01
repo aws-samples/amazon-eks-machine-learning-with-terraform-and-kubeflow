@@ -1,14 +1,12 @@
-# Aggregated serving at a 4-GPU budget, for benchmarking against dgd-disagg.yaml.
+# Aggregated serving at a 4-GPU budget, for benchmarking against ../dgd-disagg.yaml.
 #
-# The counterpart to ../dgd-disagg.yaml, and the cleanest comparison available: both occupy
-# one 4-GPU node, both shard at TP=2, both set the same memory target and the same per-replica
-# resources. The only difference is the split:
+# The cleanest comparison available: both occupy one 4-GPU node, both shard at TP=2, both set
+# the same memory target and per-replica resources. The only difference is the split:
 #
 #   this file            2 aggregated workers at TP=2, each doing its own prefill and decode
 #   ../dgd-disagg.yaml   1 prefill worker at TP=2 + 1 decode worker at TP=2, KV over NIXL
 #
-# Same node means identical GPUs and no cross-AZ hop, so neither GPU heterogeneity nor
-# inter-zone networking can be blamed for the result. See README.md.
+# One node means identical GPUs and no network hop in either arm. See README.md.
 image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
 image_pull_policy: IfNotPresent
 backend_framework: vllm
@@ -61,9 +59,8 @@ components:
       - "16384"
       - --tensor-parallel-size
       - "2"
-      # Matched to dgd-disagg.yaml rather than left at the default, so the two arms give vLLM
-      # the same memory budget. See the comment there for why the default overruns a 24GB card
-      # at TP=2.
+      # Matched to dgd-disagg.yaml so both arms get the same memory budget; see the comment
+      # there for why the default overruns a 24GB card at TP=2.
       - --gpu-memory-utilization
       - "0.80"
     resources:

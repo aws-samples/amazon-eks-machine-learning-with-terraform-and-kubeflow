@@ -43,13 +43,25 @@ gpu_tolerations:
 #                 cheapest instance that satisfies the pod, which for a bare
 #                 "nvidia.com/gpu: 1" request is a T4 that most models will not fit on.
 #                 Prefer a list of same-VRAM-class types over a single type, so the
-#                 deployment survives InsufficientInstanceCapacity on any one of them.
+#                 deployment survives any one of them being unavailable.
 #   node_type     single instance type, as a nodeSelector. Ignored if node_types is set.
+#   node_selector extra nodeSelector labels, merged with node_type. Set
+#                 karpenter.sh/nodepool: cudaefa on anything that requests EFA -- the cuda
+#                 pool's EC2NodeClass spans every AZ and EFA traffic is not routed between
+#                 subnets, so otherwise the nodes of one multinode group can land in
+#                 different subnets and lose the fabric with nothing reporting an error.
 #   shared_memory_size
 #                 size of the tmpfs the operator mounts at /dev/shm. Omit for the operator
 #                 default of 8Gi, set "0" to disable. vLLM needs this for its worker IPC.
-#   node_count    for multinode components; total GPUs is node_count x GPU request
+#   node_count    for multinode components; total GPUs is node_count x GPU request.
+#                 The operator creates a LeaderWorkerSet of this size and injects the
+#                 cross-node launch flags itself -- see examples/inference/dynamo/vllm/
+#                 qwen3-32b/README.md. Minimum 2.
 #   env           extra environment variables
+#   annotations   extra pod annotations, applied after the chart's own so they can override
+#                 them. Notably nvidia.com/vllm-distributed-executor-backend: mp | ray,
+#                 which decides how a multinode component spans nodes; left unset it follows
+#                 an operator-version compatibility gate rather than a documented default.
 components:
   Frontend:
     type: frontend

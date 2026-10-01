@@ -760,6 +760,8 @@ resource "helm_release" "aws-efa-k8s-device-plugin" {
           - "p5.48xlarge"
           - "p5e.48xlarge"
           - "p5en.48xlarge"
+          - "g6e.12xlarge"
+          - "g6e.24xlarge"
           - "g6e.48xlarge"
       tolerations:
         - key: "nvidia.com/gpu"
@@ -2120,7 +2122,13 @@ resource "helm_release" "dynamo_platform" {
   # created before monitoring.coreos.com/v1 is registered by kube-prometheus-stack: the exact
   # failure already paid for by helm_release.dcgm_exporter above. The ordering costs nothing
   # when prometheus_enabled = false, since that release is then count = 0.
-  depends_on = [helm_release.cluster-autoscaler, helm_release.prometheus]
+  #
+  # Volcano is in this list for a stronger reason than ordering hygiene: the operator probes for
+  # the scheduling.volcano.sh API group once, at startup, to decide whether its multinode path
+  # is available. Installing Volcano after the operator leaves that gate resolved to false until
+  # the operator pod is restarted, so a multinode DynamoGraphDeployment would keep failing with
+  # `no_multinode_orchestrator_available` against a cluster that visibly has Volcano running.
+  depends_on = [helm_release.cluster-autoscaler, helm_release.prometheus, helm_release.volcano]
 }
 
 module "slurm" {

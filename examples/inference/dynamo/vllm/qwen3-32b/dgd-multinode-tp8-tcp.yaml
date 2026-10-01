@@ -1,0 +1,112 @@
+# Qwen3-32B, TP=8 across two nodes WITHOUT EFA: the fallback from README.md prerequisite 5.
+#
+# Identical to dgd-multinode-tp8.yaml in everything concerning Dynamo, and different in one
+# respect: the TP collectives cross the node boundary over ordinary ENA/TCP, not EFA. Use it when
+# the AZ your cudaefa pool resolves to cannot supply your instance type, trading the fabric for
+# the ability to schedule in any AZ.
+#
+# A complete test of the LWS/mp mechanism and an honest TP=8-vs-TP=4 comparison, but NOT a
+# measurement of EFA -- label its numbers accordingly.
+
+# Plain 1.5.0, not 1.5.0-efa: with no EFA device attached, asking libfabric for the efa provider
+# fails rather than falling back, so the env block below drops FI_PROVIDER too.
+image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
+image_pull_policy: IfNotPresent
+backend_framework: vllm
+
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+
+gpu_tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+components:
+  Frontend:
+    type: frontend
+    replicas: 1
+    args:
+      - -m
+      - dynamo.frontend
+      - --http-port
+      - "8000"
+    resources:
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 8Gi
+
+  VllmWorker:
+    type: worker
+    replicas: 1
+    node_count: 2
+
+    node_types:
+      - g6e.12xlarge    # 4x L40S 48GB, 48 vCPU / 384GiB
+
+    # Pin a zone rather than a NodePool -- the one substantive difference from the EFA file.
+    # Karpenter may still pick the cudaefa pool, which does not compromise the comparison: what
+    # makes this arm TCP is that the pod never requests vpc.amazonaws.com/efa, so no EFA ENI is
+    # attached, and the plain image carries no aws-ofi-nccl.
+    #
+    # Expect a cosmetic side effect on a cudaefa node with no EFA ENI -- the EFA device plugin
+    # crash-loops with "Instance type g6e.12xlarge is not EFA enabled". It is reporting the absent
+    # ENI, not an unsupported instance type.
+    #
+    # The zone pin still matters: a cross-AZ hop would add latency to every one of the ~128
+    # collectives TP=8 performs per token. Check the cluster has a subnet in the zone you choose
+    # with `kubectl get ec2nodeclass default -o jsonpath='{.status.subnets}'`.
+    node_selector:
+      # REPLACE THIS with the same zone your cudaefa pool resolves to, so this arm and the EFA arm
+      # differ in transport and nothing else. Left as a placeholder on purpose: an unedited file
+      # leaves the pods Pending, which beats silently measuring a cross-AZ hop.
+      topology.kubernetes.io/zone: REPLACE_WITH_YOUR_AZ
+
+    annotations:
+      nvidia.com/vllm-distributed-executor-backend: "mp"
+
+    shared_memory_size: 16Gi
+
+    args:
+      - -m
+      - dynamo.vllm
+      - --model
+      - /fsx/pretrained-models/Qwen/Qwen3-32B
+      - --served-model-name
+      - qwen3-32b
+      - --max-model-len
+      - "16384"
+      - --tensor-parallel-size
+      - "8"
+      - --gpu-memory-utilization
+      - "0.85"
+      # Still required without EFA: the deadlock is in vLLM's MNNVL buffer setup, not in the
+      # transport. See dgd-multinode-tp8.yaml.
+      - --disable-custom-all-reduce
+
+    # No FI_PROVIDER or FI_EFA_* -- no fabric to point them at. NCCL_SOCKET_IFNAME stays and
+    # matters more here: NCCL picking the wrong interface is a hang, not an error.
+    #
+    # NCCL_DEBUG=INFO because the INFO lines are how you verify the ring spans two hosts -- look
+    # for NET/Socket and two distinct pod IPs. Drop to WARN once confirmed.
+    env:
+      - name: NCCL_SOCKET_IFNAME
+        value: "^lo,docker0"
+      - name: NCCL_DEBUG
+        value: "INFO"
+
+    resources:
+      requests:
+        cpu: "16"
+        memory: 128Gi
+        nvidia.com/gpu: "4"
+      limits:
+        cpu: "40"
+        memory: 320Gi
+        nvidia.com/gpu: "4"
