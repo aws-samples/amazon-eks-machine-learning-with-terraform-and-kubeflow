@@ -23,16 +23,24 @@ spec:
     podTemplate:
       metadata:
         annotations:
-          karpenter.sh/do-not-disrupt: "true"
+          {{- /* While testing, add karpenter.sh/do-not-disrupt: "true" here (or annotate the
+                 nodes) to stop Karpenter reclaiming GPU nodes between runs. */}}
           sidecar.istio.io/inject: 'false'
           app.kubernetes.io/instance: {{ $.Release.Name }}
           app.kubernetes.io/managed-by: {{ $.Release.Service }}
+          {{- /* Extra annotations, last so a component can override the defaults above. The
+                 operator reads some behaviour off pod annotations rather than DGD fields --
+                 notably nvidia.com/vllm-distributed-executor-backend, which picks vLLM native
+                 multiprocessing or Ray for a multinode component. Left unset, an operator
+                 compatibility gate decides, so an example that cares should say which. */}}
+          {{- range $k, $v := $c.annotations }}
+          {{ $k }}: {{ $v | quote }}
+          {{- end }}
       spec:
-        {{- /* node_types (a list) is preferred over node_type (a single type): pinning to
-               exactly one instance type makes a deployment fail outright when that type is
-               at InsufficientInstanceCapacity in every subnet the cluster has, which is
-               common for the newest GPU families. A list of types with comparable VRAM
-               keeps the guard against undersized GPUs while letting Karpenter fall back. */}}
+        {{- /* node_types (a list) is preferred over node_type (a single type): pinning to one
+               instance type turns any shortage of it into a deployment that never schedules.
+               A list of types with comparable VRAM keeps the guard against undersized GPUs
+               while letting Karpenter fall back. */}}
         {{- if $c.node_types }}
         affinity:
           nodeAffinity:
@@ -45,9 +53,24 @@ spec:
                       {{- range $t := $c.node_types }}
                         - {{ $t }}
                       {{- end }}
-        {{- else if $c.node_type }}
+        {{- end }}
+        {{- /* node_selector merges with node_type rather than replacing it: node_types says "a
+               GPU big enough", node_selector says "from the cudaefa NodePool", and a multinode
+               EFA deployment needs both. Pinning the pool is not optional for EFA -- EFA is not
+               routed between subnets, and the cuda pool spans every AZ, so two nodes of one LWS
+               group can land in different subnets with the fabric silently dead. */}}
+        {{- $ns := dict }}
+        {{- if and $c.node_type (not $c.node_types) }}
+        {{- $ns = set $ns "node.kubernetes.io/instance-type" $c.node_type }}
+        {{- end }}
+        {{- range $k, $v := $c.node_selector }}
+        {{- $ns = set $ns $k $v }}
+        {{- end }}
+        {{- if $ns }}
         nodeSelector:
-          node.kubernetes.io/instance-type: {{ $c.node_type }}
+          {{- range $k, $v := $ns }}
+          {{ $k }}: {{ $v | quote }}
+          {{- end }}
         {{- end }}
         {{- /* Tolerate the cuda NodePool taint only for components that ask for a GPU. */}}
         {{- if and $.Values.gpu_tolerations (dig "requests" "nvidia.com/gpu" "" ($c.resources | default dict)) }}

@@ -1,0 +1,129 @@
+# Qwen3-235B-A22B-FP8 across two nodes: TP=4 x PP=2 over 2x g6e.12xlarge (4x L40S each).
+#
+# No single-node arm exists: the weights are 223 GiB and one node has 4x 44.7 GiB = 179 GiB, so the
+# model does not fit on one node at any --gpu-memory-utilization.
+#
+# TP=8 is illegal for this checkpoint, not merely slower. config.json sets
+# weight_block_size [128, 128] and moe_intermediate_size 1536; TP slices each expert's intermediate
+# dimension, so 1536/TP must be a whole number of 128-wide blocks. TP must therefore divide
+# 1536/128 = 12, and 1536/8 = 192 fails at startup with:
+#   ValueError: The output_size of gate's and up's weight = 192 is not divisible by
+#               weight quantization block_n = 128.
+# TP=4 is the largest legal width that divides a 4-GPU node, so the second node is reached by
+# pipeline parallelism. That also puts the pipeline boundary on the node boundary, leaving only
+# inter-stage activations to cross the network instead of a per-layer TP all-reduce.
+#
+# See ../qwen3-32b/README.md for the prerequisites, the LeaderWorkerSet mechanism and the EFA setup.
+
+image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0-efa
+image_pull_policy: IfNotPresent
+backend_framework: vllm
+
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+
+gpu_tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+components:
+  Frontend:
+    type: frontend
+    replicas: 1
+    args:
+      - -m
+      - dynamo.frontend
+      - --http-port
+      - "8000"
+    resources:
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 8Gi
+
+  VllmWorker:
+    type: worker
+    replicas: 1
+
+    # The only multinode input. The operator authors the LeaderWorkerSet from it.
+    node_count: 2
+
+    node_types:
+      - g6e.12xlarge    # 4x L40S 48GB, 48 vCPU / 384GiB, 100 Gbps, 1 EFA interface
+
+    # EFA is not routed between subnets and cudaefa is single-AZ; the multi-AZ cuda pool would let
+    # the pods land in different AZs and fall back to TCP silently.
+    node_selector:
+      karpenter.sh/nodepool: cudaefa
+
+    # vLLM native multiprocessing rather than Ray.
+    annotations:
+      nvidia.com/vllm-distributed-executor-backend: "mp"
+
+    shared_memory_size: 16Gi
+
+    args:
+      - -m
+      - dynamo.vllm
+      - --model
+      - /fsx/pretrained-models/Qwen/Qwen3-235B-A22B-FP8
+      - --served-model-name
+      - qwen3-235b-a22b-fp8
+      # Matches the 32B runs for comparability, not a memory limit: per-rank KV is 23 KiB/token,
+      # and max_position_embeddings of 40960 is the real ceiling.
+      - --max-model-len
+      - "16384"
+      # TP x PP = 8 is a floor: it holds the weights, and the operator only injects the multinode
+      # launch path when TP x PP exceeds the per-container GPU request.
+      #
+      # TP=4 also matches num_key_value_heads=4, so each rank owns one KV head; TP=8 would
+      # replicate each head across two ranks and store the cache twice.
+      - --tensor-parallel-size
+      - "4"
+      - --pipeline-parallel-size
+      - "2"
+      # 27.8 GiB of weights per rank against a 38.0 GiB budget leaves ~10 GiB. If startup OOMs,
+      # lower --max-model-len; raising this past ~0.90 fails during graph capture instead.
+      - --gpu-memory-utilization
+      - "0.85"
+      # Mandatory on g6e: without it vLLM blocks forever in the MNNVL symmetric-memory rendezvous.
+      - --disable-custom-all-reduce
+      # Expert intermediates are sharded across the 4 ranks of a stage (the default).
+      # --enable-expert-parallel assigns whole experts to ranks instead, which is also the one way
+      # a TP=8 arm would be legal since nothing is then divided by TP -- a second arm, not a flag.
+
+    env:
+      - name: FI_PROVIDER
+        value: "efa"
+      - name: FI_EFA_USE_DEVICE_RDMA
+        value: "1"
+      - name: FI_EFA_FORK_SAFE
+        value: "1"
+      - name: RDMAV_FORK_SAFE
+        value: "1"
+      - name: NCCL_SOCKET_IFNAME
+        value: "^lo,docker0"
+      - name: NCCL_DEBUG
+        value: "WARN"
+      # Weight load is storage-bound and slow (~22 min here). Raise this if a rank trips the
+      # distributed init timeout while its peers are still loading.
+      - name: VLLM_ENGINE_ITERATION_TIMEOUT_S
+        value: "600"
+
+    resources:
+      requests:
+        cpu: "16"
+        memory: 128Gi
+        nvidia.com/gpu: "4"
+        vpc.amazonaws.com/efa: "1"
+      limits:
+        cpu: "40"
+        memory: 320Gi
+        nvidia.com/gpu: "4"
+        vpc.amazonaws.com/efa: "1"

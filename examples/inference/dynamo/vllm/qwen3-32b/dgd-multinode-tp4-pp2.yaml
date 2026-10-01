@@ -1,0 +1,102 @@
+# Qwen3-32B across two nodes the textbook way: TP=4 within each node, PP=2 between them.
+# Same hardware as dgd-multinode-tp8.yaml, spent differently.
+#
+# TP=8 crosses the node boundary twice per layer -- 128 small latency-bound collectives per
+# token for 64 layers, the worst shape for an Ethernet-class fabric. PP=2 crosses it once per
+# token, passing one activation tensor between stages. The cost is pipeline bubbles: stages idle
+# unless enough requests are in flight, trading single-request latency for throughput.
+
+image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0-efa
+image_pull_policy: IfNotPresent
+backend_framework: vllm
+
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+
+gpu_tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+components:
+  Frontend:
+    type: frontend
+    replicas: 1
+    args:
+      - -m
+      - dynamo.frontend
+      - --http-port
+      - "8000"
+    resources:
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 8Gi
+
+  VllmWorker:
+    type: worker
+    replicas: 1
+    node_count: 2
+    # Single type: the two pods schedule independently, and mismatched GPU counts fail
+    # distributed init.
+    node_types:
+      - g6e.12xlarge
+    node_selector:
+      karpenter.sh/nodepool: cudaefa
+    annotations:
+      nvidia.com/vllm-distributed-executor-backend: "mp"
+    shared_memory_size: 16Gi
+    args:
+      - -m
+      - dynamo.vllm
+      - --model
+      - /fsx/pretrained-models/Qwen/Qwen3-32B
+      - --served-model-name
+      - qwen3-32b
+      - --max-model-len
+      - "16384"
+      # The operator's multinode trigger is TP x PP > GPUs per container, so 4 x 2 = 8 > 4
+      # launches across both nodes just as TP=8 does. vLLM keeps each TP group inside one node,
+      # so the pipeline stages are what span nodes.
+      - --tensor-parallel-size
+      - "4"
+      - --pipeline-parallel-size
+      - "2"
+      # At PP=2 each node holds 32 of the 64 layers: ~8GB per rank, same as TP=8.
+      - --gpu-memory-utilization
+      - "0.85"
+      # Still required: the MNNVL buffer is built for the TP group during distributed init
+      # however the parallelism is split, and it deadlocks. See dgd-multinode-tp8.yaml.
+      - --disable-custom-all-reduce
+    env:
+      - name: FI_PROVIDER
+        value: "efa"
+      - name: FI_EFA_USE_DEVICE_RDMA
+        value: "1"
+      - name: FI_EFA_FORK_SAFE
+        value: "1"
+      - name: RDMAV_FORK_SAFE
+        value: "1"
+      - name: NCCL_SOCKET_IFNAME
+        value: "^lo,docker0"
+      - name: NCCL_DEBUG
+        value: "WARN"
+      # Uncomment together with NCCL_DEBUG=INFO to see provider selection and ring construction:
+      # - name: NCCL_DEBUG_SUBSYS
+      #   value: "INIT,NET,ENV"
+    resources:
+      requests:
+        cpu: "16"
+        memory: 128Gi
+        nvidia.com/gpu: "4"
+        vpc.amazonaws.com/efa: "1"
+      limits:
+        cpu: "40"
+        memory: 320Gi
+        nvidia.com/gpu: "4"
+        vpc.amazonaws.com/efa: "1"

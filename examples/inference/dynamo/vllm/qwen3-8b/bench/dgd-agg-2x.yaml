@@ -1,15 +1,11 @@
 # Aggregated serving with two replicas, for benchmarking against dgd-disagg-tp1.yaml.
 #
-# This exists only to make the comparison fair. Measuring disaggregation on 2 GPUs against
-# aggregation on 1 GPU measures the second GPU, not Dynamo. Both this file and
-# dgd-disagg-tp1.yaml occupy two single-GPU nodes with identical resource requests and an
-# identical node_types list, so the only difference is the serving topology:
+# This exists to make the comparison fair: disaggregation on 2 GPUs against aggregation on 1
+# measures the second GPU, not Dynamo. Both files occupy two single-GPU nodes with identical
+# requests and node_types, so the only difference is the topology:
 #
 #   this file             2 aggregated workers, each doing its own prefill and decode
 #   dgd-disagg-tp1.yaml   1 prefill worker + 1 decode worker, KV cache sent over NIXL
-#
-# The frontend load-balances across both registered workers here, so the two replicas are
-# independent full-stack engines rather than a split pipeline.
 image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
 image_pull_policy: IfNotPresent
 backend_framework: vllm
@@ -45,11 +41,8 @@ components:
   VllmWorker:
     type: worker
     replicas: 2
-    # ONE instance type, unlike the example files which list many for capacity resilience,
-    # and it must be the SAME type dgd-disagg-2x.yaml pins to. The comparison is only valid
-    # if every worker runs on an identical GPU: a run that happened to place one worker on
-    # an L40S and the other on an L4 would be measuring the GPUs, not the topology.
-    # g6.xlarge is an L4 24GB with 4 vCPU and 16GiB of system memory.
+    # ONE instance type, and the SAME one dgd-disagg-2x.yaml pins to: mixed GPUs across workers
+    # would measure the GPUs rather than the topology. g6.xlarge is an L4 24GB, 4 vCPU / 16GiB.
     node_types:
       - g6.xlarge
     shared_memory_size: 8Gi

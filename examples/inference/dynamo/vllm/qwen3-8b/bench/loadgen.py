@@ -3,16 +3,20 @@
 Reports time-to-first-token, inter-token latency and output throughput at a fixed
 concurrency. Standard library only, so it runs in any python image without a pip install.
 
-Run it inside the cluster, against the frontend Service. A kubectl port-forward tunnel
-becomes the bottleneck well before the GPUs do and would flatten the differences this is
-meant to measure.
+Run it inside the cluster, against the frontend Service: a kubectl port-forward tunnel becomes
+the bottleneck well before the GPUs do.
 
   python3 loadgen.py --host dyn-qwen3-8b-frontend --port 8000 \
       --model qwen3-8b --prompt-tokens 1000 --max-tokens 128 \
       --concurrency 1,4,16,32 --requests 64
+
+By default every request carries a unique prefix, which is what you want for measuring topology:
+shared prefill work would let one arm look faster because it recomputed less.
+`--shared-prefix-tokens` inverts that, for measuring KV-aware *routing*. See build_prompt.
 """
 
 import argparse
+import hashlib
 import http.client
 import json
 import statistics
@@ -20,9 +24,12 @@ import sys
 import threading
 import time
 
-# Deliberately prose rather than random tokens: random strings tokenize badly and defeat
-# the prefix cache in ways real traffic does not. Each request gets a unique prefix so
-# requests do not share cached prefill work with each other.
+# Prose rather than random tokens: random strings tokenize badly and defeat the prefix cache in
+# ways real traffic does not.
+#
+# "Unique prefix" means unique in the first block only -- the body is this text repeated, so two
+# prompts diverge just in how the salt shifted the block alignment. Enough to keep requests from
+# sharing prefill in practice, which is why the run marker matters. See build_prompt.
 FILLER = (
     "The transformer architecture processes sequences by attending over all positions "
     "simultaneously, which makes the prefill phase compute bound and the decode phase "
@@ -31,11 +38,55 @@ FILLER = (
 )
 
 
-def build_prompt(target_tokens, salt):
-    # ~4 characters per token is close enough for a synthetic prompt; the exact length is
-    # reported back from the server's usage field where available.
-    reps = max(1, (target_tokens * 4) // len(FILLER))
-    return f"[request {salt}] " + (FILLER * reps)
+# Different text from FILLER so a shared prefix cannot be confused with repeated filler.
+SHARED = (
+    "You are a deployment assistant for a Kubernetes cluster that serves large language "
+    "models. Answer using only the cluster's own conventions: workloads are scheduled by "
+    "Karpenter onto NodePools, GPU nodes carry a taint that pods must tolerate, and model "
+    "weights are read from a shared filesystem mounted at /fsx. "
+)
+
+
+def pick_group(index, groups):
+    """Which shared-prefix group request `index` belongs to.
+
+    Hashed rather than `index % groups`. Round-robin sends request i to worker `i % n_workers`,
+    so if n_workers divides n_groups each group lands on exactly one worker forever and
+    round-robin gets perfect cache affinity for free -- scoring identically to a KV-aware router.
+
+    Hashing decouples the group sequence from the router's phase while staying deterministic.
+    """
+    if groups <= 1:
+        return 0
+    digest = hashlib.blake2b(str(index).encode(), digest_size=8).digest()
+    return int.from_bytes(digest, "big") % groups
+
+
+def build_prompt(target_tokens, salt, shared_tokens=0, group=0, run=""):
+    # ~4 characters per token is close enough; exact lengths come back in the usage field.
+    if shared_tokens <= 0:
+        # The `run` marker belongs here too, not only in shared-prefix mode: without it two
+        # invocations at the same concurrency generate byte-identical prompts, and the second
+        # reads as a near-total prefix cache hit off the first.
+        reps = max(1, (target_tokens * 4) // len(FILLER))
+        return f"[request {run} {salt}] " + (FILLER * reps)
+
+    # Shared-prefix mode, for exercising KV-aware routing rather than topology. The shared block
+    # comes FIRST and is byte-identical within a group, so it is a true prefix; the unique tail
+    # keeps no two requests identical.
+    #
+    # Use more groups than workers. With one shared prefix every worker ends up holding it and
+    # any router looks good; the same happens when groups == worker count. Letting the group
+    # sequence line up with the router's phase is the other trap -- see pick_group. Neither shows
+    # up as an error, only as two routing modes scoring the same.
+    #
+    # The `run` marker, seeded from --tag, makes each invocation's prefixes new text, so each run
+    # starts from a cold prefix cache without restarting the workers between arms.
+    shared_reps = max(1, (shared_tokens * 4) // len(SHARED))
+    prefix = f"[context {run} group {group}] " + (SHARED * shared_reps)
+    unique_tokens = max(1, target_tokens - shared_tokens)
+    reps = max(1, (unique_tokens * 4) // len(FILLER))
+    return prefix + f" [request {salt}] " + (FILLER * reps)
 
 
 class Result:
@@ -56,9 +107,8 @@ def one_request(host, port, model, prompt, max_tokens, timeout):
             "model": model,
             "prompt": prompt,
             "max_tokens": max_tokens,
-            # Greedy, and ignore the EOS token, so every request emits exactly max_tokens.
-            # Without this, output length varies per request and throughput numbers stop
-            # being comparable between configurations.
+            # Greedy and ignoring EOS, so every request emits exactly max_tokens -- otherwise
+            # output length varies and throughput stops being comparable.
             "temperature": 0.0,
             "ignore_eos": True,
             "stream": True,
@@ -123,7 +173,13 @@ def run_phase(args, concurrency, n_requests, label):
                 args.host,
                 args.port,
                 args.model,
-                build_prompt(args.prompt_tokens, f"{label}-{i}"),
+                build_prompt(
+                    args.prompt_tokens,
+                    f"{label}-{i}",
+                    args.shared_prefix_tokens,
+                    pick_group(i, max(1, args.shared_prefix_groups)),
+                    args.tag,
+                ),
                 args.max_tokens,
                 args.timeout,
             )
@@ -189,6 +245,20 @@ def main():
     p.add_argument("--max-tokens", type=int, default=128)
     p.add_argument("--concurrency", default="1,4,16,32")
     p.add_argument("--requests", type=int, default=64)
+    # 0 keeps the default unique-prefix behaviour, so existing invocations are unaffected.
+    p.add_argument(
+        "--shared-prefix-tokens",
+        type=int,
+        default=0,
+        help="prepend this many tokens of identical text per group, for KV-routing tests",
+    )
+    p.add_argument(
+        "--shared-prefix-groups",
+        type=int,
+        default=2,
+        help="number of distinct shared prefixes; use several times the worker replica count, "
+        "not equal to it -- see build_prompt",
+    )
     p.add_argument("--warmup", type=int, default=4)
     p.add_argument("--timeout", type=float, default=600.0)
     p.add_argument("--tag", default="RESULT")
@@ -196,9 +266,15 @@ def main():
 
     levels = [int(x) for x in args.concurrency.split(",") if x.strip()]
 
+    if args.shared_prefix_tokens >= args.prompt_tokens:
+        print("# --shared-prefix-tokens must be less than --prompt-tokens")
+        sys.exit(2)
+
     print(
         f"# host={args.host}:{args.port} model={args.model} "
-        f"prompt_tokens~{args.prompt_tokens} max_tokens={args.max_tokens}",
+        f"prompt_tokens~{args.prompt_tokens} max_tokens={args.max_tokens} "
+        f"shared_prefix_tokens={args.shared_prefix_tokens} "
+        f"shared_prefix_groups={args.shared_prefix_groups if args.shared_prefix_tokens else 0}",
         flush=True,
     )
 
@@ -211,13 +287,14 @@ def main():
             for r in failed[:3]:
                 print(f"#   {r.error}")
             sys.exit(1)
-        # Let the engine settle and any prefix cache from warmup age out of relevance.
+        # Let the engine settle. In shared-prefix mode warmup deliberately carries over: it seeds
+        # each group's prefix onto whichever worker served it, which is the steady state a KV
+        # router is meant to exploit.
         time.sleep(5)
 
     rows = []
     for c in levels:
-        # Scale total requests with concurrency so every level runs long enough to be
-        # steady state rather than dominated by ramp-up.
+        # Scale total requests with concurrency so every level reaches steady state.
         n = max(args.requests, c * 4)
         res, wall = run_phase(args, c, n, f"c{c}")
         row = summarize(args.tag, c, res, wall)

@@ -1,0 +1,73 @@
+# Qwen3-32B on ONE node: TP=4 on a single g6e.12xlarge (4x L40S 48GB).
+#
+# The baseline for the multinode files, and what to prefer in production when the model fits --
+# ~65GB in bf16 against 192GB of VRAM here. Identical instance type, model, context length and
+# memory fraction to dgd-multinode-tp8.yaml, so the only difference is whether the
+# tensor-parallel collectives cross a node boundary.
+#
+# No EFA and no cudaefa pin: with one node there is no inter-node traffic, so this runs on the
+# ordinary `cuda` NodePool.
+
+image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
+image_pull_policy: IfNotPresent
+backend_framework: vllm
+
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+
+gpu_tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+components:
+  Frontend:
+    type: frontend
+    replicas: 1
+    args:
+      - -m
+      - dynamo.frontend
+      - --http-port
+      - "8000"
+    resources:
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 8Gi
+
+  VllmWorker:
+    type: worker
+    replicas: 1
+    # Same type as the multinode files, so the comparison is between topologies and not GPUs.
+    # L40S has no NVLink, so even intra-node TP=4 runs its collectives over PCIe.
+    node_types:
+      - g6e.12xlarge    # 4x L40S 48GB, 48 vCPU / 384GiB
+    shared_memory_size: 16Gi
+    args:
+      - -m
+      - dynamo.vllm
+      - --model
+      - /fsx/pretrained-models/Qwen/Qwen3-32B
+      - --served-model-name
+      - qwen3-32b
+      - --max-model-len
+      - "16384"
+      - --tensor-parallel-size
+      - "4"
+      # Matches the multinode files. ~16GB of weights per rank leaves ~22GiB of KV cache per GPU.
+      - --gpu-memory-utilization
+      - "0.85"
+    resources:
+      requests:
+        cpu: "16"
+        memory: 128Gi
+        nvidia.com/gpu: "4"
+      limits:
+        cpu: "40"
+        memory: 320Gi
+        nvidia.com/gpu: "4"

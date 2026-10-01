@@ -1,0 +1,117 @@
+# Qwen3-32B, TWO aggregated workers behind one frontend, routed by KV-cache overlap.
+#
+# The only file here that exercises KV-aware routing: every other arm runs replicas: 1, and a
+# router with one candidate is a no-op in any mode.
+#
+# Not multinode in the LeaderWorkerSet sense -- there is no node_count, so the operator authors a
+# plain Deployment of two independent TP=4 engines, each with its own weights and KV cache. This
+# is scale-out, not a sharded engine, so it needs no EFA, no --disable-custom-all-reduce and no
+# Volcano. The same two nodes, spent a third way:
+#
+#   A2  one engine,  8 GPUs, TP=8 sharded across both nodes
+#   A4  one engine,  8 GPUs, TP=4 per node with PP=2 between
+#   A5  TWO engines, 4 GPUs each, no traffic between them
+#
+# It scales with replica count rather than engine size, so it cannot serve a model larger than one
+# node holds. What it buys instead is cache locality.
+
+# Plain 1.5.0, not 1.5.0-efa: no cross-node collectives, so no fabric to use.
+image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
+image_pull_policy: IfNotPresent
+backend_framework: vllm
+
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+
+gpu_tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+components:
+  Frontend:
+    type: frontend
+    replicas: 1
+    args:
+      - -m
+      - dynamo.frontend
+      - --http-port
+      - "8000"
+      # The point of the file. The default round-robin ignores cache state; kv scores each
+      # worker by how much of the prompt's prefix it already holds.
+      #
+      # NOT sufficient on its own -- the worker must also be told to publish KV events via
+      # --kv-events-config below. Configure one side only and the frontend's radix tree stays
+      # empty, the router scores every worker at zero overlap and degrades to load balancing,
+      # with no error and a plausible-looking latency table.
+      #
+      # To measure what this is worth, run the same load against round-robin and diff.
+      - --router-mode
+      - kv
+    resources:
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 8Gi
+
+  VllmWorker:
+    type: worker
+    # TWO workers. This is the line that makes routing mean anything.
+    replicas: 2
+    node_types:
+      - g6e.12xlarge    # 4x L40S 48GB, 48 vCPU / 384GiB
+
+    # Pinned to cudaefa only to reuse the nodes the EFA arms already warmed. Nothing here needs
+    # EFA, so the ordinary cuda pool would behave identically.
+    node_selector:
+      karpenter.sh/nodepool: cudaefa
+
+    shared_memory_size: 16Gi
+    args:
+      - -m
+      - dynamo.vllm
+      - --model
+      - /fsx/pretrained-models/Qwen/Qwen3-32B
+      - --served-model-name
+      - qwen3-32b
+      - --max-model-len
+      - "16384"
+      - --tensor-parallel-size
+      - "4"
+      - --gpu-memory-utilization
+      - "0.85"
+      # On by default in vLLM V1, set explicitly because the KV router is useless without it: if
+      # the engine recomputes the prefix anyway, the routing is correct and worthless. Explicit
+      # means a default change breaks loudly instead of flattening the A5-kv / A5-rr difference.
+      - --enable-prefix-caching
+      # The second half of the routing configuration, and the easy half to miss.
+      # --router-mode kv makes the frontend run a router; it does NOT make the workers feed it.
+      # Without this the worker logs `use_kv_events=False` and the radix tree stays empty, so
+      # mean prefix overlap sits at flat zero even when every prompt shares a prefix.
+      #
+      # Both keys are required: create_kv_events_config() returns nothing unless
+      # enable_kv_cache_events is true, and publisher defaults to None, which publishes nothing.
+      # The ZMQ endpoint is pod-local, so no ports need opening.
+      #
+      # Deliberately NOT setting --router-mode on the worker: it advertises a mode in the model
+      # card that overrides the frontend's, which would defeat the round-robin control arm.
+      #
+      # Verify with bench/router-metrics.sh: `KV event batches recvd` must be nonzero.
+      - --kv-events-config
+      - '{"enable_kv_cache_events": true, "publisher": "zmq"}'
+    resources:
+      # 4 GPUs is one whole node, so replicas: 2 lands one worker per node without an
+      # anti-affinity rule.
+      requests:
+        cpu: "16"
+        memory: 128Gi
+        nvidia.com/gpu: "4"
+      limits:
+        cpu: "40"
+        memory: 320Gi
+        nvidia.com/gpu: "4"

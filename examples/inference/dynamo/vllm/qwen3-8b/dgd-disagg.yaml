@@ -30,18 +30,16 @@ components:
         cpu: "2"
         memory: 8Gi
 
-  # Prefill-only worker. Computes the KV cache for the prompt and hands it to the decode
-  # worker over NIXL, so the two phases stop competing for the same SMs.
+  # Prefill-only worker. Computes the prompt's KV cache and hands it to the decode worker over
+  # NIXL, so the two phases stop competing for the same SMs.
   #
-  # --kv-transfer-config is mandatory here, not merely advisable: dynamo.vllm raises
-  # "When using --disaggregation-mode prefill, you must explicitly provide
-  # --kv-transfer-config" and exits. The older --connector flag is rejected outright in
-  # 1.5.0, so examples written against Dynamo 0.x will not run.
+  # --kv-transfer-config is mandatory, not advisable: dynamo.vllm exits without it. The older
+  # --connector flag is rejected in 1.5.0, so Dynamo 0.x examples will not run.
   VllmPrefillWorker:
     type: prefill
     replicas: 1
-    # 4-GPU nodes; this worker takes 2 GPUs and the decode worker the other 2. Listed as a
-    # set for the same capacity reason as the aggregated example -- see dgd-agg.yaml.
+    # 4-GPU nodes; this worker takes 2 and the decode worker the other 2. A list for the same
+    # reason as dgd-agg.yaml.
     node_types:
       - g6e.12xlarge    # 4x L40S 48GB
       - g6.12xlarge     # 4x L4   24GB
@@ -60,12 +58,9 @@ components:
       - "16384"
       - --tensor-parallel-size
       - "2"
-      # vLLM's default memory target leaves no headroom at TP=2 on a 24GB card. Sharding the
-      # weights across two GPUs shrinks them to 7.6GiB per rank, so vLLM grows the KV cache to
-      # fill the default fraction -- and then CUDA graph capture plus the NIXL registration
-      # buffers push past it. Both workers died with "CUDA out of memory. Tried to allocate
-      # 150.00 MiB. GPU 0 has a total capacity of 22.30 GiB of which 100.69 MiB is free" at
-      # 99.5% occupancy. 0.80 still leaves ~10GiB of KV cache per rank.
+      # vLLM's default leaves no headroom at TP=2 on a 24GB card: weights shrink to 7.6GiB per
+      # rank, vLLM grows the KV cache to fill the default fraction, and CUDA graph capture plus
+      # the NIXL registration buffers then OOM. 0.80 still leaves ~10GiB of KV cache per rank.
       - --gpu-memory-utilization
       - "0.80"
       - --disaggregation-mode
@@ -82,8 +77,7 @@ components:
         memory: 96Gi
         nvidia.com/gpu: "2"
 
-  # Decode-only worker. Needs the same connector configured to receive the KV cache the
-  # prefill worker sends.
+  # Decode-only worker. Needs the same connector to receive what prefill sends.
   VllmDecodeWorker:
     type: decode
     replicas: 1
@@ -105,12 +99,9 @@ components:
       - "16384"
       - --tensor-parallel-size
       - "2"
-      # vLLM's default memory target leaves no headroom at TP=2 on a 24GB card. Sharding the
-      # weights across two GPUs shrinks them to 7.6GiB per rank, so vLLM grows the KV cache to
-      # fill the default fraction -- and then CUDA graph capture plus the NIXL registration
-      # buffers push past it. Both workers died with "CUDA out of memory. Tried to allocate
-      # 150.00 MiB. GPU 0 has a total capacity of 22.30 GiB of which 100.69 MiB is free" at
-      # 99.5% occupancy. 0.80 still leaves ~10GiB of KV cache per rank.
+      # vLLM's default leaves no headroom at TP=2 on a 24GB card: weights shrink to 7.6GiB per
+      # rank, vLLM grows the KV cache to fill the default fraction, and CUDA graph capture plus
+      # the NIXL registration buffers then OOM. 0.80 still leaves ~10GiB of KV cache per rank.
       - --gpu-memory-utilization
       - "0.80"
       - --disaggregation-mode

@@ -101,11 +101,11 @@ which one you want is a real decision rather than a default:
 - **Aggregated** — prefill and decode in one process. Simplest, and at 8B on A10G-class GPUs it
   won both throughput and time-to-first-token at a fixed GPU budget.
 - **Disaggregated** — prefill and decode as separate workers exchanging the KV cache over NIXL.
-  Its win is decode smoothness under mixed load, where it held p99 inter-token latency 21x
-  lower.
+  Its win is decode smoothness under mixed load, where it held p99 inter-token latency
+  dramatically lower.
 
-[vllm/qwen3-8b/bench/README.md](vllm/qwen3-8b/bench/README.md) has the measurements and the
-method. The short version: budget **144 KiB of interconnect per prompt token**, and check
+[vllm/qwen3-8b/bench/README.md](vllm/qwen3-8b/bench/README.md) has the method and the
+findings. The short version: budget **144 KiB of interconnect per prompt token**, and check
 whether your instance family actually has a GPU fabric — `g5`, `g6` and `g6e` have no NVLink,
 so peer transfers fall back to PCIe.
 

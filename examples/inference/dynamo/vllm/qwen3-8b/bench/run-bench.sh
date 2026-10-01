@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Run loadgen.py against the Dynamo frontend from inside the cluster.
 #
-# In-cluster on purpose. Driving load through `kubectl port-forward` routes every request
-# through a single userspace tunnel on the workstation, which saturates long before two GPUs
-# do and would flatten exactly the throughput differences this is meant to measure.
+# In-cluster on purpose: `kubectl port-forward` funnels every request through one userspace
+# tunnel, which saturates long before two GPUs do and flattens the differences being measured.
 #
 #   ./run-bench.sh <tag> [extra loadgen args...]
 #
 # Example:
 #   ./run-bench.sh disagg --concurrency 1,4,16,32 --requests 64
+#
+# Set LOG=<path> to tee the results to a file. Worth doing: completed Job pods are garbage
+# collected, and once the pod is gone the numbers are unrecoverable.
 set -euo pipefail
 
 NS="${NS:-kubeflow-user-example-com}"
@@ -28,8 +30,7 @@ kubectl create configmap dyn-loadgen -n "$NS" \
 
 kubectl delete job "$JOB" -n "$NS" --ignore-not-found >/dev/null
 
-# backoffLimit 0: a crashed run should surface as a failure, not silently retry and emit a
-# second set of numbers into the same log.
+# backoffLimit 0: a crashed run should fail, not retry and emit a second set of numbers.
 kubectl apply -f - <<YAML >/dev/null
 apiVersion: batch/v1
 kind: Job
@@ -61,9 +62,8 @@ $(for a in "$@"; do printf '            - %s\n' "\"$a\""; done)
           volumeMounts:
             - name: bench
               mountPath: /opt/bench
-          # Sized to fit a 2-vCPU CPU node. The generator only parses small SSE frames -- at
-          # 32 concurrent streams that is on the order of a thousand json.loads per second,
-          # which is nowhere near CPU bound, so it is not the thing under measurement.
+          # Sized to fit a 2-vCPU CPU node. The generator only parses small SSE frames, so it is
+          # nowhere near CPU bound and is not the thing under measurement.
           resources:
             requests:
               cpu: "1"
@@ -78,12 +78,36 @@ $(for a in "$@"; do printf '            - %s\n' "\"$a\""; done)
 YAML
 
 echo "waiting for $JOB ..."
-kubectl wait --for=condition=complete "job/$JOB" -n "$NS" --timeout=3600s &
-wait_pid=$!
-kubectl wait --for=condition=failed "job/$JOB" -n "$NS" --timeout=3600s && \
-  { echo "JOB FAILED"; kubectl logs -n "$NS" "job/$JOB" --tail=50; exit 1; } &
-fail_pid=$!
-wait -n "$wait_pid" "$fail_pid" 2>/dev/null || true
-kill "$wait_pid" "$fail_pid" 2>/dev/null || true
+# Polled rather than two racing `kubectl wait` calls: the loser of that race survives as a
+# grandchild and holds this script's stdout open, so a caller piping run-bench.sh anywhere never
+# sees EOF and hangs on a benchmark that already finished.
+deadline=$((SECONDS + 3600))
+status=""
+while [ "$SECONDS" -lt "$deadline" ]; do
+  if [ "$(kubectl get job "$JOB" -n "$NS" \
+            -o 'jsonpath={.status.conditions[?(@.type=="Complete")].status}')" = "True" ]; then
+    status=complete
+    break
+  fi
+  if [ "$(kubectl get job "$JOB" -n "$NS" \
+            -o 'jsonpath={.status.conditions[?(@.type=="Failed")].status}')" = "True" ]; then
+    status=failed
+    break
+  fi
+  sleep 10
+done
 
-kubectl logs -n "$NS" "job/$JOB"
+# Fetch the log before anything else: the Job outlives its pod, and once the pod is collected the
+# results are gone for good.
+LOG="${LOG:-}"
+if [ -n "$LOG" ]; then
+  kubectl logs -n "$NS" "job/$JOB" | tee "$LOG"
+else
+  kubectl logs -n "$NS" "job/$JOB"
+fi
+
+case "$status" in
+  complete) ;;
+  failed)   echo "JOB FAILED"; exit 1 ;;
+  *)        echo "TIMED OUT waiting for $JOB"; exit 1 ;;
+esac
