@@ -28,6 +28,9 @@ server:
   # were trained on, so no pooler override is set. The parity check in serve.ipynb verifies it.
   # States longer than --max-model-len are truncated; raise it together with
   # CLM_EMB_MAX_TOKENS in clm-serve.yaml.
+  # Chunked prefill is off: with it on, concurrent pooling requests sometimes never
+  # completed (vllm:num_requests_running stayed above 0 on an idle server) and clients
+  # timed out. Without it, the same load test had no errors and the embeddings are unchanged.
   command:
     - vllm serve /fsx/pretrained-models/Qwen/Qwen3-8B
   args:
@@ -35,6 +38,7 @@ server:
     - --runner pooling
     - --max-model-len 2048
     - --enable-prefix-caching
+    - --no-enable-chunked-prefill
     - --enforce-eager
     - --max-num-seqs 32
     - --gpu-memory-utilization 0.85
