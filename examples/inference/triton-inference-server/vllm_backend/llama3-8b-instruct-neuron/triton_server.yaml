@@ -70,6 +70,11 @@ inline_script:
   ]
   
   EOF
+# neuronx-cc 2.26 (Neuron SDK 2.31.1) fails to compile the NxDI context-encoding
+# attention NKI kernel on inf2/trn1 (logical_nc_config=1), which NxDI enables
+# automatically once a bucket's q_len reaches 4096. The additional_config below
+# disables that kernel so the full context length works; remove it once the
+# compiler is fixed upstream.
 - |+
   cat > /tmp/model.json <<EOF
   {
@@ -81,7 +86,8 @@ inline_script:
     "max_model_len": 8192,
     "max_num_batched_tokens": 8192,
     "block_size": 16,
-    "enable_prefix_caching": false
+    "enable_prefix_caching": false,
+    "additional_config": {"override_neuron_config": {"attn_kernel_enabled": false}}
   }
 
   EOF

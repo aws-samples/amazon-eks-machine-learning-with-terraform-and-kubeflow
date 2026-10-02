@@ -1,4 +1,4 @@
-FROM rayproject/ray:2.54.1-py312
+FROM rayproject/ray:2.58.0-py312
 
 # 1. Environment variables for non-interactive installs
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -45,9 +45,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libarchive-dev \
     libxml2-dev \
     libnuma-dev \
-    aws-neuronx-collectives=2.* \
-    aws-neuronx-runtime-lib=2.* \
-    aws-neuronx-tools=2.* \
+    aws-neuronx-collectives=2.33.10.0-068180c7a \
+    aws-neuronx-runtime-lib=2.33.10.0-3dcef56f0 \
+    aws-neuronx-tools=2.31.15.0-5c7949a6a \
     && rm -rf /var/lib/apt/lists/*
 
 # 4. Switch back to the ray user for Python package installation
@@ -58,10 +58,10 @@ USER ray
 # Combined into a single RUN to reduce layers
 RUN pip install --no-cache-dir \
     --extra-index-url https://pip.repos.neuron.amazonaws.com \
-    libneuronxla==2.2.15515.0+50c26cbd \
-    neuronx-cc==2.23.6484.0+3b612583 \
-    neuronx-distributed==0.17.26814+4b18de63 \
-    neuronx-distributed-inference==0.8.16251+f3ca5575 \
-    torch-neuronx==2.9.0.2.12.22436+0f1dac25
+    libneuronxla==2.2.17544.0+fb9962bf \
+    neuronx-cc==2.26.6360.0+6f180f47 \
+    neuronx-distributed==0.19.28492+435aae2b \
+    neuronx-distributed-inference==0.10.18399+ed62453e \
+    torch-neuronx==2.9.0.2.15.32035+de43f57c
 
 CMD ["/bin/bash"]
