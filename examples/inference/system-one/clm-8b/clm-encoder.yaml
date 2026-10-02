@@ -1,0 +1,63 @@
+# Qwen3-8B served by vLLM as an embedding model: the frozen encoder behind clm-serve.
+# Install with release name `clm-encoder`; clm-serve.yaml reaches it at http://clm-encoder:8000.
+# The image is passed at install time: --set image.name=<ray-pytorch-vllm ECR URI>.
+image:
+  name:
+  pull_policy: IfNotPresent
+resources:
+  node_type: g5.2xlarge
+  # generic-server reads cpu/memory/GPU from here, not from server.resources.
+  requests:
+    "nvidia.com/gpu": 1
+    cpu: 4
+    memory: 16Gi
+  limits:
+    "nvidia.com/gpu": 1
+    cpu: 7
+    memory: 28Gi
+tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+server:
+  name: clm-encoder
+  env:
+    - name: LD_LIBRARY_PATH
+      value: "/home/ray/anaconda3/lib/python3.12/site-packages/nvidia/cusparselt/lib:/usr/local/cuda/lib64"
+  # vLLM's default sequence pooling for a decoder model is LAST, which is what the CLM heads
+  # were trained on, so no pooler override is set. The parity check in serve.ipynb verifies it.
+  # States longer than --max-model-len are truncated; raise it together with
+  # CLM_EMB_MAX_TOKENS in clm-serve.yaml.
+  command:
+    - vllm serve /fsx/pretrained-models/Qwen/Qwen3-8B
+  args:
+    - --served-model-name qwen3-8b
+    - --runner pooling
+    - --max-model-len 2048
+    - --enable-prefix-caching
+    - --enforce-eager
+    - --max-num-seqs 32
+    - --gpu-memory-utilization 0.85
+    - --host 0.0.0.0
+    - --port 8000
+  ports:
+    - name: http
+      value: 8000
+  readiness_probe:
+    period_secs: 10
+    failure_threshold: 3
+    path: /health
+    port: 8000
+  startup_probe:
+    period_secs: 10
+    failure_threshold: 90
+    path: /health
+    port: 8000
+  liveness_probe:
+    period_secs: 10
+    failure_threshold: 3
+    path: /health
+    port: 8000
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 1
