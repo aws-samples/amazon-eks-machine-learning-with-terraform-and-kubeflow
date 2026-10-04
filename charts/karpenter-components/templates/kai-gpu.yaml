@@ -1,0 +1,98 @@
+{{- if .Values.kai.enabled }}
+# kai-gpu: nodes for KAI Scheduler GPU fractions (NvFractions). Ubuntu 24.04, because the
+# GPU Operator installs driver r615+ there; it cannot on AL2023. Tainted kai.scheduler/gpu, so
+# only pods that tolerate it -- KAI workloads, the GPU Operator, and gpu-fractioning (whose
+# toleration terraform adds; see kai.tf) -- land here, and the default GPU stack needs no change.
+---
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: kai-gpu
+  namespace: {{ .Values.namespace }}
+spec:
+  amiFamily: Custom
+  amiSelectorTerms:
+    - id: {{ required "kai.ami_id is required" .Values.kai.ami_id | quote }}
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "{{ .Values.cluster_id }}"
+  securityGroupSelectorTerms:
+    - tags:
+        "kubernetes.io/cluster/{{ .Values.cluster_id }}": "owned"
+  role: "{{ .Values.role_name }}"
+  tags:
+    name: {{ .Values.cluster_id }}-karpenter
+  metadataOptions:
+    httpEndpoint: enabled
+    httpProtocolIPv6: disabled
+    httpPutResponseHopLimit: 2
+    httpTokens: required
+  blockDeviceMappings:
+    - deviceName: /dev/sda1
+      ebs:
+        volumeSize: 200Gi
+        volumeType: gp3
+        iops: 10000
+        encrypted: false
+        deleteOnTermination: true
+        throughput: 125
+  # Custom amiFamily: Karpenter generates no userData, so the node must register with
+  # karpenter.sh/unregistered itself.
+  userData: |
+    #!/bin/bash
+    set -euo pipefail
+    /etc/eks/bootstrap.sh {{ .Values.cluster_id }} \
+      --apiserver-endpoint '{{ required "kai.cluster_endpoint is required" .Values.kai.cluster_endpoint }}' \
+      --b64-cluster-ca '{{ required "kai.cluster_ca is required" .Values.kai.cluster_ca }}' \
+      --dns-cluster-ip {{ required "kai.cluster_dns_ip is required" .Values.kai.cluster_dns_ip }} \
+      --kubelet-extra-args '--register-with-taints=karpenter.sh/unregistered:NoExecute --node-labels=kai.scheduler/node=true'
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: kai-gpu
+  namespace: {{ .Values.namespace }}
+spec:
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: {{ .Values.kai.consolidate_after }}
+  template:
+    metadata:
+      labels:
+        kai.scheduler/node: "true"
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: kai-gpu
+      requirements:
+      - key: kubernetes.io/arch
+        operator: In
+        values: ["amd64"]
+      - key: kubernetes.io/os
+        operator: In
+        values: ["linux"]
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values:
+          - {{ .Values.capacity_type | quote }}
+      - key: node.kubernetes.io/instance-type
+        operator: In
+        values:
+          {{- range .Values.kai.instance_types }}
+          - {{ . | quote }}
+          {{- end }}
+      taints:
+      - key: kai.scheduler/gpu
+        value: "true"
+        effect: NoSchedule
+      startupTaints:
+      - key: fsx.csi.aws.com/agent-not-ready
+        effect: NoExecute
+      - key: ebs.csi.aws.com/agent-not-ready
+        effect: NoExecute
+      - key: efs.csi.aws.com/agent-not-ready
+        effect: NoExecute
+  limits:
+    nvidia.com/gpu: {{ .Values.kai.gpu_limit }}
+{{- end }}

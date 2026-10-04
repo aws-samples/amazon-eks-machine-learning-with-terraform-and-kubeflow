@@ -13,3 +13,15 @@ cr:
       - "on-demand"
     ids: []
     tags: {}
+
+# KAI Scheduler GPU pool (kai_enabled in terraform). Off by default: nothing below renders.
+kai:
+  enabled: false
+  ami_id: ""                # Canonical Ubuntu 24.04 EKS AMI, resolved by terraform from SSM
+  cluster_endpoint: ""
+  cluster_ca: ""
+  cluster_dns_ip: ""
+  instance_types:
+    - "g6e.xlarge"
+  gpu_limit: 1024
+  consolidate_after: "1h"   # the GPU Operator builds the driver on each new node (~5 min)

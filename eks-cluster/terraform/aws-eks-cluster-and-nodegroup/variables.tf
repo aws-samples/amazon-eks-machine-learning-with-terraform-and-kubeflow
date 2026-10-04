@@ -768,4 +768,44 @@ variable "kmcp_enable_istio_injection" {
   default     = false
 }
 
+#---------------------------------------------------------------
+# KAI Scheduler Configuration
+#---------------------------------------------------------------
+
+variable "kai_enabled" {
+  description = "Install KAI Scheduler with GPU fractions, the GPU Operator, and a kai-gpu Karpenter pool (Ubuntu 24.04). Requires karpenter_enabled=true"
+  type        = bool
+  default     = false
+}
+
+variable "kai_scheduler_version" {
+  description = "KAI Scheduler Helm chart version"
+  type        = string
+  default     = "v0.18.2"
+}
+
+variable "kai_gpu_operator_version" {
+  description = "NVIDIA GPU Operator Helm chart version (kai-gpu nodes only); NvFractions needs v26.7+"
+  type        = string
+  default     = "v26.7.1"
+}
+
+variable "kai_gpu_driver_version" {
+  description = "NVIDIA driver the GPU Operator installs on kai-gpu nodes; NvFractions needs r615+"
+  type        = string
+  default     = "615.71.09"
+}
+
+variable "kai_ubuntu_ami_release" {
+  description = "Canonical Ubuntu 24.04 EKS AMI release for kai-gpu nodes ('current' or a dated release such as '20260925'). Pinned because the GPU Operator builds the driver against its kernel"
+  type        = string
+  default     = "20260925"
+}
+
+variable "kai_instance_types" {
+  description = "Instance types for the kai-gpu Karpenter pool"
+  type        = list(string)
+  default     = ["g6e.xlarge", "g6e.2xlarge", "g6e.12xlarge", "g6e.48xlarge"]
+}
+
 # END variables

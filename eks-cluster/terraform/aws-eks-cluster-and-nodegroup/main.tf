@@ -1347,7 +1347,7 @@ resource "helm_release" "karpenter_components" {
 
   chart     = "${var.local_helm_repo}/karpenter-components"
   name      = "karpenter-components"
-  version   = "1.0.8"
+  version   = "1.0.9"
   namespace = var.karpenter_namespace
 
   values = [
@@ -1364,6 +1364,7 @@ resource "helm_release" "karpenter_components" {
           capacity_types: ${jsonencode(var.karpenter_cr_capacity_types)}
           ids: ${jsonencode(var.karpenter_cr_cudaefa_ids)}
           tags: ${jsonencode(var.karpenter_cr_cudaefa_tags)}
+      kai: ${jsonencode(local.kai_karpenter_values)}
     EOT
   ]
 
