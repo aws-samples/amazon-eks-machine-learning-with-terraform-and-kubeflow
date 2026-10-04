@@ -41,6 +41,19 @@ spec:
   userData: |
     #!/bin/bash
     set -euo pipefail
+    # FSx for Lustre client: the AL2023 AMIs ship it, the Ubuntu EKS AMI does not. The FSx Ubuntu
+    # repo builds modules per aws kernel, so this needs a package for the pinned AMI's kernel.
+    # Not fatal: a node without it still serves pods that don't mount FSx.
+    if ! modinfo lustre >/dev/null 2>&1; then
+      # The key stays ASCII-armored (.asc, which apt reads directly): the AMI has no gpg to dearmor it.
+      { curl -fsSL https://fsx-lustre-client-repo-public-keys.s3.amazonaws.com/fsx-ubuntu-public-key.asc \
+          -o /usr/share/keyrings/fsx-ubuntu-public-key.asc &&
+        echo "deb [signed-by=/usr/share/keyrings/fsx-ubuntu-public-key.asc] https://fsx-lustre-client-repo.s3.amazonaws.com/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") main" \
+          > /etc/apt/sources.list.d/fsxlustreclientrepo.list &&
+        apt-get update &&
+        DEBIAN_FRONTEND=noninteractive apt-get install -y "lustre-client-modules-$(uname -r)" lustre-client-utils; } \
+        || echo "WARNING: no Lustre client for kernel $(uname -r); FSx mounts will fail on this node" >&2
+    fi
     /etc/eks/bootstrap.sh {{ .Values.cluster_id }} \
       --apiserver-endpoint '{{ required "kai.cluster_endpoint is required" .Values.kai.cluster_endpoint }}' \
       --b64-cluster-ca '{{ required "kai.cluster_ca is required" .Values.kai.cluster_ca }}' \
