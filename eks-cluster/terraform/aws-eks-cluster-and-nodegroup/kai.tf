@@ -101,6 +101,39 @@ resource "helm_release" "kai_scheduler" {
   depends_on = [helm_release.gpu_operator]
 }
 
+# A queue for serving. KAI gives a Deployment's pods the `inference` priority, which is
+# non-preemptible, and schedules non-preemptible pods only within their queue's GPU quota; the
+# chart's default-queue has none, so a Deployment there stays Pending (NonPreemptibleOverQuota).
+# Top-level, because the chart's default-parent-queue has no quota either. The GPU quota matches
+# the kai-gpu pool's GPU limit (karpenter-components kai.gpu_limit), so whatever the pool can hold
+# the queue can too.
+resource "kubectl_manifest" "kai_serving_queue" {
+  count = var.kai_enabled ? 1 : 0
+
+  yaml_body = <<-EOT
+    apiVersion: scheduling.run.ai/v2
+    kind: Queue
+    metadata:
+      name: colocation-serving
+    spec:
+      resources:
+        gpu:
+          quota: 1024
+          limit: -1
+          overQuotaWeight: 1
+        cpu:
+          quota: -1
+          limit: -1
+          overQuotaWeight: 1
+        memory:
+          quota: -1
+          limit: -1
+          overQuotaWeight: 1
+  EOT
+
+  depends_on = [helm_release.kai_scheduler]
+}
+
 # gpu-fractioning's operator builds its two DaemonSets with no tolerations, and its
 # GpuFractioningConfig has no field for one, so on the tainted pool they would never run. Two
 # parts: the patch below adds the toleration, and this policy rejects any later update that takes
