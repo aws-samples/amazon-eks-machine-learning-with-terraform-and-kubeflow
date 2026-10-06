@@ -803,9 +803,15 @@ variable "kai_ubuntu_ami_release" {
 }
 
 variable "kai_instance_types" {
-  description = "Instance types for the kai-gpu Karpenter pool"
+  description = "Instance types for the kai-gpu Karpenter pool. A type the region does not offer is skipped by Karpenter, and a node is launched only for a pod that asks for it"
   type        = list(string)
-  default     = ["g6e.xlarge", "g6e.2xlarge", "g6e.12xlarge", "g6e.48xlarge"]
+  default = [
+    "g6.xlarge", "g6.2xlarge", "g6.4xlarge", "g6.8xlarge", "g6.12xlarge", "g6.16xlarge", "g6.24xlarge", "g6.48xlarge",
+    "g6e.xlarge", "g6e.2xlarge", "g6e.4xlarge", "g6e.8xlarge", "g6e.12xlarge", "g6e.16xlarge", "g6e.24xlarge", "g6e.48xlarge",
+    "g7.2xlarge", "g7.4xlarge", "g7.8xlarge", "g7.12xlarge", "g7.24xlarge", "g7.48xlarge",
+    "g7e.2xlarge", "g7e.4xlarge", "g7e.8xlarge", "g7e.12xlarge", "g7e.24xlarge", "g7e.48xlarge",
+    "p5.4xlarge", "p5.48xlarge", "p5e.48xlarge", "p5en.48xlarge",
+  ]
 }
 
 # END variables
