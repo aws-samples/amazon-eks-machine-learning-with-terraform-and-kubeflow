@@ -34,7 +34,7 @@ System One models answer typed questions about a state (choice, score, true/fals
 
 | Model      | Inference Engine | Accelerator | Notes |
 | ----------- | ----------- | ------------ | ----------- |
-| [CLM-8B](./system-one/clm-8b/serve.ipynb)    | [vLLM](https://github.com/vllm-project/vllm) encoder, [clm-serve](https://github.com/Contrastive-LM/CLM) heads   | Nvidia GPU, CPU | Devices=1, TP=1, PP=1; Qwen3-8B encoder on GPU, heads and API on CPU; [request triage demo](./system-one/clm-8b/demo/) |
+| [CLM-8B](./system-one/clm-8b/serve.ipynb)    | [vLLM](https://github.com/vllm-project/vllm) encoder, [clm-serve](https://github.com/Contrastive-LM/CLM) heads   | Nvidia GPU, CPU | Devices=1, TP=1, PP=1; Qwen3-8B encoder on GPU, heads and API on CPU; [load test](./system-one/clm-8b/example/) |
 
 
 ### [Triton Inference Server](https://github.com/triton-inference-server/server)

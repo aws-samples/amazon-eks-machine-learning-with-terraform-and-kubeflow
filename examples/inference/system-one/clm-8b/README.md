@@ -8,7 +8,7 @@ This example shows how to use the [generic-server](../../../../charts/machine-le
 | `score` | an expected level on an ordered scale, plus a confidence | How frustrated is the customer, from calm to very angry? |
 | `noul` | the probability that a statement is true | This request is urgent. |
 
-Because the answer is a distribution and not generated text, it suits decisions an application makes on every request: routing, triage, tagging, guardrail checks and ranking candidates. Using a generative LLM for these is often overkill. The [demo](./demo/) uses CLM to triage requests for a model-routing layer.
+Because the answer is a distribution and not generated text, it suits decisions an application makes on every request: routing, triage, tagging, guardrail checks and ranking candidates. Using a generative LLM for these is often overkill.
 
 Before proceeding, complete the [Prerequisites](../../../../README.md#prerequisites) and [Getting started](../../../../README.md#getting-started). See [What is in the YAML file](../../../../README.md#yaml-recipes) to understand the common fields in the Helm values files.
 
@@ -27,7 +27,7 @@ Splitting them keeps the GPU doing only what needs a GPU. The heads, the vector 
 
 ## Jupyter notebook
 
-The [serve.ipynb](./serve.ipynb) notebook runs every step below, including a parity check against independently computed reference answers, the triage demo and an in-cluster load test. The sections that follow give the same steps as commands.
+The [serve.ipynb](./serve.ipynb) notebook runs every step below, including a parity check against independently computed reference answers and an in-cluster load test. The sections that follow give the same steps as commands.
 
 ## Build and push the Docker containers
 
@@ -92,7 +92,7 @@ r = requests.post("http://localhost:8700/v1/systemone", json={
                         "criteria": ["Calm", "Frustrated", "Very angry"]},
     },
 })
-print(r.json()["answers"], r.headers["X-CLM-Latency-Ms"])
+print(r.json()["answers"])
 ```
 
 For this request, CLM-8B answers urgency ≈ 0.85, billing ≈ 0.99 and frustration ≈ 2.00. The notebook checks your deployment against these values with a tolerance of 0.02. [parity_reference.py](./parity_reference.py) produced them without vLLM: it computes the Qwen3-8B embeddings with Hugging Face Transformers and runs them through the same `contrastive-lm` 0.1.0 engine and heads. A large difference usually means the encoder is not the one the heads were trained with, or its pooling or truncation differs. The upstream README shows other values for this request (urgency 0.41, billing 0.94); they do not reproduce with the published package and checkpoint.
@@ -109,22 +109,17 @@ requests.post("http://localhost:8700/v1/rank", json={
 
 You can also use the [upstream Python client](https://github.com/Contrastive-LM/CLM#api-reference) (`pip install contrastive-lm`, `CLM_BASE_URL=http://localhost:8700`).
 
-## Run the triage demo and the load test
+## Run the load test
 
-See [demo/README.md](./demo/README.md). In short:
-
-    pip install -r examples/inference/system-one/clm-8b/demo/requirements.txt
-    python examples/inference/system-one/clm-8b/demo/triage_demo.py --url http://localhost:8700
-
-Run the load test in the cluster, as Step 8 of the notebook does; `kubectl port-forward` fails under concurrent connections.
+The [load test](./example/README.md) checks that every request completes at increasing concurrency. Run it in the cluster, as Step 7 of the notebook does; `kubectl port-forward` fails under concurrent connections.
 
 ## Things to know
 
 - **The heads are tied to the encoder.** The CLM-8B heads were trained on Qwen3-8B last-token embeddings. Swapping the encoder for another model, a quantized variant or a different pooling setting invalidates them. vLLM's default pooling for Qwen3-8B is last-token, and the parity check confirms it.
 - **GPU memory.** Qwen3-8B in bf16 needs a GPU with at least 24 GB. `--max-model-len 2048` and `--gpu-memory-utilization 0.85` in `clm-encoder.yaml` are set for an A10G.
 - **2048-token states.** Longer states are truncated, with `truncate_prompt_tokens` sent by `clm-serve`. To raise the limit, raise `--max-model-len` in `clm-encoder.yaml` and `CLM_EMB_MAX_TOKENS` in `clm-serve.yaml` together. This needs more GPU memory.
-- **Chunked prefill is off.** With vLLM's default chunked prefill, concurrent pooling requests sometimes never completed, and clients timed out. `clm-encoder.yaml` sets `--no-enable-chunked-prefill`. The [load test](./demo/README.md#load-test) checks for this: it reports requests that fail or time out, and can read the encoder's `vllm:num_requests_running` after each concurrency level.
-- **Probabilities are relative to the options.** A `choice` distribution says how the options compare with each other for this state. It is not a calibrated probability that any option is correct. Add an `other` option when none might fit, and calibrate thresholds on your own data, as the demo does for confidence gating.
+- **Chunked prefill is off.** With vLLM's default chunked prefill, concurrent pooling requests sometimes never completed, and clients timed out. `clm-encoder.yaml` sets `--no-enable-chunked-prefill`. The [load test](./example/README.md) checks for this: it reports requests that fail or time out, and can read the encoder's `vllm:num_requests_running` after each concurrency level.
+- **Probabilities are relative to the options.** A `choice` distribution says how the options compare with each other for this state. It is not a calibrated probability that any option is correct. Add an `other` option when none might fit, and calibrate thresholds on your own data.
 - **Each question embeds the state once.** The question's instructions are appended to the state, so N questions cost N state embeddings. Option texts are embedded once and cached. `clm-serve` also caches state embeddings, so a repeated state costs no encoder call.
 - **Security.** Both services are `ClusterIP` with no authentication by default. To require a bearer token on `clm-serve`, add a `CLM_API_KEY` entry to `server.env` in a copy of `clm-serve.yaml`; clients then send `Authorization: Bearer <key>`. `generic-server` takes literal env values only, so the key is visible to anyone who can read the Deployment in the namespace. Do not expose either service outside the cluster.
 - **Alpha software.** `contrastive-lm` is at 0.1.0. The container pins it, and the API may change between releases.
