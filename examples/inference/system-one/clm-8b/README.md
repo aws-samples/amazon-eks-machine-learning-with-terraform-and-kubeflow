@@ -109,19 +109,21 @@ requests.post("http://localhost:8700/v1/rank", json={
 
 You can also use the [upstream Python client](https://github.com/Contrastive-LM/CLM#api-reference) (`pip install contrastive-lm`, `CLM_BASE_URL=http://localhost:8700`).
 
-## Run the triage demo
+## Run the triage demo and the load test
 
 See [demo/README.md](./demo/README.md). In short:
 
     pip install -r examples/inference/system-one/clm-8b/demo/requirements.txt
     python examples/inference/system-one/clm-8b/demo/triage_demo.py --url http://localhost:8700
 
+Run the load test in the cluster, as Step 8 of the notebook does; `kubectl port-forward` fails under concurrent connections.
+
 ## Things to know
 
 - **The heads are tied to the encoder.** The CLM-8B heads were trained on Qwen3-8B last-token embeddings. Swapping the encoder for another model, a quantized variant or a different pooling setting invalidates them. vLLM's default pooling for Qwen3-8B is last-token, and the parity check confirms it.
 - **GPU memory.** Qwen3-8B in bf16 needs a GPU with at least 24 GB. `--max-model-len 2048` and `--gpu-memory-utilization 0.85` in `clm-encoder.yaml` are set for an A10G.
 - **2048-token states.** Longer states are truncated, with `truncate_prompt_tokens` sent by `clm-serve`. To raise the limit, raise `--max-model-len` in `clm-encoder.yaml` and `CLM_EMB_MAX_TOKENS` in `clm-serve.yaml` together. This needs more GPU memory.
-- **Chunked prefill is off.** With vLLM's default chunked prefill, concurrent pooling requests sometimes never completed, and clients timed out. `clm-encoder.yaml` sets `--no-enable-chunked-prefill`; the [model-routing load test](../model-routing/demo/README.md#throughput) has the numbers.
+- **Chunked prefill is off.** With vLLM's default chunked prefill, concurrent pooling requests sometimes never completed, and clients timed out. `clm-encoder.yaml` sets `--no-enable-chunked-prefill`. The [load test](./demo/README.md#load-test) checks for this: it reports requests that fail or time out, and can read the encoder's `vllm:num_requests_running` after each concurrency level.
 - **Probabilities are relative to the options.** A `choice` distribution says how the options compare with each other for this state. It is not a calibrated probability that any option is correct. Add an `other` option when none might fit, and calibrate thresholds on your own data, as the demo does for confidence gating.
 - **Each question embeds the state once.** The question's instructions are appended to the state, so N questions cost N state embeddings. Option texts are embedded once and cached. `clm-serve` also caches state embeddings, so a repeated state costs no encoder call.
 - **Security.** Both services are `ClusterIP` with no authentication by default. To require a bearer token on `clm-serve`, add a `CLM_API_KEY` entry to `server.env` in a copy of `clm-serve.yaml`; clients then send `Authorization: Bearer <key>`. `generic-server` takes literal env values only, so the key is visible to anyone who can read the Deployment in the namespace. Do not expose either service outside the cluster.

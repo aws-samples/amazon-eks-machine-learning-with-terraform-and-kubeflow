@@ -54,7 +54,22 @@ python triage_demo.py --url http://localhost:8700 \
   --baseline-url http://<openai-compatible-host> --baseline-model <model-name>
 ```
 
-The baseline gets the same labels and tier descriptions in a JSON-only prompt. The summary adds its latency, its accuracy and the number of replies that would not parse. A follow-up model-routing example makes this comparison against Amazon Bedrock, with cost.
+The baseline gets the same labels and tier descriptions in a JSON-only prompt. The summary adds its latency, its accuracy and the number of replies that would not parse.
+
+## Load test
+
+`loadtest.py` measures how much traffic one encoder serves. At each concurrency level it sends 96 requests, each asking the three triage questions about a prompt with a unique prefix, so none is answered from the state cache:
+
+Run it inside the cluster, next to the services. Through `kubectl port-forward`, concurrent connections break the tunnel, and the errors measure the tunnel instead of `clm-serve`. Step 8 of [serve.ipynb](../serve.ipynb) runs it as a Kubernetes Job and copies `results/loadtest.json` back. Inside the cluster, the command is:
+
+```bash
+python loadtest.py --url http://clm-serve:8700 --encoder-metrics-url http://clm-encoder:8000/metrics \
+    --concurrency 1,2,4,8,16,32
+```
+
+It reports requests per second, client and server latency (p50 and p95), and errors, in `results/loadtest.md` and `results/loadtest.json`. A request that never completes counts as an error once the client's 60-second timeout passes.
+
+With `--encoder-metrics-url`, the script reads the encoder's `vllm:num_requests_running` five seconds after each level. It should be 0. A non-zero value on an idle server is the symptom that made `clm-encoder.yaml` turn off chunked prefill.
 
 ## Mock encoder
 
