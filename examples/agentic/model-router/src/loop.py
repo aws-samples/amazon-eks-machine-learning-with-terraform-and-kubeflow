@@ -1,6 +1,6 @@
 """The agent loop, with the CLM hooks around it.
 
-    route -> run the agent on that tier -> escalate? -> run it again on the next tier ...
+    signals -> policy picks a tier -> run the agent there -> escalate? -> the next tier ...
 
 The agent itself is the plain tool-calling loop: call the model, run the tools it asks
 for (risky ones through the gate), send the results back, and stop when it answers
@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass, field
 
 import yaml
 
-from . import hooks
+from . import hooks, policy
 from .backends import make_backend
 from .clm import CLM
 from .tools import TOOLS, run_tool
@@ -30,11 +30,22 @@ SYSTEM = ("You are a helpful general assistant. Answer any question, including o
 _VAR = re.compile(r"\$\{(\w+)(?::-([^}]*))?\}")
 
 
-def load_tiers(path: str) -> dict:
-    """Read a tiers file. ${VAR} and ${VAR:-default} take values from the environment."""
+def load_tiers(path: str, profile: str | None = None) -> dict:
+    """Read a tiers file. ${VAR} and ${VAR:-default} take values from the environment.
+
+    profile is an optional YAML file of {tier name: profile fields}, for example the
+    latency_ms and tokens that eval.py measured, merged over each tier's profile.
+    """
     text = _VAR.sub(lambda m: os.environ.get(m.group(1), m.group(2) or ""), open(path).read())
     cfg = yaml.safe_load(text)
     cfg["name"] = os.path.splitext(os.path.basename(path))[0]
+    if profile:
+        measured = yaml.safe_load(open(profile)) or {}
+        for t in cfg["tiers"]:
+            t["profile"] = {**t.get("profile", {}), **measured.get(t["name"], {})}
+    options = [o for q in cfg["signals"].values() for o in q["criteria"]]
+    if len(options) != len(set(options)):
+        raise ValueError(f"{path}: option names must be unique across signals, because tier limits name them")
     return cfg
 
 
@@ -109,21 +120,27 @@ def run_agent(tier_index: int, tier: dict, task: str, clm: CLM, cfg: dict) -> At
     return attempt
 
 
-def run_task(task: str, cfg: dict, clm: CLM, start_tier: str | None = None) -> Trace:
-    """Route the task, run it, and escalate as needed. start_tier skips the route hook."""
+def run_task(task: str, cfg: dict, clm: CLM, start_tier: str | None = None,
+             constraints: dict | None = None) -> Trace:
+    """Route the task, run it, and escalate as needed. start_tier skips the routing.
+
+    constraints override the policy's in_cluster_only and latency_budget_ms for this task.
+    """
     tiers = cfg["tiers"]
+    constraints = {**cfg.get("policy", {}), **(constraints or {})}
     trace = Trace(task, cfg["name"])
     if start_tier is None:
-        r = hooks.route(clm, task, cfg["route"], len(tiers))
-        trace.route = {"tier": tiers[r.value]["name"], "reasons": r.reasons, "answers": r.answers, "clm_ms": r.clm_ms}
-        i = r.value
+        s = hooks.signals(clm, task, cfg["signals"])
+        i, reasons = policy.choose(tiers, s.value, cfg.get("policy", {}), constraints)
+        trace.route = {"tier": tiers[i]["name"], "reasons": reasons, "signals": s.value, "clm_ms": s.clm_ms}
     else:
         i = [t["name"] for t in tiers].index(start_tier)
         trace.route = {"tier": start_tier, "reasons": ["set by the caller"]}
     while True:
         attempt = run_agent(i, tiers[i], task, clm, cfg)
         trace.attempts.append(attempt)
-        if i == len(tiers) - 1:
+        j = policy.next_tier(tiers, i, constraints)
+        if j is None:
             break
         if attempt.error:
             why = {"reasons": [f"error: {attempt.error}"]}
@@ -134,7 +151,7 @@ def run_task(task: str, cfg: dict, clm: CLM, start_tier: str | None = None) -> T
             if not e.value:
                 break
             why = {"reasons": e.reasons, "answers": e.answers, "clm_ms": e.clm_ms}
-        trace.escalations.append({"from": tiers[i]["name"], "to": tiers[i + 1]["name"], **why})
-        i += 1
+        trace.escalations.append({"from": tiers[i]["name"], "to": tiers[j]["name"], **why})
+        i = j
     trace.answer, trace.final_tier = attempt.answer, attempt.tier_name
     return trace

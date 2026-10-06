@@ -1,27 +1,71 @@
-# Every tier is a model on Amazon Bedrock. CLM-8B picks the tier, gates risky tool calls
-# and decides when an answer needs a larger model.
+# Every tier is a model on Amazon Bedrock. CLM-8B's signals pick the tier, it gates risky
+# tool calls, and it decides when an answer needs a larger model.
 #
 # The model IDs are global cross-Region inference profiles. Use any Converse model that
 # supports tool use and is enabled in your account.
+#
+# profile: what each tier offers. All fields are optional.
+#   max             the highest p(option) the tier takes; a task above it starts higher up
+#   in_cluster      true when the model runs in your cluster (for --in-cluster-only)
+#   price_per_mtok  your price per million input and output tokens, for policy.prefer: cost
+#   tokens          typical tokens per task; eval.py measures them
+#   latency_ms      typical time per task; eval.py measures it (for --latency-budget)
+# The prices, tokens and latency are left empty here. Fill them in from your pricing and
+# from eval.py's measured profile (results/measured-<tiers>.yaml, passed with --profile).
 tiers:
   - name: small
     backend: bedrock
     model: global.anthropic.claude-haiku-4-5-20251001-v1:0
     max_tokens: 4096
+    profile:
+      max: {hard: 0.5, money_or_email: 0.5}
+      in_cluster: false
+      price_per_mtok: {input: null, output: null}
+      tokens: {input: null, output: null}
+      latency_ms: null
   - name: medium
     backend: bedrock
     model: global.anthropic.claude-sonnet-4-6
     max_tokens: 4096
+    profile:
+      max: {hard: 0.75}
+      in_cluster: false
+      price_per_mtok: {input: null, output: null}
+      tokens: {input: null, output: null}
+      latency_ms: null
   - name: large
     backend: bedrock
     model: global.anthropic.claude-opus-4-8
     max_tokens: 4096
+    profile:
+      in_cluster: false
+      price_per_mtok: {input: null, output: null}
+      tokens: {input: null, output: null}
+      latency_ms: null
 
-# Hand-set starting points, not calibrated values. See the README.
-route:
-  hard_limits: [0.5, 0.75]         # small takes p(hard) <= 0.5, medium <= 0.75, large the rest
-  high_stakes_floor: 0.7           # p(high stakes) at or above this ...
-  high_stakes_min_tier: 1          # ... starts at medium or higher
+# CLM-8B's questions about each task, before the run. Each is a choice between described
+# options; a tier's profile.max names an option, so option names must be unique. CLM-8B
+# answers concrete questions, such as whether a request sends an email, more reliably than
+# abstract ones, such as how risky it is; eval.py shows how well each one predicts failures.
+signals:
+  difficulty:
+    type: choice
+    instructions: How hard is this request?
+    criteria:
+      easy: A simple request any assistant can answer
+      hard: A difficult request that needs a strong model
+  action:
+    type: choice
+    instructions: Will answering this request require sending an email or moving money?
+    criteria:
+      no_action: "No"
+      money_or_email: "Yes"
+
+# Starting points, not calibrated values. Measure them on your own tasks with eval.py; --fit suggests limits.
+policy:
+  prefer: order                    # among the tiers that may take a task: order, cost or latency
+  in_cluster_only: false           # per request, run.py --in-cluster-only
+  latency_budget_ms: null          # per request, run.py --latency-budget
 gate:                              # block a risky tool call when either is below its limit
   intent_below: 0.85               # p(allow): the user asked for this action
   args_below: 0.5                  # p(args match): its arguments match the tool results

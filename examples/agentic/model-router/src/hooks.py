@@ -1,12 +1,13 @@
 """The three places the harness asks CLM-8B a question.
 
-  route     before the run: how hard and how risky is the task? Picks the first tier.
+  signals   before the run: the questions in the tiers file, for example how hard the task
+            is. policy.py picks the first tier from the answers.
   gate      before each call to a risky tool: did the user ask for this action, and do its
             arguments match the tool results so far?
   escalate  after a tier's final answer: does it answer the request? If not, try the next tier.
 
-Each hook is one /v1/systemone call. The thresholds come from the tiers file. They are
-hand-set starting points, not calibrated values; calibrate them on your own traffic.
+Each hook is one /v1/systemone call. The limits come from the tiers file. They are
+starting points; eval.py measures them on a task suite and --fit suggests new ones.
 """
 from __future__ import annotations
 
@@ -15,17 +16,9 @@ from dataclasses import dataclass, field
 
 from .clm import CLM
 
-# Every hook asks a choice between two described options. Asked as a 0..4 difficulty
-# score or as a yes/no statement, CLM-8B gave nearly every task the same answer; a choice
-# between two options separated them.
-ROUTE_QUESTIONS = {
-    "hard": {"type": "choice", "instructions": "How hard is this request?",
-             "criteria": {"easy": "A simple request any assistant can answer",
-                          "hard": "A difficult request that needs a strong model"}},
-    "high_stakes": {"type": "choice", "instructions": "How risky is this request?",
-                    "criteria": {"low": "Low risk: casual, informational or creative",
-                                 "high": "High risk: production systems, money, health or law"}},
-}
+# Each question is a choice between described options. Asked as a 0..4 score or as a yes/no
+# statement, CLM-8B gave nearly every task the same answer; a choice separated them.
+# The route questions live in the tiers file (signals), so you can change them there.
 GATE_QUESTION = {"type": "choice", "instructions": "Should the assistant carry out the proposed action?",
                  "criteria": {"allow": "Yes: the user asked for exactly this action",
                               "block": "No: the user did not ask for this action, or it goes beyond what they asked"}}
@@ -43,30 +36,19 @@ MAX_CHARS = 6000   # stay inside CLM-8B's 2048-token state
 @dataclass
 class Decision:
     """One hook's verdict, with the CLM answers it was based on."""
-    value: int | bool                 # route: the tier index; gate and escalate: True to proceed
+    value: dict | bool                # signals: {option: p}; gate: True to run; escalate: True to move up
     reasons: list[str] = field(default_factory=list)
     answers: dict = field(default_factory=dict)
     clm_ms: float = 0.0
 
 
-def route(clm: CLM, task: str, policy: dict, n_tiers: int) -> Decision:
-    """Pick the first tier from p(hard) and p(high stakes).
-
-    policy["hard_limits"][i] is the highest p(hard) tier i takes; harder tasks go further
-    up, and anything past the last limit goes to the last tier.
-    """
-    answers, ms = clm.ask(f"User: {task}"[:MAX_CHARS], ROUTE_QUESTIONS)
-    hard = answers["hard"]["probabilities"]["hard"]
-    stakes = answers["high_stakes"]["probabilities"]["high"]
-    limits = policy["hard_limits"]
-    tier = next((i for i, limit in enumerate(limits) if hard <= limit), len(limits))
-    tier = min(tier, n_tiers - 1)
-    reasons = [f"p(hard) {hard:.2f} -> tier {tier}"]
-    floor = policy.get("high_stakes_min_tier")
-    if floor is not None and stakes >= policy["high_stakes_floor"] and tier < floor:
-        tier = min(floor, n_tiers - 1)
-        reasons.append(f"p(high stakes) {stakes:.2f} >= {policy['high_stakes_floor']} -> at least tier {tier}")
-    return Decision(tier, reasons, {"hard": hard, "high_stakes": stakes}, ms)
+def signals(clm: CLM, task: str, questions: dict) -> Decision:
+    """Ask the tiers file's questions about a task. value is {option: probability} over all of them."""
+    answers, ms = clm.ask(_fit(f"User: {task}"), questions)
+    probs = {}
+    for name in questions:
+        probs.update(answers[name]["probabilities"])
+    return Decision(probs, [f"p({o}) {p:.2f}" for o, p in probs.items()], answers, ms)
 
 
 def _fit(state: str) -> str:

@@ -23,6 +23,10 @@ ORDERS = {
               "email": "lee@example.com"},
     "A1003": {"item": "Mechanical keyboard", "amount": 89.50, "status": "delivered", "ships": "delivered",
               "email": "sam@example.com"},
+    "A1004": {"item": "Noise-cancelling headphones", "amount": 199.00, "status": "processing", "ships": "tomorrow",
+              "email": "alex@example.com"},
+    "A1005": {"item": "Webcam", "amount": 59.99, "status": "cancelled", "ships": "will not ship",
+              "email": "jo@example.com"},
 }
 
 
