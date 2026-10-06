@@ -95,7 +95,7 @@ r = requests.post("http://localhost:8700/v1/systemone", json={
 print(r.json()["answers"])
 ```
 
-For this request, CLM-8B answers urgency ≈ 0.85, billing ≈ 0.99 and frustration ≈ 2.00. The notebook checks your deployment against these values with a tolerance of 0.02. [parity_reference.py](./parity_reference.py) produced them without vLLM: it computes the Qwen3-8B embeddings with Hugging Face Transformers and runs them through the same `contrastive-lm` 0.1.0 engine and heads. A large difference usually means the encoder is not the one the heads were trained with, or its pooling or truncation differs. The upstream README shows other values for this request (urgency 0.41, billing 0.94); they do not reproduce with the published package and checkpoint.
+For this request, CLM-8B answers urgency ≈ 0.85, billing ≈ 0.99 and frustration ≈ 2.00. The notebook checks your deployment against these values with a tolerance of 0.02. [parity_reference.py](./parity_reference.py) produced them without vLLM: it computes the Qwen3-8B embeddings with Hugging Face Transformers and runs them through the same `contrastive-lm` 0.1.0 engine and heads. A large difference usually means the encoder is not the one the heads were trained with, or its pooling or truncation differs.
 
 To rank free-form candidates, for example tool names, best-of-N answers or next actions, use `/v1/rank`. It returns the answers best first:
 
