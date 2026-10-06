@@ -28,6 +28,15 @@ backend support matrix and the CUDA and driver requirements.
 | [Qwen 3 VL 32B Instruct](./rayserve/qwen3-vl-32B-instruct-vllm/serve.ipynb)    | [vLLM](https://github.com/vllm-project/vllm)    | Nvidia GPU | Devices=8, TP=8, PP=1, Multi-modal |
 
 
+### System One Models
+
+System One models answer typed questions about a state (choice, score, true/false) with probabilities from one forward pass, without generating text. They suit per-request decisions such as routing, triage and tagging.
+
+| Model      | Inference Engine | Accelerator | Notes |
+| ----------- | ----------- | ------------ | ----------- |
+| [CLM-8B](./system-one/clm-8b/serve.ipynb)    | [vLLM](https://github.com/vllm-project/vllm) encoder, [clm-serve](https://github.com/Contrastive-LM/CLM) heads   | Nvidia GPU, CPU | Devices=1, TP=1, PP=1; Qwen3-8B encoder on GPU, heads and API on CPU; [load test](./system-one/clm-8b/example/) |
+
+
 ### [Triton Inference Server](https://github.com/triton-inference-server/server)
 
 #### [Python Backend](https://github.com/triton-inference-server/python_backend)

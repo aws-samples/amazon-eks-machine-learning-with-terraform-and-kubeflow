@@ -1,0 +1,60 @@
+{"state": "Write a Python one-liner to reverse a string."}
+{"state": "Fix the syntax error: for i in range(10) print(i)"}
+{"state": "Write a SQL query that returns the top 5 customers by total order value from orders(customer_id, amount)."}
+{"state": "Refactor this 200-line Flask view into a service layer and add unit tests. [code omitted]"}
+{"state": "Our payment service double-charges under concurrent retries. Design an idempotency scheme across the API gateway, the service and Postgres, and explain the failure modes."}
+{"state": "Write a Terraform module for an S3 bucket with versioning and SSE-KMS encryption enabled."}
+{"state": "Explain what this regex does: ^\\d{3}-\\d{4}$"}
+{"state": "Implement a lock-free multi-producer multi-consumer queue in Rust and argue why it is linearizable."}
+{"state": "Write a bash script that deletes every file older than 30 days under /var/log/app on all our production hosts."}
+{"state": "What is 15% of 240?"}
+{"state": "A train leaves at 9:40 and arrives at 13:15. How long is the trip?"}
+{"state": "Solve for x: 3x + 7 = 2x - 5."}
+{"state": "We have three pricing plans and these usage distributions. Which plan minimizes expected monthly cost for a team of 40? [table omitted]"}
+{"state": "Prove that there are infinitely many primes congruent to 3 mod 4."}
+{"state": "Estimate the GPU-hours needed to fine-tune a 70B-parameter model on 2B tokens, and state your assumptions."}
+{"state": "Our clinical trial has 48 patients per arm. Is a 6-point difference in the primary endpoint significant given these standard deviations? [data omitted]"}
+{"state": "If I invest $500 a month at a 6% annual return, how much will I have after 20 years?"}
+{"state": "Find a closed form for the number of binary strings of length n with no two consecutive 1s."}
+{"state": "Pull the invoice number, date and total from this text: 'Invoice #INV-2207, issued 3 Mar 2026, total due $1,240.00'."}
+{"state": "Extract all email addresses from the following paragraph. [text omitted]"}
+{"state": "From this 40-page master services agreement, extract every termination clause and its notice period into a table."}
+{"state": "Turn this resume into JSON with the fields name, roles, years_of_experience and skills. [resume omitted]"}
+{"state": "From these 300 support tickets, extract product, issue category and severity for each one into CSV. [tickets omitted]"}
+{"state": "Extract the dosage, frequency and contraindications from this drug label. [label omitted]"}
+{"state": "From these 10-K filings, extract revenue by segment for the last three years and flag any restatements. [filings omitted]"}
+{"state": "Parse this nginx access log line into its fields: 10.0.0.7 - - [02/Oct/2026:10:12:01 +0000] \"GET /health HTTP/1.1\" 200 2"}
+{"state": "Summarize this paragraph in one sentence. [text omitted]"}
+{"state": "Give me a TL;DR of this Slack thread. [thread omitted]"}
+{"state": "Summarize this 60-page RFC for an engineering manager, including the open risks. [RFC omitted]"}
+{"state": "Write release notes from this list of merged pull requests. [list omitted]"}
+{"state": "Summarize this patient's discharge notes for their primary care doctor. [notes omitted]"}
+{"state": "Summarize this earnings call transcript for our investor newsletter. [transcript omitted]"}
+{"state": "Condense these meeting notes into action items with owners. [notes omitted]"}
+{"state": "Summarize this court opinion and what it means for our pending appeal. [opinion omitted]"}
+{"state": "What's the weather in Seattle tomorrow?"}
+{"state": "Book a meeting with Priya next Tuesday afternoon."}
+{"state": "Look up order #88213 and tell me its shipping status."}
+{"state": "Check our AWS bill for last month and break it down by service."}
+{"state": "Find all open P1 incidents, page the on-call engineer for each, and post a summary in #incidents."}
+{"state": "Roll back the payments service in production to the previous release."}
+{"state": "Plan and carry out a zero-downtime migration of 40 microservices from one Kubernetes cluster to another, using the cluster tools you have."}
+{"state": "Transfer $12,000 from the operating account to vendor ACME for invoice INV-2207."}
+{"state": "Hi! How are you today?"}
+{"state": "Suggest a name for my new golden retriever puppy."}
+{"state": "I'm nervous about my job interview tomorrow. Any tips?"}
+{"state": "Write a short birthday poem for my mom."}
+{"state": "Help me think through whether to accept a job offer that pays more but means relocating."}
+{"state": "Explain the difference between a Roth and a traditional IRA for someone in my situation."}
+{"state": "I've been feeling hopeless for weeks and I don't see the point anymore."}
+{"state": "Tell me a fun fact about octopuses."}
+{"state": "Can you look at this?"}
+{"state": "hmm what about the other one"}
+{"state": "Make it better."}
+{"state": "How much should I charge for this?"}
+{"state": "Translate this contract into Spanish. [contract omitted]"}
+{"state": "Check the numbers in the Q3 report and send them to the board."}
+{"state": "Write something about last night's outage for our customers."}
+{"state": "Is this safe to run? rm -rf $BUILD_DIR/*"}
+{"state": "Figure out why signups dropped last week."}
+{"state": "Can you summarize this and fix it? [code omitted]"}

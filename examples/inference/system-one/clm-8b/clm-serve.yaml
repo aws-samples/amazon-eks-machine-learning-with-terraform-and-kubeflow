@@ -1,0 +1,62 @@
+# CLM System One API (projection heads + HTTP API) on CPU.
+# Install with release name `clm-serve`. It expects the encoder release to be named `clm-encoder`.
+# The image is passed at install time: --set image.name=<clm-serve ECR URI>.
+image:
+  name:
+  pull_policy: IfNotPresent
+resources:
+  node_type: m6i.xlarge
+  # generic-server reads cpu/memory from here, not from server.resources.
+  # Measured at ~0.8 GiB resident with the 512MiB vector cache reserved.
+  requests:
+    cpu: 2
+    memory: 2Gi
+  limits:
+    cpu: 4
+    memory: 4Gi
+tolerations:
+  - key: "compute-tier"
+    operator: "Exists"
+    effect: "NoSchedule"
+server:
+  name: clm-serve
+  env:
+    - name: CLM_EMB_URL
+      value: "http://clm-encoder:8000/v1/embeddings"
+    - name: CLM_EMB_MODEL
+      value: qwen3-8b
+    - name: CLM_EMB_MAX_TOKENS
+      value: "2048"
+    - name: CLM_CKPT
+      value: /fsx/pretrained-models/Contrastive-LM/CLM-v0.1-8B/CLM_v0.1-8B.pt
+    - name: CLM_DEVICE
+      value: cpu
+    - name: CLM_ACTION_CACHE
+      value: 512MiB
+  command:
+    - clm-serve
+  args:
+    - --port 8700
+    - --no-download
+    - --no-ui
+  ports:
+    - name: http
+      value: 8700
+  readiness_probe:
+    period_secs: 5
+    failure_threshold: 3
+    path: /health
+    port: 8700
+  startup_probe:
+    period_secs: 10
+    failure_threshold: 30
+    path: /health
+    port: 8700
+  liveness_probe:
+    period_secs: 10
+    failure_threshold: 3
+    path: /health
+    port: 8700
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 1
