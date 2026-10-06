@@ -91,7 +91,7 @@ def run_agent(tier_index: int, tier: dict, task: str, clm: CLM, cfg: dict) -> At
                 record = {"name": call.name, "arguments": call.arguments}
                 tool = TOOLS.get(call.name)
                 if tool is not None and tool.risky:
-                    g = hooks.gate(clm, task, _transcript(attempt), call.name, call.arguments, cfg["gate_below"])
+                    g = hooks.gate(clm, task, _transcript(attempt), call.name, call.arguments, cfg["gate"])
                     record["gate"] = {"allowed": g.value, "reasons": g.reasons, "clm_ms": g.clm_ms}
                     if not g.value:
                         result = json.dumps({"error": "blocked: this action needs the user's confirmation"})

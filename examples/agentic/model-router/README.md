@@ -5,10 +5,10 @@ This example is a small agent harness that uses [CLM-8B](../../inference/system-
 | hook | when | question CLM-8B answers | effect |
 |---|---|---|---|
 | **route** | before the run | How hard is this request? How risky is it? | picks the first model tier |
-| **gate** | before each call to a risky tool | Should the assistant carry out this action? | runs the tool, or returns "blocked" to the model |
+| **gate** | before each call to a risky tool | Did the user ask for this action? Do its arguments match the tool results? | runs the tool, or returns "blocked" to the model |
 | **escalate** | after a tier's final answer | Does this reply answer the request? | keeps the answer, or reruns the task on the next tier |
 
-Each decision is one `/v1/systemone` call that returns probabilities from a single forward pass, with no text generated. The harness is plain Python with no agent framework, so every decision is visible in a few lines of [src/hooks.py](./src/hooks.py).
+Each decision is one `/v1/systemone` call, with one or two questions, that returns probabilities from a single forward pass, with no text generated. The harness is plain Python with no agent framework, so every decision is visible in a few lines of [src/hooks.py](./src/hooks.py).
 
 ```
           ┌───────────────────── clm-serve (CLM-8B) ─────────────────────┐
@@ -87,9 +87,10 @@ When the gate blocks a call, the model receives `blocked: this action needs the 
 
 ## Things to know
 
-- **The thresholds are not calibrated.** `hard_limits`, `high_stakes_floor`, `gate_below` and `escalate_below` in the tiers files are hand-set starting points. Log the traces on your own traffic, judge the outcomes, and set the thresholds from that.
+- **The thresholds are not calibrated.** `hard_limits`, `high_stakes_floor`, the `gate` limits and `escalate_below` in the tiers files are hand-set starting points. Log the traces on your own traffic, judge the outcomes, and set the thresholds from that.
 - **How you ask matters.** CLM-8B's answers depend strongly on the wording and the type of a question. Asked for a difficulty score or for the probability of a yes/no statement, it gave nearly every task the same answer. A `choice` between two described options separated them, so every hook asks one. Test any question you change against tasks whose right answer you know.
-- **The gate is a check, not a security boundary.** It catches actions the user clearly did not ask for. It can miss a plausible-looking action with a wrong argument, such as an email to the wrong address. Keep authorization and argument validation in the tools themselves.
+- **The gate asks two questions.** Asked only whether the user wanted the action, CLM-8B allowed an email to an address the order lookup never returned: the intent was right, and the argument was wrong. A second question, whether the arguments match the tool results, separates those cases.
+- **The gate is a check, not a security boundary.** CLM-8B judges meaning; it does not compare strings. Keep authorization and exact checks, such as "the recipient is the customer on this order", in the tools themselves.
 - **CLM-8B does not verify facts or arithmetic.** The escalate hook judges whether a reply addresses the request. It cannot tell a wrong number from a right one.
 - **Escalation starts over.** An escalated task reruns from the user's message on the next tier, so tool calls the lower tier made can run again. Make risky tools idempotent, or carry the lower tier's tool results forward if your tools are not.
 - **2048-token states.** CLM-8B reads at most 2048 tokens. The hooks keep the start of a long state (the task) and its end (the latest step).

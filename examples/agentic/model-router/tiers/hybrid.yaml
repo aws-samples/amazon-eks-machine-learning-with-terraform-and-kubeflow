@@ -17,6 +17,8 @@ route:
   hard_limits: [0.5]               # small takes p(hard) <= 0.5, large the rest
   high_stakes_floor: 0.7           # p(high stakes) at or above this ...
   high_stakes_min_tier: 1          # ... goes to large
-gate_below: 0.85                   # block a risky tool call when p(allow) is below this
+gate:                              # block a risky tool call when either is below its limit
+  intent_below: 0.85               # p(allow): the user asked for this action
+  args_below: 0.5                  # p(args match): its arguments match the tool results
 escalate_below: 0.5                # try the next tier when p(answered) is below this
 max_steps: 6                       # model calls per tier before the attempt counts as unfinished

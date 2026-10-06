@@ -1,7 +1,8 @@
 """The three places the harness asks CLM-8B a question.
 
   route     before the run: how hard and how risky is the task? Picks the first tier.
-  gate      before each call to a risky tool: did the user ask for exactly this action?
+  gate      before each call to a risky tool: did the user ask for this action, and do its
+            arguments match the tool results so far?
   escalate  after a tier's final answer: does it answer the request? If not, try the next tier.
 
 Each hook is one /v1/systemone call. The thresholds come from the tiers file. They are
@@ -28,6 +29,11 @@ ROUTE_QUESTIONS = {
 GATE_QUESTION = {"type": "choice", "instructions": "Should the assistant carry out the proposed action?",
                  "criteria": {"allow": "Yes: the user asked for exactly this action",
                               "block": "No: the user did not ask for this action, or it goes beyond what they asked"}}
+# Intent alone misses a requested action with a wrong argument, such as an email to an address
+# the order lookup did not return; the arguments question catches those.
+ARGS_QUESTION = {"type": "choice", "instructions": "Do the proposed action's arguments match the tool results?",
+                 "criteria": {"match": "Yes, every argument matches the tool results",
+                              "mismatch": "No, an argument differs from the tool results"}}
 ESCALATE_QUESTION = {"type": "choice", "instructions": "Does the assistant's final reply answer the user's request?",
                      "criteria": {"answered": "Yes, fully and correctly",
                                   "not_answered": "No: wrong, partial or refused"}}
@@ -70,17 +76,20 @@ def _fit(state: str) -> str:
     return state[:MAX_CHARS // 3] + "\n...\n" + state[-2 * MAX_CHARS // 3:]
 
 
-def gate(clm: CLM, task: str, transcript: str, name: str, arguments: dict | None, threshold: float) -> Decision:
-    """Allow a risky tool call only if CLM thinks the user asked for exactly this action.
+def gate(clm: CLM, task: str, transcript: str, name: str, arguments: dict | None, policy: dict) -> Decision:
+    """Allow a risky tool call only if the user asked for it and its arguments match the tool results.
 
     The state includes the tool results so far, so CLM can compare the action with them,
     for example the email address an order lookup returned.
     """
     state = f"User: {task}\n\n{transcript}\n\nProposed action: {name}({json.dumps(arguments)})"
-    answers, ms = clm.ask(_fit(state), {"allow": GATE_QUESTION})
-    p = answers["allow"]["probabilities"]["allow"]
-    ok = p >= threshold
-    return Decision(ok, [f"p(allow) {p:.2f} {'>=' if ok else '<'} {threshold}"], {"allow": p}, ms)
+    answers, ms = clm.ask(_fit(state), {"allow": GATE_QUESTION, "args": ARGS_QUESTION})
+    allow = answers["allow"]["probabilities"]["allow"]
+    match = answers["args"]["probabilities"]["match"]
+    checks = [("p(allow)", allow, policy["intent_below"]), ("p(args match)", match, policy["args_below"])]
+    ok = all(p >= limit for _, p, limit in checks)
+    reasons = [f"{label} {p:.2f} {'>=' if p >= limit else '<'} {limit}" for label, p, limit in checks]
+    return Decision(ok, reasons, {"allow": allow, "args_match": match}, ms)
 
 
 def escalate(clm: CLM, task: str, transcript: str, answer: str, threshold: float) -> Decision:
