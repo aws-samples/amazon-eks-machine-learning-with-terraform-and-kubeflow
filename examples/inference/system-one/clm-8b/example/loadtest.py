@@ -14,7 +14,10 @@ A request that fails or never completes counts as an error (the client times out
 60 seconds). With --encoder-metrics-url, the script reads the encoder's
 vllm:num_requests_running five seconds after each level; it should be 0 on an idle server.
 
-The results record request and error counts only, not latency or throughput.
+By default the script reports request and error counts only. Add --latency to also
+measure throughput and client and server latency (p50 and p95) at each level:
+
+    python loadtest.py --url http://clm-serve:8700 --latency
 """
 from __future__ import annotations
 
@@ -52,24 +55,50 @@ def running_requests(metrics_url: str) -> float | None:
     return sum(values) if values else None
 
 
-def level(session: requests.Session, url: str, model: str, states: list[str], concurrency: int) -> dict:
+def pct(xs: list[float], q: float) -> float | None:
+    if not xs:
+        return None
+    xs = sorted(xs)
+    return xs[min(len(xs) - 1, round(q * (len(xs) - 1)))]
+
+
+def level(session: requests.Session, url: str, model: str, states: list[str], concurrency: int,
+          latency: bool = False) -> dict:
     errors = []
 
     def one(state):
         try:
+            t0 = time.perf_counter()
             r = session.post(f"{url}/v1/systemone", timeout=60,
                              json={"state": f"[{uuid.uuid4().hex[:12]}] {state}", "model": model,
                                    "questions": QUESTIONS})
+            wall_ms = (time.perf_counter() - t0) * 1000
             r.raise_for_status()
-            return set(r.json()["answers"]) == set(QUESTIONS)
+            if set(r.json()["answers"]) != set(QUESTIONS):
+                raise ValueError("incomplete answers")
+            server_ms = r.headers.get("X-CLM-Latency-Ms")
+            return {"wall_ms": wall_ms, "server_ms": float(server_ms) if server_ms else None}
         except (requests.RequestException, KeyError, ValueError) as e:
             errors.append(f"{type(e).__name__}: {e}"[:200])
-            return False
+            return None
 
+    t0 = time.perf_counter()
     with ThreadPoolExecutor(concurrency) as pool:
-        ok = sum(pool.map(one, states))
-    return {"concurrency": concurrency, "requests": len(states), "errors": len(states) - ok,
-            "error_samples": errors[:3]}
+        ok = [c for c in pool.map(one, states) if c]
+    elapsed = time.perf_counter() - t0
+    row = {"concurrency": concurrency, "requests": len(states), "errors": len(states) - len(ok),
+           "error_samples": errors[:3]}
+    if latency:
+        wall = [c["wall_ms"] for c in ok]
+        server = [c["server_ms"] for c in ok if c["server_ms"] is not None]
+        row.update({"throughput_rps": len(ok) / elapsed,
+                    "wall_p50_ms": pct(wall, 0.5), "wall_p95_ms": pct(wall, 0.95),
+                    "server_p50_ms": pct(server, 0.5), "server_p95_ms": pct(server, 0.95)})
+    return row
+
+
+def fmt(x: float | None) -> str:
+    return "n/a" if x is None else f"{x:.0f}"
 
 
 def main() -> None:
@@ -79,6 +108,8 @@ def main() -> None:
     ap.add_argument("--concurrency", default="1,2,4,8,16,32")
     ap.add_argument("--requests", type=int, default=96, help="requests per concurrency level")
     ap.add_argument("--encoder-metrics-url", help="clm-encoder's /metrics, to check for requests left running")
+    ap.add_argument("--latency", action="store_true",
+                    help="also measure throughput and client and server latency (p50, p95)")
     ap.add_argument("--out", default=str(HERE / "results"))
     args = ap.parse_args()
 
@@ -98,13 +129,16 @@ def main() -> None:
 
     levels = []
     for c in (int(x) for x in args.concurrency.split(",")):
-        row = level(session, url, args.model, states, c)
+        row = level(session, url, args.model, states, c, args.latency)
         if args.encoder_metrics_url:
             time.sleep(5)   # let any finished request leave the scheduler before reading the gauge
             row["encoder_running_after"] = running_requests(args.encoder_metrics_url)
         levels.append(row)
         stuck = f"  encoder running after: {row['encoder_running_after']}" if args.encoder_metrics_url else ""
-        print(f"concurrency {c:3}: {row['requests']} requests  errors {row['errors']}{stuck}")
+        timing = (f"  {row['throughput_rps']:6.1f} req/s  p50 {fmt(row['wall_p50_ms']):>5} ms  "
+                  f"p95 {fmt(row['wall_p95_ms']):>5} ms  server p50 {fmt(row['server_p50_ms']):>5} ms"
+                  if args.latency else "")
+        print(f"concurrency {c:3}: {row['requests']} requests  errors {row['errors']}{stuck}{timing}")
         for sample in row["error_samples"]:
             print(f"    {sample}")
 

@@ -16,7 +16,9 @@ If `clm-serve` was installed with `CLM_API_KEY`, export the same `CLM_API_KEY` b
 
 ## What it reports
 
-For each concurrency level, the number of requests and the number of errors, with up to three error messages. A request counts as an error if it fails, returns an incomplete answer, or does not complete within the client's 60-second timeout. The results go to `results/loadtest.json`, which is git-ignored. The script does not record latency or throughput.
+For each concurrency level, the number of requests and the number of errors, with up to three error messages. A request counts as an error if it fails, returns an incomplete answer, or does not complete within the client's 60-second timeout. The results go to `results/loadtest.json`.
+
+To also measure throughput and client and server latency (p50 and p95) at each level, add `--latency`. The server latency comes from the `X-CLM-Latency-Ms` response header, so you can tell network overhead from model time.
 
 With `--encoder-metrics-url`, the script also reads the encoder's `vllm:num_requests_running` five seconds after each level. It should be 0. A non-zero value on an idle server is the symptom that made `clm-encoder.yaml` turn off chunked prefill.
 
