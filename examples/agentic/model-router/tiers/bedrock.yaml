@@ -1,0 +1,27 @@
+# Every tier is a model on Amazon Bedrock. CLM-8B picks the tier, gates risky tool calls
+# and decides when an answer needs a larger model.
+#
+# The model IDs are global cross-Region inference profiles. Use any Converse model that
+# supports tool use and is enabled in your account.
+tiers:
+  - name: small
+    backend: bedrock
+    model: global.anthropic.claude-haiku-4-5-20251001-v1:0
+    max_tokens: 4096
+  - name: medium
+    backend: bedrock
+    model: global.anthropic.claude-sonnet-4-6
+    max_tokens: 4096
+  - name: large
+    backend: bedrock
+    model: global.anthropic.claude-opus-4-8
+    max_tokens: 4096
+
+# Hand-set starting points, not calibrated values. See the README.
+route:
+  hard_limits: [0.5, 0.75]         # small takes p(hard) <= 0.5, medium <= 0.75, large the rest
+  high_stakes_floor: 0.7           # p(high stakes) at or above this ...
+  high_stakes_min_tier: 1          # ... starts at medium or higher
+gate_below: 0.85                   # block a risky tool call when p(allow) is below this
+escalate_below: 0.5                # try the next tier when p(answered) is below this
+max_steps: 6                       # model calls per tier before the attempt counts as unfinished

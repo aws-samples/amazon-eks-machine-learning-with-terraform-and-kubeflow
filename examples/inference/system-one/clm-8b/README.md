@@ -109,6 +109,8 @@ requests.post("http://localhost:8700/v1/rank", json={
 
 You can also use the [upstream Python client](https://github.com/Contrastive-LM/CLM#api-reference) (`pip install contrastive-lm`, `CLM_BASE_URL=http://localhost:8700`).
 
+For CLM-8B in an agent loop, routing tasks to model tiers, gating risky tool calls and escalating weak answers, see the [model router](../../../agentic/model-router/README.md) example.
+
 ## Run the load test
 
 The [load test](./example/README.md) checks that every request completes at increasing concurrency. Run it in the cluster, as Step 7 of the notebook does; `kubectl port-forward` fails under concurrent connections.

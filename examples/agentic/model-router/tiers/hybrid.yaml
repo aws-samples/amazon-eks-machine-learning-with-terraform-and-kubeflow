@@ -1,0 +1,22 @@
+# The small tier is Qwen3-8B on your own GPUs, served by Dynamo with tool calling on
+# (examples/inference/dynamo/vllm/qwen3-8b/dgd-agg-tools.yaml). Harder or high-stakes
+# tasks, and answers CLM-8B escalates, go to Amazon Bedrock.
+tiers:
+  - name: small
+    backend: openai
+    base_url: ${DYNAMO_BASE_URL:-http://localhost:8000/v1}
+    model: qwen3-8b
+    max_tokens: 4096               # Qwen3 reasons before it answers or calls a tool
+  - name: large
+    backend: bedrock
+    model: global.anthropic.claude-sonnet-4-6
+    max_tokens: 4096
+
+# Hand-set starting points, not calibrated values. See the README.
+route:
+  hard_limits: [0.5]               # small takes p(hard) <= 0.5, large the rest
+  high_stakes_floor: 0.7           # p(high stakes) at or above this ...
+  high_stakes_min_tier: 1          # ... goes to large
+gate_below: 0.85                   # block a risky tool call when p(allow) is below this
+escalate_below: 0.5                # try the next tier when p(answered) is below this
+max_steps: 6                       # model calls per tier before the attempt counts as unfinished

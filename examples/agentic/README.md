@@ -218,3 +218,7 @@ spec:
 ```
 
 For full documentation, see the [kmcp repository](https://github.com/kagent-dev/kmcp).
+
+## Model Router with a System One Model
+
+[model-router](./model-router/README.md) is a small agent harness, with no agent framework, that uses [CLM-8B](../inference/system-one/clm-8b/README.md) to route each task to a model tier, gate risky tool calls, and escalate answers that miss the request. It runs with Qwen3-8B on [Dynamo](../inference/dynamo/vllm/qwen3-8b/README.md#tool-calling) plus Claude on Amazon Bedrock, or with Claude on Bedrock alone.

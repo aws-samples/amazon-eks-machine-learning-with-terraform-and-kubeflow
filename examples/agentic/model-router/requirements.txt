@@ -1,0 +1,4 @@
+requests>=2.31
+openai>=1.40
+boto3>=1.35
+pyyaml>=6.0

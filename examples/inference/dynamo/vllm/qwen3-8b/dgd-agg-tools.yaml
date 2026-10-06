@@ -1,0 +1,84 @@
+image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
+image_pull_policy: IfNotPresent
+backend_framework: vllm
+
+pvc:
+  - name: pv-fsx
+    mount_path: /fsx
+  - name: pv-efs
+    mount_path: /efs
+
+gpu_tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+components:
+  # OpenAI-compatible HTTP endpoint. No GPU, so it lands on a CPU node.
+  Frontend:
+    type: frontend
+    replicas: 1
+    args:
+      - -m
+      - dynamo.frontend
+      - --http-port
+      - "8000"
+    resources:
+      requests:
+        cpu: "1"
+        memory: 4Gi
+      limits:
+        cpu: "2"
+        memory: 8Gi
+
+  # Aggregated worker, as in dgd-agg.yaml, with tool calling and reasoning parsing turned on.
+  VllmWorker:
+    type: worker
+    replicas: 1
+    # Single-GPU instances with at least 24GB of VRAM. Qwen3-8B is ~16GB in bf16, so 24GB leaves
+    # room for a KV cache at 16k context.
+    #
+    # Constraining this is not optional: unconstrained, Karpenter picks the cheapest instance with
+    # one GPU, which is a 16GB T4 -- enough for the weights and nothing else, so the pod
+    # crash-loops. A list rather than one type because pinning to one type turns any transient
+    # shortage of it into a deployment that never schedules.
+    node_types:
+      - g6e.xlarge      # 1x L40S 48GB,  4 vCPU /  32GiB
+      - g6e.2xlarge     # 1x L40S 48GB,  8 vCPU /  64GiB
+      - g6e.4xlarge     # 1x L40S 48GB, 16 vCPU / 128GiB
+      - g6e.8xlarge     # 1x L40S 48GB, 32 vCPU / 256GiB
+      - g6.2xlarge      # 1x L4   24GB,  8 vCPU /  32GiB
+      - g6.4xlarge      # 1x L4   24GB, 16 vCPU /  64GiB
+      - g6.8xlarge      # 1x L4   24GB, 32 vCPU / 128GiB
+      - g5.2xlarge      # 1x A10G 24GB,  8 vCPU /  32GiB
+      - g5.4xlarge      # 1x A10G 24GB, 16 vCPU /  64GiB
+      - g5.8xlarge      # 1x A10G 24GB, 32 vCPU / 128GiB
+      - g7.2xlarge      # 1x RTX PRO 6000 96GB
+      - g7e.2xlarge     # 1x RTX PRO 6000 96GB
+    # vLLM worker IPC.
+    shared_memory_size: 8Gi
+    args:
+      - -m
+      - dynamo.vllm
+      - --model
+      - /fsx/pretrained-models/Qwen/Qwen3-8B
+      - --served-model-name
+      - qwen3-8b
+      - --max-model-len
+      - "16384"
+      # Qwen3 emits tool calls as Hermes-style <tool_call>{...}</tool_call> blocks. With this
+      # parser, the frontend returns them in message.tool_calls instead of in the content.
+      - --dyn-tool-call-parser
+      - hermes
+      # Moves the <think>...</think> block out of content and into message.reasoning_content.
+      - --dyn-reasoning-parser
+      - qwen3
+    resources:
+      requests:
+        cpu: "2"
+        memory: 16Gi
+        nvidia.com/gpu: "1"
+      limits:
+        cpu: "3"
+        memory: 24Gi
+        nvidia.com/gpu: "1"
