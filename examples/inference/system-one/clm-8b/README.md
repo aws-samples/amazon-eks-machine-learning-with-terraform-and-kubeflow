@@ -27,7 +27,7 @@ Splitting them keeps the GPU doing only what needs a GPU. The heads, the vector 
 
 ## Jupyter notebook
 
-The [serve.ipynb](./serve.ipynb) notebook runs every step below, including a parity check against independently computed reference answers and the triage demo. The sections that follow give the same steps as commands.
+The [serve.ipynb](./serve.ipynb) notebook runs every step below, including a parity check against independently computed reference answers, the triage demo and an in-cluster load test. The sections that follow give the same steps as commands.
 
 ## Build and push the Docker containers
 
