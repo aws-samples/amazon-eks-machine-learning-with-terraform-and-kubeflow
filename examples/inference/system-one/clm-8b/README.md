@@ -134,7 +134,3 @@ Run the load test in the cluster, as Step 8 of the notebook does; `kubectl port-
 
     helm uninstall clm-serve -n kubeflow-user-example-com
     helm uninstall clm-encoder -n kubeflow-user-example-com
-
-## License and attribution
-
-CLM and the CLM-8B weights are by Jacky Kwok, Hangoo Kang, Tarun Suresh, Jon Saad-Falcon, Marco Pavone, Christopher Ré and Azalia Mirhoseini, released under Apache 2.0 at [Contrastive-LM/CLM](https://github.com/Contrastive-LM/CLM) and [Contrastive-LM/CLM-v0.1-8B](https://huggingface.co/Contrastive-LM/CLM-v0.1-8B). Qwen3-8B is by the Qwen team, released under Apache 2.0 at [Qwen/Qwen3-8B](https://huggingface.co/Qwen/Qwen3-8B). This example downloads both from Hugging Face; it does not redistribute them.
