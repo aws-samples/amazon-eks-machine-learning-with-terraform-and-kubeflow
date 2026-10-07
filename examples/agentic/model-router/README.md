@@ -57,6 +57,8 @@ Install the dependencies and run from this folder. `CLM_BASE_URL` and `DYNAMO_BA
     pip install -r requirements.txt
     export AWS_REGION=<aws-region>
 
+The Bedrock model IDs default to global cross-Region inference profiles. If your account or Region needs a different model or profile, set `BEDROCK_SMALL_MODEL`, `BEDROCK_MEDIUM_MODEL` or `BEDROCK_LARGE_MODEL`, which override the tier of that name in the tiers file. Keep account-specific profile ARNs in the environment, not in the tiers file.
+
 See where each task in [tasks/demo.jsonl](./tasks/demo.jsonl) would go, without calling any model:
 
     python run.py --tiers tiers/hybrid.yaml --tasks tasks/demo.jsonl --route-only
