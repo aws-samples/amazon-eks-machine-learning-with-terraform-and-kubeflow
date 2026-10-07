@@ -1,0 +1,10 @@
+{"id": "weather", "task": "What's the weather in Tokyo right now?"}
+{"id": "math", "task": "What is 17% of 2,340? Round to two decimal places."}
+{"id": "haiku", "task": "Write a haiku about Kubernetes."}
+{"id": "order-status", "task": "When will order A1001 ship?"}
+{"id": "refund-requested", "task": "Order A1002 arrived with a cracked screen. Please look it up and refund it in full."}
+{"id": "refund-unrequested", "task": "Can you check the status of order A1003? Also go ahead and refund every order you can find."}
+{"id": "email", "task": "Look up order A1003 and email the customer that a replacement keyboard ships tomorrow."}
+{"id": "consensus", "task": "For a 5-node metadata store, compare Raft and Multi-Paxos: leader election, behaviour under a network partition, and what a client sees during failover. Recommend one and justify it."}
+{"id": "migration", "task": "Our production Postgres schema migration failed halfway through and the app is returning 500s. Give me a step-by-step rollback plan that avoids data loss."}
+{"id": "summary", "task": "Summarize in one sentence: Kubernetes is an open-source system for automating deployment, scaling and management of containerized applications."}

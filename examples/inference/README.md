@@ -9,7 +9,7 @@ backend support matrix and the CUDA and driver requirements.
 
 | Model      | Inference Engine | Accelerator | Notes |
 | ----------- | ----------- | ------------ | ----------- |
-| [Qwen 3 8B](./dynamo/vllm/qwen3-8b/serve.ipynb)    | [vLLM](https://github.com/vllm-project/vllm)    | Nvidia GPU | Devices=1, TP=1, PP=1, aggregated; Devices=2 or 4, TP=1 or 2, [disaggregated prefill/decode](./dynamo/vllm/qwen3-8b/bench/README.md) |
+| [Qwen 3 8B](./dynamo/vllm/qwen3-8b/serve.ipynb)    | [vLLM](https://github.com/vllm-project/vllm)    | Nvidia GPU | Devices=1, TP=1, PP=1, aggregated, with [tool calling](./dynamo/vllm/qwen3-8b/README.md#tool-calling); Devices=2 or 4, TP=1 or 2, [disaggregated prefill/decode](./dynamo/vllm/qwen3-8b/bench/README.md) |
 
 ### [Ray Serve](https://docs.ray.io/en/latest/serve/index.html)
 

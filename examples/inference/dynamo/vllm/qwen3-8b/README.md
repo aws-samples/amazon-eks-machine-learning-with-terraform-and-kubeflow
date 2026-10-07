@@ -84,6 +84,39 @@ Qwen3 is a reasoning model and emits a `<think>` block before its answer, so kee
 
 An empty `data` array from `/v1/models` means the frontend is up but no worker has registered yet — check the worker pod's logs rather than the frontend's.
 
+## Tool Calling
+
+Agents need the model's tool calls as structured `tool_calls`, not as text. [`dgd-agg-tools.yaml`](dgd-agg-tools.yaml) is `dgd-agg.yaml` with two worker flags added:
+
+| flag | what it does |
+|---|---|
+| `--dyn-tool-call-parser hermes` | Qwen3 writes tool calls as Hermes-style `<tool_call>{...}</tool_call>` blocks. The parser returns them in `message.tool_calls`, with `finish_reason: tool_calls`. |
+| `--dyn-reasoning-parser qwen3` | Moves the `<think>` block out of `content` and into `message.reasoning_content`. |
+
+Without them, as in `dgd-agg.yaml`, the model still decides to call the tool, but the call comes back as `<tool_call>` text inside `content`, after the `<think>` block, with `finish_reason: stop` and no `tool_calls`. An agent loop never sees it.
+
+Changing the worker args makes `helm upgrade` leave the old worker running (see [Notes](#notes)), so uninstall the aggregated deployment first:
+
+    cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+    helm uninstall dyn-qwen3-8b -n kubeflow-user-example-com
+    helm install --debug dyn-qwen3-8b \
+        charts/machine-learning/serving/dynamo/ \
+        -f examples/inference/dynamo/vllm/qwen3-8b/dgd-agg-tools.yaml -n kubeflow-user-example-com
+
+Port-forward to the frontend as in [Test the Endpoint](#test-the-endpoint), then run [`tool_call_check.py`](tool_call_check.py):
+
+    pip install openai
+    python examples/inference/dynamo/vllm/qwen3-8b/tool_call_check.py --base-url http://localhost:8000/v1
+
+It makes the calls an agent loop makes, and prints `PASS` or `FAIL` for each check:
+
+1. A question with one `get_weather` tool. The model must call the tool, with JSON arguments that name the city, and leave no `<tool_call>` or `<think>` markup in `content`.
+2. The tool's result, sent back as a `tool` message. The model must answer from it, without calling the tool again.
+3. The same question with `tool_choice: "none"`. The model must not call the tool.
+4. The same question with `stream: true`. The streamed deltas must add up to the same tool call.
+
+Keep `max_tokens` generous here too: Qwen3 reasons before it calls a tool. The script uses 2048.
+
 ## Disaggregated Serving
 
 Prefill and decode run as separate workers exchanging the KV cache over NIXL. This is what Dynamo exists to do: the two phases have very different compute profiles, and separating them stops long prompts from stalling in-flight decodes.
