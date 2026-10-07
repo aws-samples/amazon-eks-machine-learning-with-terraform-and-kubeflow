@@ -1,8 +1,10 @@
 # Every tier is a model on Amazon Bedrock. CLM-8B's signals pick the tier, it gates risky
 # tool calls, and it decides when an answer needs a larger model.
 #
-# The model IDs are global cross-Region inference profiles. Use any Converse model that
-# supports tool use and is enabled in your account.
+# The model IDs default to global cross-Region inference profiles. Override them with
+# BEDROCK_SMALL_MODEL, BEDROCK_MEDIUM_MODEL and BEDROCK_LARGE_MODEL, for example to use a
+# geographic profile or your own inference profile. Use any Converse model that supports
+# tool use and is enabled in your account.
 #
 # profile: what each tier offers. All fields are optional.
 #   max             the highest p(option) the tier takes; a task above it starts higher up
@@ -15,7 +17,7 @@
 tiers:
   - name: small
     backend: bedrock
-    model: global.anthropic.claude-haiku-4-5-20251001-v1:0
+    model: ${BEDROCK_SMALL_MODEL:-global.anthropic.claude-haiku-4-5-20251001-v1:0}
     max_tokens: 4096
     profile:
       max: {hard: 0.5, money_or_email: 0.5}
@@ -25,7 +27,7 @@ tiers:
       latency_ms: null
   - name: medium
     backend: bedrock
-    model: global.anthropic.claude-sonnet-4-6
+    model: ${BEDROCK_MEDIUM_MODEL:-global.anthropic.claude-sonnet-4-6}
     max_tokens: 4096
     profile:
       max: {hard: 0.75}
@@ -35,7 +37,7 @@ tiers:
       latency_ms: null
   - name: large
     backend: bedrock
-    model: global.anthropic.claude-opus-4-8
+    model: ${BEDROCK_LARGE_MODEL:-global.anthropic.claude-opus-4-8}
     max_tokens: 4096
     profile:
       in_cluster: false

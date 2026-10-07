@@ -1,6 +1,7 @@
 # The small tier is Qwen3-8B on your own GPUs, served by Dynamo with tool calling on
 # (examples/inference/dynamo/vllm/qwen3-8b/dgd-agg-tools.yaml). Harder tasks, tasks that
 # send an email or move money, and answers CLM-8B escalates, go to Amazon Bedrock.
+# BEDROCK_LARGE_MODEL overrides the Bedrock model ID.
 #
 # profile: what each tier offers. All fields are optional.
 #   max             the highest p(option) the tier takes; a task above it starts higher up
@@ -24,7 +25,7 @@ tiers:
       latency_ms: null
   - name: large
     backend: bedrock
-    model: global.anthropic.claude-sonnet-4-6
+    model: ${BEDROCK_LARGE_MODEL:-global.anthropic.claude-sonnet-4-6}
     max_tokens: 4096
     profile:
       in_cluster: false
