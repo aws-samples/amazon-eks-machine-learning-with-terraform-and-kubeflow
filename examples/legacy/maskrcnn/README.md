@@ -1,10 +1,10 @@
 # Training Mask R-CNN model on COCO 2017 dataset
 
-This example illustrates how to use [mpijob-horovod-tensorflow-gpu](../../charts/machine-learning/training/mpijob-horovod-tensorflow-gpu/Chart.yaml) Helm chart to train Mask R-CNN model on [COCO 2017 dataset](https://cocodataset.org/#download).
+This example illustrates how to use [mpijob-horovod-tensorflow-gpu](../../../charts/machine-learning/training/mpijob-horovod-tensorflow-gpu/Chart.yaml) Helm chart to train Mask R-CNN model on [COCO 2017 dataset](https://cocodataset.org/#download).
 
-Before proceeding, complete the [Prerequisites](../../README.md#prerequisites) and [Getting started](../../README.md#getting-started). 
+Before proceeding, complete the [Prerequisites](../../../README.md#prerequisites) and [Getting started](../../../README.md#getting-started). 
 
-See [What is in the YAML file](../../README.md#yaml-recipes) to understand the common fields in the Helm values files. There are some fields that are specific to a machine learning chart.
+See [What is in the YAML file](../../../README.md#yaml-recipes) to understand the common fields in the Helm values files. There are some fields that are specific to a machine learning chart.
 
 
 ## Build and Push Docker Container

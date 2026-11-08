@@ -2,7 +2,7 @@
 
 This tutorial is a companion to the [Mask R-CNN distributed training blog](https://aws.amazon.com/blogs/opensource/distributed-tensorflow-training-using-kubeflow-on-amazon-eks/) on how to to do distributed training of [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN), and [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) models using [Kubeflow MPI Operator](https://github.com/kubeflow/mpi-operator) on [Amazon Elastic Kubernetes Service (EKS)](https://docs.aws.amazon.com/whitepapers/latest/overview-deployment-options/amazon-elastic-kubernetes-service.html). 
 
-Before proceeding, complete the [Prerequisites](../../README.md#prerequisites) and [Getting started](../../README.md#getting-started).
+Before proceeding, complete the [Prerequisites](../../../README.md#prerequisites) and [Getting started](../../../README.md#getting-started).
 
 ## Step by step tutorial
 
@@ -27,12 +27,12 @@ In the script above, by default, data is uploaded under a top-level S3 folder na
  
 You have two Helm charts available for training Mask-RCNN models. Both these Helm charts use the same Kubernetes namespace, which, by default, is set to `kubeflow`.
 
-To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, install the [maskrcnn](../../charts/machine-learning/training/maskrcnn/Chart.yaml) chart by executing following commands:
+To train [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, install the [maskrcnn](../../../charts/machine-learning/training/maskrcnn/Chart.yaml) chart by executing following commands:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug maskrcnn ./charts/machine-learning/training/maskrcnn/ 
 
-To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, install the [maskrcnn-optimized](../../charts/machine-learning/training/maskrcnn-optimized/Chart.yaml) chart by executing following commands:
+To train [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow) optimized model, install the [maskrcnn-optimized](../../../charts/machine-learning/training/maskrcnn-optimized/Chart.yaml) chart by executing following commands:
 
     cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
     helm install --debug maskrcnn-optimized ./charts/machine-learning/training/maskrcnn-optimized/
@@ -78,7 +78,7 @@ Copy the generated password for `tensorboard` from `.htpasswd` file and save it 
     
 #### Test TensorPack Mask-RCNN model
 
-To test [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize  [values.yaml](charts/machine-learning/testing/maskrcnn-jupyter/values.yaml), as described below:
+To test [TensorPack Mask-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) model, customize  [values.yaml](../../../charts/machine-learning/testing/maskrcnn-jupyter/values.yaml), as described below:
 
 1. Use [AWS check ip](http://checkip.amazonaws.com/) to get the public IP of your web browser client. Use this public IP to set `global.source_cidr` as a  `/32` CIDR. This will restrict Internet access to [Jupyter](https://jupyter.org/) notebook and [TensorBoard](https://www.tensorflow.org/tensorboard) services to your public IP.
 2. Set `global.log_dir` to the **relative path** of your training log directory, for example, `maskrcnn-XXXX-XX-XX-XX-XX-XX`.
@@ -107,7 +107,7 @@ Accessing TensorBoard service in a browser will display a browser warning, becau
 
 #### Test AWS Mask-RCNN model 
 
-To test [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow)  model, customize  [values.yaml](charts/machine-learning/testing/maskrcnn-optimized-jupyter/values.yaml) file, following the three steps shown for [TensorPack Mask-RCNN model](#test-tensorpack-mask-rcnn-model). Note, the `log_dir` will be different, for example, `maskrcnn-optimized-XXXX-XX-XX-XX-XX-XX`.
+To test [AWS Mask-RCNN](https://github.com/aws-samples/mask-rcnn-tensorflow)  model, customize  [values.yaml](../../../charts/machine-learning/testing/maskrcnn-optimized-jupyter/values.yaml) file, following the three steps shown for [TensorPack Mask-RCNN model](#test-tensorpack-mask-rcnn-model). Note, the `log_dir` will be different, for example, `maskrcnn-optimized-XXXX-XX-XX-XX-XX-XX`.
 
 To install the `maskrcnn-optimized-jupyter` chart, execute:
 
@@ -122,7 +122,7 @@ Execute `kubectl get service maskrcnn-optimized-jupyter -n kubeflow` to get the 
 When testing is complete, you may uninstall an installed chart by executing `helm uninstall chart-name`, for example `helm uninstall maskrcnn-jupyter`, or `helm uninstall maskrcnn-optimized-jupyter`.
 
 ### (Optional) Stage Data on EFS
-The COCO 2017 training data used in the tutorial is **automatically imported** from the `S3_BUCKET` to the FSx for Lustre file-system. However, if you want to use the EFS file-system as the source for your training data, you need to customize `S3_BUCKET` variable in [stage-data.yaml](eks-cluster/utils/stage-data.yaml), and run following command:
+The COCO 2017 training data used in the tutorial is **automatically imported** from the `S3_BUCKET` to the FSx for Lustre file-system. However, if you want to use the EFS file-system as the source for your training data, you need to customize `S3_BUCKET` variable in [stage-data.yaml](../../../eks-cluster/utils/stage-data.yaml), and run following command:
 
     kubectl apply -f eks-cluster/utils/stage-data.yaml -n kubeflow
 

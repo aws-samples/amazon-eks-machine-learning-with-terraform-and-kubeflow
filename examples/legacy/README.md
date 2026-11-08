@@ -8,6 +8,7 @@
 | Model      | Accelerator | Notes |
 | ----------- | ----------- | -------- |
 | [Mask R-CNN](./maskrcnn/README.md)     | Nvidia GPU | Mask R-CNN training for [AWS Samples Mask R-CNN](https://github.com/aws-samples/mask-rcnn-tensorflow)  on COCO 2017 dataset   |
+| [Mask R-CNN Blog Tutorial](./maskrcnn-blog/README.md)     | Nvidia GPU | Companion to the Mask R-CNN distributed training blog: [TensorPack Mask/Faster-RCNN](https://github.com/tensorpack/tensorpack/tree/master/examples/FasterRCNN) and [AWS Samples Mask R-CNN](https://github.com/aws-samples/mask-rcnn-tensorflow) on COCO 2017 dataset |
 
 
 ### [Neuronx Nemo Megatron](https://github.com/aws-neuron/neuronx-nemo-megatron)
