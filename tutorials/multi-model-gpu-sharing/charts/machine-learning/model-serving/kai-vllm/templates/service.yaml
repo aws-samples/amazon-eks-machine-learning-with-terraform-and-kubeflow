@@ -1,0 +1,17 @@
+{{- with .Values.tenant }}
+{{- if . }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- toYaml .labels | nindent 4 }}
+spec:
+  selector:
+    {{- toYaml .labels | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .port }}
+      targetPort: http
+{{- end }}
+{{- end }}

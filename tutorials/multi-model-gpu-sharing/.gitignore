@@ -1,0 +1,3 @@
+# The repository-level .gitignore ignores *.log. These boot logs are test
+# fixtures read by the selftest, so they must be tracked.
+!src/colocation/tests/fixtures/boots/*.log

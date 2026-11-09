@@ -1,0 +1,26 @@
+{{- /*
+The tenant's address, and the one object here the load driver talks to. Named
+like the siblings' Service so the driver's URL does not depend on the stack, and
+selecting the FRONTEND pod only: the worker listens on nothing the driver may
+reach, and a Service that also selected it would spread requests across a pod
+that does not serve HTTP. The operator makes a Service of its own for the
+frontend (`<graph>-frontend`); this one exists so that no part of the harness
+has to know that name.
+*/ -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dynamo-vllm.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dynamo-vllm.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: {{ .Values.service.port }}
+    targetPort: {{ .Values.service.port }}
+    protocol: TCP
+  selector:
+    {{- include "dynamo-vllm.podLabels" . | nindent 4 }}
+    colocation/role: frontend

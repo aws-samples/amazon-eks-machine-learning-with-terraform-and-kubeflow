@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vllm-tis.fullname" . }}-verify
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vllm-tis.labels" . | nindent 4 }}
+data:
+  # impl §4.4. Because a mis-keyed MPS limit fails silently (design §4.5,
+  # finding 9), every tenant attaches to MPS and measures its own envelope
+  # BEFORE the server starts. This converts the design's most dangerous silent
+  # failure into a pod that will not start.
+  #
+  # Byte-for-byte the sibling chart's script, and it has to stay that way: it
+  # tests MPS, not the server, so the two stacks must be held to the same
+  # measurement. It only needs torch, which this image has (2.13.0a0, the same
+  # build).
+  #
+  # Extended beyond the spec's single-device version: it checks EVERY visible
+  # device. For a TP group the limit string carries one UUID per shard, and a
+  # single transposed or stale UUID would leave one shard unbounded while the
+  # others verify clean — the group would then OOM mid-run rather than fail fast.
+  verify_mps_limit.py: |
+    import os, sys, torch
+
+    expected = float(os.environ["EXPECTED_FREE_GIB"])
+    tol = float(os.environ["TOLERANCE_GIB"])
+
+    n = torch.cuda.device_count()
+    if n == 0:
+        sys.stderr.write("no CUDA devices visible: check CUDA_VISIBLE_DEVICES "
+                         "and NVIDIA_VISIBLE_DEVICES\n")
+        sys.exit(1)
+
+    print("pipe directory: %s" % os.environ.get("CUDA_MPS_PIPE_DIRECTORY", "<unset>"))
+    print("limit string:   %s" % os.environ.get("CUDA_MPS_PINNED_DEVICE_MEM_LIMIT", "<unset>"))
+    print("visible devices: %d" % n)
+
+    failed = []
+    for i in range(n):
+        free, total = torch.cuda.mem_get_info(i)
+        free_gib = free / 1024**3
+        total_gib = total / 1024**3
+        ok = abs(free_gib - expected) <= tol
+        # `total` is NOT virtualized by MPS and stays at the physical figure
+        # (finding 4) — printed for provenance, never asserted.
+        print("device %d: free=%.2f GiB total=%.2f GiB expected=%.2f +/- %.2f -> %s"
+              % (i, free_gib, total_gib, expected, tol, "ok" if ok else "MISMATCH"))
+        if not ok:
+            failed.append((i, free_gib))
+
+    if failed:
+        sys.stderr.write(
+            "envelope check FAILED on %d of %d device(s): %s\n"
+            % (len(failed), n,
+               ", ".join("device %d free=%.2f GiB" % (i, f) for i, f in failed)))
+        # Two distinct faults land here and they have OPPOSITE signs. An earlier
+        # version reported only the first, which misdiagnosed the second as a key
+        # bug and sent the reader hunting through UUIDs that were already correct.
+        # `free` under MPS is min(envelope, physical_free) minus the ~0.41 GiB
+        # attach-time offset (impl §4.2.2), so which side of `expected` the value
+        # falls on identifies the cause.
+        if any(f > expected + tol for _, f in failed):
+            sys.stderr.write(
+                "TOO HIGH (free at or near the full physical capacity): the limit "
+                "was silently ignored. Almost always an ordinal key where a GPU "
+                "UUID was required. Check the UUIDs in "
+                "the limit string above against `nvidia-smi -L` on this node.\n")
+        if any(f < expected - tol for _, f in failed):
+            sys.stderr.write(
+                "TOO LOW (limit applied, but physical memory is already spoken "
+                "for): a CO-TENANT holds the difference, i.e. the envelopes on "
+                "this device sum past physical capacity. This is an "
+                "OVER-SUBSCRIBED PLACEMENT, not a key error — the limit string "
+                "above is fine. The solver owns `sum(envelopes) <= physical` "
+                "(impl §9); this check is a backstop and only catches the case "
+                "where the co-tenant was already resident when we looked. Do NOT "
+                "raise tolerance_gib to get past this.\n")
+        sys.exit(1)
+
+    print("verified: MPS envelope enforced on all %d device(s)" % n)

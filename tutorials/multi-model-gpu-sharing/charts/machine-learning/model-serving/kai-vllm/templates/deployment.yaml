@@ -1,0 +1,76 @@
+{{- with .Values.tenant }}
+{{- if . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- toYaml .labels | nindent 4 }}
+spec:
+  replicas: 1
+  # Never two at once: a rolling update would ask for a second fraction beside the first.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- toYaml .labels | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- toYaml .podLabels | nindent 8 }}
+      annotations:
+        sidecar.istio.io/inject: "false"
+        nvidia.com/container.{{ .container }}.gpu-memory.request: {{ .memory | quote }}
+        nvidia.com/container.{{ .container }}.gpu-memory.limit: {{ .memory | quote }}
+        nvidia.com/container.{{ .container }}.gpu-compute.mode: sm-sharing
+        {{- if gt (int .devices) 1 }}
+        gpu-fraction-num-devices: {{ .devices | quote }}
+        {{- end }}
+    spec:
+      schedulerName: kai-scheduler
+      nodeSelector:
+        {{- toYaml .nodeSelector | nindent 8 }}
+      {{- with .affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      tolerations:
+        - key: {{ .taint }}
+          operator: Exists
+          effect: NoSchedule
+      volumes:
+        - name: fsx
+          persistentVolumeClaim:
+            claimName: {{ .fsxClaim }}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ printf "%vGi" .shmSizeGi }}
+      containers:
+        - name: {{ .container }}
+          image: {{ .image }}
+          # No nvidia_entrypoint.sh: the node driver is newer than the image's forward-compat
+          # library (proof test 1).
+          command: ["python3"]
+          args:
+            {{- toYaml .args | nindent 12 }}
+          env:
+            {{- toYaml .env | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .port }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 180
+          volumeMounts:
+            - name: fsx
+              mountPath: /fsx
+              readOnly: true
+            - name: dshm
+              mountPath: /dev/shm
+{{- end }}
+{{- end }}

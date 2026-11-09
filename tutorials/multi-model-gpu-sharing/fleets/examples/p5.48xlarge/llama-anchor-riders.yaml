@@ -1,0 +1,170 @@
+# A dense 70B with four smaller tenants sharing its GPUs, plus a multimodal
+# tenant that must keep its own pair, on 8x H100.
+#
+# WHAT THIS FLEET IS FOR
+#
+# Two things at once. It is the fleet in which co-location is worth doing --
+# `anchor` needs four GPUs for its weights alone and leaves most of each card's
+# memory unused, which is the condition impl §0 describes -- and it is the fleet
+# whose SLOs are tight enough that packing is a real decision rather than a
+# formality.
+#
+# The second half is the part that took two attempts. An earlier version of this
+# file set every ITL ceiling far above what the model does on an idle card. Ten
+# of its eleven distinct placements passed, which is not an experiment: measured
+# co-location costs 1.2-2.9x, so a tenant with more than ~2.9x headroom cannot be
+# made to fail by packing and one under ~1.2x cannot be made to pass. Only the
+# band between them carries information, and that version had one tenant in it.
+#
+# Every ceiling below is derived from a stated endpoint deadline,
+#     ITL ceiling = (deadline - TTFT budget) / output length
+# and the headroom it produces against the model's measured solo speed is printed
+# next to it. Four tenants land in the band.
+#
+#   tenant    solo ITL   ceiling   headroom   shared at 2.0x / 2.9x
+#   anchor      18.70      41.0      2.19x        PASS / miss
+#   vision      16.70      30.0      1.80x        miss / miss
+#   guard       13.59      22.0      1.62x        miss / miss
+#   fast        11.66      23.0      1.97x        miss / miss
+#   extract      8.11      27.0      3.33x        PASS / PASS
+#   route        4.76      16.0      3.36x        PASS / PASS
+#
+# MEASURED RESULT (run r5ao9d, 2026-09-18): baseline 10 GPUs, certified 7 --
+# `guard` given a private device, the other three small tenants sharing the
+# anchor's four. Two of five measured placements failed. The report's RELAXED row
+# is the finding worth presenting: 6 GPUs certifies if `guard`'s ceiling moves
+# from 22.000 to 22.337 ms, a 1.53% relaxation of one target and nothing else --
+# so the answer is a trade, not a number.
+#
+# TRAFFIC IS TEXT ONLY. `vision` and `fast` are multimodal checkpoints and their
+# vision towers are resident, which is why their weights are what they are. They
+# are driven here with text prompts, so nothing in these results says anything
+# about image traffic and no writeup may imply otherwise. A fleet that drives
+# images is a different fleet with different shapes and a different TTFT.
+
+hardware:
+  instance_type: p5.48xlarge
+
+workload:
+  delivered_fraction_threshold: 0.99
+
+models:
+  llama33-70b:
+    model_id: meta-llama/Llama-3.3-70B-Instruct
+  gemma3-27b:
+    model_id: google/gemma-3-27b-it
+  phi4:
+    model_id: microsoft/phi-4
+  gemma3-12b:
+    model_id: google/gemma-3-12b-it
+  qwen3-8b:
+    model_id: Qwen/Qwen3-8B
+  qwen3-4b:
+    model_id: Qwen/Qwen3-4B
+
+tenants:
+  # Long-document summarisation. 45 s end to end with a 3 s TTFT budget, so
+  # (45000 - 3000) / 1024 = 41 ms. Its weights alone are 1.66 cards, so no pool
+  # size changes the fact that it needs four GPUs -- which is what leaves the
+  # memory this fleet exists to reclaim.
+  - name: anchor
+    model: llama33-70b
+    served_name: llama33-70b-anchor
+    model_path: /fsx/pretrained-models/meta-llama/Llama-3.3-70B-Instruct
+    rate_hz: 0.12
+    isl_tokens: 8192
+    osl_tokens: 1024
+    max_model_len: 16384
+    extra_args:
+      - --no-enable-prefix-caching
+      - --disable-custom-all-reduce
+      - '--compilation-config={"pass_config": {"fuse_allreduce_rms": false}}'
+    slo:
+      itl_mean_ms: 41.0
+      ttft_p95_ms: 3000.0
+
+  # Image-and-text answering, driven with text here. 18 s with a 2.5 s TTFT
+  # budget -> (18000 - 2500) / 512 = 30 ms. Its cache is the most expensive per
+  # token in the fleet, which is what forces it to two GPUs rather than its
+  # weights.
+  - name: vision
+    model: gemma3-27b
+    served_name: gemma3-27b-vision
+    model_path: /fsx/pretrained-models/google/gemma-3-27b-it
+    rate_hz: 0.6
+    isl_tokens: 4096
+    osl_tokens: 512
+    max_model_len: 8192
+    extra_args:
+      - --no-enable-prefix-caching
+      - --disable-custom-all-reduce
+      - '--compilation-config={"pass_config": {"fuse_allreduce_rms": false}}'
+    slo:
+      itl_mean_ms: 30.0
+      ttft_p95_ms: 2500.0
+
+  # Content moderation. A 2 s verdict with 600 ms for the first token ->
+  # (2000 - 600) / 64 = 22 ms. The tightest headroom in the fleet at 1.62x, and
+  # the tenant that decides the answer.
+  - name: guard
+    model: phi4
+    served_name: phi4-guard
+    model_path: /fsx/pretrained-models/microsoft/phi-4
+    rate_hz: 4.0
+    isl_tokens: 1024
+    osl_tokens: 64
+    max_model_len: 2048
+    extra_args:
+      - --no-enable-prefix-caching
+    slo:
+      itl_mean_ms: 22.0
+      ttft_p95_ms: 600.0
+
+  # Interactive completion. 7 s with 1.2 s for the first token ->
+  # (7000 - 1200) / 256 = 23 ms.
+  - name: fast
+    model: gemma3-12b
+    served_name: gemma3-12b-fast
+    model_path: /fsx/pretrained-models/google/gemma-3-12b-it
+    rate_hz: 0.8
+    isl_tokens: 2048
+    osl_tokens: 256
+    max_model_len: 4096
+    extra_args:
+      - --no-enable-prefix-caching
+    slo:
+      itl_mean_ms: 23.0
+      ttft_p95_ms: 1200.0
+
+  # Structured extraction consumed by code. 8 s with 1 s for the first token ->
+  # (8000 - 1000) / 256 = 27 ms. Deliberately comfortable: a fleet in which every
+  # tenant is on the edge cannot show which one decided the answer.
+  - name: extract
+    model: qwen3-8b
+    served_name: qwen3-8b-extract
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-8B
+    rate_hz: 2.0
+    isl_tokens: 2048
+    osl_tokens: 256
+    max_model_len: 4096
+    extra_args:
+      - --no-enable-prefix-caching
+    slo:
+      itl_mean_ms: 27.0
+      ttft_p95_ms: 1000.0
+
+  # Routing. A 400 ms decision with 150 ms for the first token ->
+  # (400 - 150) / 16 = 16 ms. The one tenant that fits anywhere.
+  - name: route
+    model: qwen3-4b
+    served_name: qwen3-4b-route
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-4B
+    rate_hz: 8.0
+    isl_tokens: 512
+    osl_tokens: 16
+    max_model_len: 1024
+    extra_args:
+      - --no-enable-prefix-caching
+    slo:
+      itl_mean_ms: 16.0
+      ttft_p95_ms: 150.0

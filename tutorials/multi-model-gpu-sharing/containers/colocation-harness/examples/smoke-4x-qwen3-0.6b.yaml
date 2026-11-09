@@ -1,0 +1,95 @@
+# End-to-end smoke run against the four Qwen3-0.6B tenants already resident on the
+# g6e node. Its purpose is to exercise the instrument -- load generation, batch means,
+# the DCGM UUID join, the verdict logic, and the artifact write -- at near-zero GPU
+# cost. It is NOT a calibration run and its numbers are not a measurement of anything:
+# 0.6B on an L40S at these rates is nowhere near contended.
+#
+# Real runs differ in three ways: rates set to a common fraction of each model's own
+# solo saturation rate (design §8.3), `itl_target_halfwidth_ms` read from the
+# calibration record rather than unset, and a validity key hash that means something.
+
+run_id: smoke-0001
+validity_key_hash: smoke
+
+# Deliberately "smoke": these observations must not be mistaken for measurements
+# taken under a real key. The store partitions by this hash, so they stay separate.
+
+# The sequence shape is per tenant, below. Only the tokenizer is fleet-wide here.
+tokenizer_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+
+# `<daemon-release>-dcgm-exporter`. The exporter ships inside the mps-daemon chart since
+# 2026-09-04, so this name follows the daemon's release name -- which, once a run installs
+# its own daemon, is per-run. `mps-daemon` here is just the release name used when it is
+# installed by hand. The agent derives this itself (render.exporter_service_url); it is
+# spelled out only because this example is meant to be runnable without the agent.
+exporter_url: http://mps-daemon-dcgm-exporter.kubeflow-user-example-com.svc.cluster.local:9400/metrics
+
+# Unset on purpose: no calibration record exists yet for this key, so the window
+# falls back to `window_min_s` and the record says rule=fixed. See config.py.
+itl_target_halfwidth_ms: null
+window_min_s: 60
+window_ceiling_s: 300
+steady_state_ceiling_s: 300
+drain_timeout_s: 120
+
+out_dir: /efs/colocation
+
+tenants:
+  # gpu_uuids come from the mps-daemon ConfigMap on this node, matched to each
+  # tenant's own GPU assignment. Not discovered from DCGM -- it cannot attribute a
+  # GPU to an MPS tenant (see scrape.scrape_dcgm).
+  - name: m1
+    base_url: http://m1-qwen3-0-6b-a.kubeflow-user-example-com.svc.cluster.local:8000
+    served_name: qwen3-0-6b
+    model_id: Qwen/Qwen3-0.6B
+    tp: 1
+    envelope_gib: 8
+    rate_hz: 2.0
+    isl_tokens: 512
+    osl_tokens: 128
+    gpu_uuids: ["GPU-00010000-0000-0000-0000-000000000001"]        # gpu0
+
+  - name: r1
+    base_url: http://r1-qwen3-0-6b-i3a.kubeflow-user-example-com.svc.cluster.local:8000
+    served_name: qwen3-0-6b-i3a
+    model_id: Qwen/Qwen3-0.6B
+    tp: 1
+    envelope_gib: 20
+    rate_hz: 2.0
+    isl_tokens: 512
+    osl_tokens: 128
+    gpu_uuids: ["GPU-00080000-0000-0000-0000-000000000008"]        # gpu1
+
+  - name: t2
+    base_url: http://t2-qwen3-0-6b-tp2.kubeflow-user-example-com.svc.cluster.local:8000
+    served_name: qwen3-0-6b-tp2
+    model_id: Qwen/Qwen3-0.6B
+    tp: 2
+    envelope_gib: 8
+    rate_hz: 2.0
+    isl_tokens: 512
+    osl_tokens: 128
+    gpu_uuids:                                                     # gpu2, gpu3
+      - GPU-00020000-0000-0000-0000-000000000002
+      - GPU-00050000-0000-0000-0000-000000000005
+
+  - name: r2
+    base_url: http://r2-qwen3-0-6b-r2.kubeflow-user-example-com.svc.cluster.local:8000
+    served_name: qwen3-0-6b-r2
+    model_id: Qwen/Qwen3-0.6B
+    tp: 2
+    envelope_gib: 20
+    rate_hz: 2.0
+    isl_tokens: 512
+    osl_tokens: 128
+    gpu_uuids:                                                     # gpu4, gpu5
+      - GPU-00060000-0000-0000-0000-000000000006
+      - GPU-00030000-0000-0000-0000-000000000003
+
+provenance:
+  purpose: instrument smoke test, not a measurement
+  vllm_image: see charts/machine-learning/model-serving/vllm-openai/values.yaml
+  note: >-
+    GPUs 6 and 7 are idle and held by mps-daemon. Their DCGM series are not
+    collected because no tenant claims them, which is the intended behaviour of the
+    UUID join.

@@ -1,0 +1,18 @@
+{{- /* Each tenant's drift figures over a rolling hour, for graphing. The expressions are the ones
+`colocation.kai drift` records from (src/colocation/kai/drift.py), written here as values. */ -}}
+{{- with .Values.plan }}
+{{- if and . .rules ($.Capabilities.APIVersions.Has "monitoring.coreos.com/v1/PrometheusRule") }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- toYaml .labels | nindent 4 }}
+spec:
+  groups:
+    - name: {{ .name }}
+      interval: 1m
+      rules:
+        {{- toYaml .rules | nindent 8 }}
+{{- end }}
+{{- end }}

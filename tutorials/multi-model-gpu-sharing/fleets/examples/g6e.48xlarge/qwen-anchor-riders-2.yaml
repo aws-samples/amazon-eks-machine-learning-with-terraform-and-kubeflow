@@ -1,0 +1,141 @@
+# qwen-anchor-riders, served by Triton Inference Server instead of vLLM's own server.
+#
+# THE DEMAND IS IDENTICAL TO fleets/examples/g6e.48xlarge/qwen-anchor-riders.yaml, tenant for tenant
+# and number for number. That is the point of the file: it changes exactly one thing, the serving
+# stack, so a difference measured between the two is a difference between two servers. The engine
+# build underneath is the same (both images carry vLLM 0.24.0+092c4842.dev on torch 2.13.0a0), so this
+# is not a comparison of two engine versions wearing different names.
+#
+# `engine:` below is a FLEET-LEVEL default, and a tenant may state its own. That is why this file is
+# `-2` and not `-triton`: a later file may mix stacks within one fleet, and a name that promised one
+# stack would then be wrong (`qwen35-multimodal-2.yaml` already is such a file). The stack a tenant is
+# served by is written in the file, never in its name.
+#
+# WHAT IT COSTS TO RUN. Nothing here is amortized from the vLLM rows. The serving stack is part of a
+# row's identity -- deliberately, because the whole exercise is to find out whether it matters -- so
+# every tenant needs its own solo `profile` round before `search` has a baseline. Five tenants, and
+# the anchor's floor is two shards.
+#
+# Everything below the engine line is transcribed from the sibling file, comments included, and should
+# stay that way: if the two ever disagree about a rate or a target, the pair stops being a comparison.
+
+hardware:
+  instance_type: g6e.48xlarge
+
+# Triton's OpenAI-compatible frontend, so the requests the driver sends are the same requests the
+# sibling fleet's driver sends -- same path, same body, same `min_tokens`/`ignore_eos` pinning of
+# output length. Triton's native protocol would also work and is deliberately not used: a different
+# request shape would be a second difference between the two fleets, and then neither could be
+# attributed.
+engine: vllm-triton-inference-server
+
+workload:
+  delivered_fraction_threshold: 0.99
+
+models:
+  # The riders' model: cheap in weights, not cheap in cache -- its page is only 30% below the 14B's.
+  qwen3-0-6b:
+    model_id: Qwen/Qwen3-0.6B
+
+  # Dense bf16, and the largest weight bill any single shard here carries.
+  qwen3-14b:
+    model_id: Qwen/Qwen3-14B
+
+  # A3B: 3B parameters active per token out of 30B, but all 128 experts stay resident, so it is the
+  # weights that force the shard count. Fewer KV heads than either dense model, so less cache per
+  # token than both of them.
+  qwen3-30b-a3b:
+    model_id: Qwen/Qwen3-30B-A3B-Base
+
+tenants:
+  # THE ANCHOR. Long chain-of-thought reasoning: the caller waits for a complete answer rather than
+  # reading it as it streams, so the requirement is on total time -- 1024 output tokens at 60 ms is
+  # 61 s, and a research-assistant answer a minute after asking is acceptable. Stating 60 ms rather
+  # than whatever this model happens to manage on a dedicated GPU is what leaves headroom for a rider.
+  - name: reason
+    model: qwen3-30b-a3b
+    served_name: qwen3-30b-reason
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-30B-A3B-Base
+    rate_hz: 1.0
+    isl_tokens: 1024
+    osl_tokens: 1024
+    max_model_len: 4096
+    # Written as a CLI flag here exactly as in the sibling fleet, and converted to the JSON key
+    # `enable_prefix_caching: false` by this stack's adapter, because Triton's vLLM backend reads its
+    # engine arguments as JSON rather than from a command line. A fleet file states the demand, not
+    # the plumbing, so the flag spelling does not change with the stack.
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 60.0
+      ttft_p95_ms: 2000.0
+
+  # Interactive streamed chat. A human reads the tokens as they arrive, and reading speed is the
+  # requirement -- 50 ms is 20 tokens/s, comfortably faster than anyone reads. What makes it feel
+  # responsive is the first token, so TTFT is the tighter half of this SLO.
+  #
+  # This is the tenant with the least room. At 1 Hz it needs two shards to hold 50 ms, and two shards
+  # of a 14B halve its weight bill, which leaves the largest pocket in the fleet on the cards it sits
+  # on -- so the riders may well end up beside `chat` rather than beside the anchor.
+  - name: chat
+    model: qwen3-14b
+    served_name: qwen3-14b-chat
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-14B
+    rate_hz: 1.0
+    isl_tokens: 1024
+    osl_tokens: 256
+    max_model_len: 4096
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 50.0
+      ttft_p95_ms: 1200.0
+
+  # RIDER 1, and the hardest target in the fleet. A classifier in front of everything else: it gates
+  # each request, so its whole latency is added to every other tenant's. 8 output tokens at 20 ms is
+  # 160 ms of decode on top of a 300 ms first-token bound, which is the budget a gate can have before
+  # the thing behind it stops feeling immediate. Highest rate here for the same reason -- it sees
+  # every request any other tenant sees.
+  - name: route
+    model: qwen3-0-6b
+    served_name: qwen3-06b-route
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 8.0
+    isl_tokens: 512
+    osl_tokens: 8
+    max_model_len: 1024
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 20.0
+      ttft_p95_ms: 300.0
+
+  # RIDER 2. A safety filter over generated text: it runs after a response exists, so it is not in the
+  # interactive path the way `route` is, but a user is waiting on its verdict before the response
+  # ships. 16 tokens at 80 ms is 1.3 s of decode behind a 500 ms first token.
+  - name: guard
+    model: qwen3-0-6b
+    served_name: qwen3-06b-guard
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 6.0
+    isl_tokens: 1024
+    osl_tokens: 16
+    max_model_len: 2048
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 80.0
+      ttft_p95_ms: 500.0
+
+  # RIDER 3, the prefill-heavy one. Titles and tags for a document nobody is waiting on: 2048 input
+  # tokens for 24 output tokens, once a second, read whenever. The bursts of prefill are most of what
+  # this tenant does to its neighbours, and a loose ITL is honest here in a way it would not be for
+  # `route` -- nothing downstream of this is interactive.
+  - name: title
+    model: qwen3-0-6b
+    served_name: qwen3-06b-title
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 1.0
+    isl_tokens: 2048
+    osl_tokens: 24
+    max_model_len: 4096
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 150.0
+      ttft_p95_ms: 3000.0

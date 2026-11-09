@@ -1,0 +1,279 @@
+# Three teams' fleets on one cluster, and more of them than one node serves: the first fleet that has
+# to be split over nodes.
+#
+# The tenants are those of qwen-anchor-riders.yaml (prefixed `q-`), glm-air-anchor-riders.yaml (`g-`)
+# and qwen35-multimodal.yaml (`m-`), transcribed number for number; the comments there say why each
+# number is what it is, and are not repeated here. Each of the three fits one node by itself. Together
+# they fit one node's memory, just -- all 15 at their KV floors pack onto 8 L40S at a 1.03x margin --
+# but not its latency: measured on one node, q-chat never met its target (2026-10-08/09). On two
+# nodes they meet every target on 9 GPUs. So `max_nodes: 2` is what makes this fleet servable.
+#
+# Each tenant stays on ONE node; which tenants share a node is the split, and `plan` lists the splits
+# with fewest nodes first. A tenant split across nodes (pipeline stages over the network) is not
+# built, so a model too big for one node is refused here as it is everywhere else.
+#
+# The prefix is on `served_name` as well as on the name, because two tenants on one cluster answer to
+# their served name and the three source fleets reuse `route`, `guard` and `title`.
+
+hardware:
+  instance_type: g6e.48xlarge
+  # The most nodes of `instance_type` the fleet may use. Left out, it is 1: a fleet on one node, and
+  # the fleet's validity key is the same either way.
+  max_nodes: 2
+
+workload:
+  delivered_fraction_threshold: 0.99
+
+models:
+  qwen3-0-6b:
+    model_id: Qwen/Qwen3-0.6B
+  qwen3-14b:
+    model_id: Qwen/Qwen3-14B
+  qwen3-30b-a3b:
+    model_id: Qwen/Qwen3-30B-A3B-Base
+  glm-4-5-air-fp8:
+    model_id: zai-org/GLM-4.5-Air-FP8
+  qwen35-9b:
+    model_id: Qwen/Qwen3.5-9B
+  qwen35-4b:
+    model_id: Qwen/Qwen3.5-4B
+  qwen35-2b:
+    model_id: Qwen/Qwen3.5-2B
+  qwen35-0-8b:
+    model_id: Qwen/Qwen3.5-0.8B
+
+tenants:
+  # qwen-anchor-riders.yaml: the Qwen3-30B-A3B anchor, a 14B chat tenant and three 0.6B riders.
+  - name: q-reason
+    model: qwen3-30b-a3b
+    served_name: q-qwen3-30b-reason
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-30B-A3B-Base
+    rate_hz: 1.0
+    isl_tokens: 1024
+    osl_tokens: 1024
+    max_model_len: 4096
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 60.0
+      ttft_p95_ms: 2000.0
+
+  - name: q-chat
+    model: qwen3-14b
+    served_name: q-qwen3-14b-chat
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-14B
+    rate_hz: 1.0
+    isl_tokens: 1024
+    osl_tokens: 256
+    max_model_len: 4096
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      # 55, not 50: q-chat measured 49.72 ms solo on g6e.48xlarge, so a 50 ms ceiling left 0.6% and
+      # no shared placement could be certified against it run to run.
+      itl_mean_ms: 55.0
+      ttft_p95_ms: 1200.0
+
+  - name: q-route
+    model: qwen3-0-6b
+    served_name: q-qwen3-06b-route
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 8.0
+    isl_tokens: 512
+    osl_tokens: 8
+    max_model_len: 1024
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 20.0
+      ttft_p95_ms: 300.0
+
+  - name: q-guard
+    model: qwen3-0-6b
+    served_name: q-qwen3-06b-guard
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 6.0
+    isl_tokens: 1024
+    osl_tokens: 16
+    max_model_len: 2048
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 80.0
+      ttft_p95_ms: 500.0
+
+  - name: q-title
+    model: qwen3-0-6b
+    served_name: q-qwen3-06b-title
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 1.0
+    isl_tokens: 2048
+    osl_tokens: 24
+    max_model_len: 4096
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 150.0
+      ttft_p95_ms: 3000.0
+
+  # glm-air-anchor-riders.yaml: the GLM-4.5-Air anchor on four shards and four 0.6B riders.
+  - name: g-reason
+    model: glm-4-5-air-fp8
+    served_name: g-glm-45-air-reason
+    model_path: /fsx/pretrained-models/zai-org/GLM-4.5-Air-FP8
+    rate_hz: 0.5
+    isl_tokens: 1024
+    osl_tokens: 1024
+    max_model_len: 4096
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 80.0
+      ttft_p95_ms: 4000.0
+
+  - name: g-route
+    model: qwen3-0-6b
+    served_name: g-qwen3-06b-route
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 8.0
+    isl_tokens: 512
+    osl_tokens: 8
+    max_model_len: 1024
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 20.0
+      ttft_p95_ms: 300.0
+
+  - name: g-guard
+    model: qwen3-0-6b
+    served_name: g-qwen3-06b-guard
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 6.0
+    isl_tokens: 1024
+    osl_tokens: 16
+    max_model_len: 2048
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 80.0
+      ttft_p95_ms: 500.0
+
+  - name: g-title
+    model: qwen3-0-6b
+    served_name: g-qwen3-06b-title
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 1.0
+    isl_tokens: 2048
+    osl_tokens: 24
+    max_model_len: 4096
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 150.0
+      ttft_p95_ms: 3000.0
+
+  - name: g-followup
+    model: qwen3-0-6b
+    served_name: g-qwen3-06b-followup
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 2.0
+    isl_tokens: 512
+    osl_tokens: 256
+    max_model_len: 1024
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 50.0
+      ttft_p95_ms: 800.0
+
+  # qwen35-multimodal.yaml: the Qwen3.5 image pipeline, every tenant multimodal.
+  - name: m-docqa
+    model: qwen35-9b
+    served_name: m-qwen35-9b-docqa
+    model_path: /fsx/pretrained-models/Qwen/Qwen3.5-9B
+    rate_hz: 0.5
+    isl_tokens: 8448
+    osl_tokens: 512
+    images:
+      count: 8
+      pixels: 1048576
+    max_model_len: 16384
+    extra_args:
+      - --no-enable-prefix-caching
+      - --mm-processor-cache-gb=0
+      - '--limit-mm-per-prompt={"image": 8, "video": 0}'
+      - '--mm-processor-kwargs={"min_pixels": 262144, "max_pixels": 1048576}'
+    slo:
+      itl_mean_ms: 60.0
+      ttft_p95_ms: 12000.0
+
+  - name: m-caption
+    model: qwen35-4b
+    served_name: m-qwen35-4b-caption
+    model_path: /fsx/pretrained-models/Qwen/Qwen3.5-4B
+    rate_hz: 6.0
+    isl_tokens: 1088
+    osl_tokens: 96
+    images:
+      count: 1
+      pixels: 1048576
+    max_model_len: 2048
+    extra_args:
+      - --no-enable-prefix-caching
+      - --mm-processor-cache-gb=0
+      - '--limit-mm-per-prompt={"image": 1, "video": 0}'
+      - '--mm-processor-kwargs={"min_pixels": 262144, "max_pixels": 1048576}'
+    slo:
+      itl_mean_ms: 60.0
+      ttft_p95_ms: 2000.0
+
+  - name: m-tag
+    model: qwen35-2b
+    served_name: m-qwen35-2b-tag
+    model_path: /fsx/pretrained-models/Qwen/Qwen3.5-2B
+    rate_hz: 8.0
+    isl_tokens: 304
+    osl_tokens: 16
+    images:
+      count: 1
+      pixels: 262144
+    max_model_len: 1024
+    extra_args:
+      - --no-enable-prefix-caching
+      - --mm-processor-cache-gb=0
+      - '--limit-mm-per-prompt={"image": 1, "video": 0}'
+      - '--mm-processor-kwargs={"min_pixels": 262144, "max_pixels": 262144}'
+    slo:
+      itl_mean_ms: 30.0
+      ttft_p95_ms: 400.0
+
+  - name: m-alt
+    model: qwen35-0-8b
+    served_name: m-qwen35-0-8b-alt
+    model_path: /fsx/pretrained-models/Qwen/Qwen3.5-0.8B
+    rate_hz: 6.0
+    isl_tokens: 320
+    osl_tokens: 48
+    images:
+      count: 1
+      pixels: 262144
+    max_model_len: 1024
+    extra_args:
+      - --no-enable-prefix-caching
+      - --mm-processor-cache-gb=0
+      - '--limit-mm-per-prompt={"image": 1, "video": 0}'
+      - '--mm-processor-kwargs={"min_pixels": 262144, "max_pixels": 262144}'
+    slo:
+      itl_mean_ms: 25.0
+      ttft_p95_ms: 300.0
+
+  - name: m-thumb
+    model: qwen35-0-8b
+    served_name: m-qwen35-0-8b-thumb
+    model_path: /fsx/pretrained-models/Qwen/Qwen3.5-0.8B
+    rate_hz: 12.0
+    isl_tokens: 320
+    osl_tokens: 8
+    images:
+      count: 1
+      pixels: 262144
+    max_model_len: 512
+    extra_args:
+      - --no-enable-prefix-caching
+      - --mm-processor-cache-gb=0
+      - '--limit-mm-per-prompt={"image": 1, "video": 0}'
+      - '--mm-processor-kwargs={"min_pixels": 262144, "max_pixels": 262144}'
+    slo:
+      itl_mean_ms: 20.0
+      ttft_p95_ms: 250.0

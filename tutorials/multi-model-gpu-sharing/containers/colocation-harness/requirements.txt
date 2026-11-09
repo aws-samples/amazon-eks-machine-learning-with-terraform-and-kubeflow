@@ -1,0 +1,28 @@
+# Pinned deliberately: the harness is part of the validity key (impl §1), so a
+# dependency that floats makes measurements incomparable across runs.
+httpx==0.27.2
+numpy==2.1.3
+PyYAML==6.0.2
+
+# Prometheus TEXT PARSER, not the query client. impl §6.1 named
+# `prometheus-api-client`, which talks to a Prometheus server. We scrape the
+# exporter and the tenant endpoints directly instead -- impl §6.5, "Prometheus is
+# a convenience view, not the system of record" -- so what is needed is a parser
+# for the exposition format, which this package provides and the other does not.
+prometheus-client==0.21.0
+
+# Tokenizer only. transformers imports cleanly without torch as long as nothing
+# asks it for a model, and the harness never does -- it needs exact TEXT length
+# (impl §6.2) and nothing else.
+#
+# Note what is deliberately NOT here: no `AutoProcessor`, no torch, no torchvision.
+# A multimodal request's length is settled by probing the server (`workload.calibrate`),
+# so the driver never needs a copy of any model family's image preprocessor. That is
+# what keeps this a CPU container with four dependencies instead of a second inference
+# stack that has to agree with the first one.
+transformers==4.46.3
+
+# Synthetic image payloads (`workload.ImagePool`). Pillow renders and PNG-encodes; the
+# pixel count is the only property of an image that costs anything on the GPU, so no
+# corpus is shipped and nothing is read from disk.
+Pillow==11.0.0

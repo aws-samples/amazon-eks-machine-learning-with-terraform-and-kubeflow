@@ -1,0 +1,10 @@
+# Traffic that has moved away from the fleet file, one kind of move per tenant, so each shows in
+# `drift` on its own: rate up, rate down, a window too thin to read, and requests longer than
+# stated. Unlisted tenants run at their fleet demand.
+fleet: fleets/examples/g6e.12xlarge/two-reasoners.yaml
+hours: 2
+tenants:
+  q-reason: {rate: 0.5}     # an anchor at half its rate: a quiet hour
+  g-guard: {rate: 2.0}      # a rider at twice its rate: the peak the file did not describe
+  g-title: {per_hour: 10}   # a trickle: too few requests for a p95
+  q-route: {isl: 1.9}       # longer prompts than the fleet file says, still inside its max_model_len

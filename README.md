@@ -511,6 +511,8 @@ Supported serving platforms:
 - Triton Inference Server (vLLM, TensorRT-LLM, Python, Ray vLLM backends)
 - DJL Serving
 
+To serve several models on shared GPUs, each still meeting its own latency target, see the [multi-model GPU sharing tutorial](./tutorials/multi-model-gpu-sharing/README.md).
+
 ## Training Examples
 
 For comprehensive training examples across multiple frameworks and accelerators, see [Training Examples README](./examples/training/README.md).

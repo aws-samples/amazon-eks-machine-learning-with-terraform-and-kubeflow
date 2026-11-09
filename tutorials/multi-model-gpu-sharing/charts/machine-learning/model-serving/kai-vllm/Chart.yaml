@@ -1,0 +1,10 @@
+apiVersion: v2
+name: kai-vllm
+description: >-
+  One vLLM tenant on a KAI GPU-memory fraction, or the plan of a KAI deployment
+  that verify and teardown read back. Installed only by `python -m colocation.kai
+  deploy`, which writes every value: one release per tenant, in the order that
+  makes KAI's binpack reproduce the slots, and one release for the plan. The
+  chart decides the shape of the manifests and nothing else.
+type: application
+version: 0.1.0

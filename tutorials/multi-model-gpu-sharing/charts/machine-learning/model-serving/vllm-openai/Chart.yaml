@@ -1,0 +1,15 @@
+apiVersion: v2
+name: vllm-openai
+description: >-
+  One vLLM tenant serving its built-in OpenAI-compatible API, attached to the
+  node's MPS control daemon under a UUID-keyed pinned-memory envelope. Every
+  tenant runs a verification init container that fails the pod if the envelope
+  was not actually applied, because a mis-keyed limit fails silently
+  (finding 9). This chart's values schema IS the solver's output schema.
+type: application
+version: 0.1.0
+# Measured in-image, not assumed: vllm 0.24.0+092c4842.dev (NGC package build
+# 0.24.0+092c4842.nv26.7.59534043), torch 2.13.0a0+9186a08b2c.nv26.07, CUDA
+# runtime 13.3, NCCL 2.30.7, python 3.12.3. Part of the validity key.
+# Was 0.9.2 on nvcr.io/nvidia/tritonserver:25.08-vllm-python-py3 until 2026-09-02.
+appVersion: "0.24.0"

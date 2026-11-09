@@ -459,9 +459,9 @@ variable "dcgm_exporter_enabled" {
 variable "cloudwatch_dcgm_exporter_enabled" {
   # The amazon-cloudwatch-observability addon deploys its OWN dcgm-exporter, whose field list
   # is operator-managed and omits DCGM_FI_PROF_SM_ACTIVE and DCGM_FI_PROF_DRAM_ACTIVE. Setting
-  # this false sets accelerated_compute_metrics = false on the addon, which removes that
-  # exporter and with it the Container Insights GPU dashboards. Nothing else the addon
-  # collects (container logs, node and pod metrics) is affected.
+  # this false sets accelerated_compute_metrics = false and dcgmExporter.enabled = false on the
+  # addon, which removes that exporter and with it the Container Insights GPU dashboards.
+  # Nothing else the addon collects (container logs, node and pod metrics) is affected.
   #
   # Deliberately INDEPENDENT of dcgm_exporter_enabled rather than derived from it: this is a
   # variable about the CloudWatch addon, and a variable named for one component should not

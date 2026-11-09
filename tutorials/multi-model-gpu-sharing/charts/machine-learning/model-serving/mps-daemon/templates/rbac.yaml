@@ -1,0 +1,45 @@
+# RBAC so the uuid-publisher sidecar can write the per-node GPU-index->UUID
+# ConfigMap at startup. The ConfigMap name embeds the node hostname (unknown at
+# template time), so the grant is on configmaps within the release namespace,
+# which is expected to be dedicated to the co-location workload (design §1.9).
+{{- if .Values.uuidConfigMap.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "mps-daemon.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mps-daemon.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "mps-daemon.fullname" . }}-uuid-writer
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mps-daemon.labels" . | nindent 4 }}
+rules:
+# The per-node ConfigMap name embeds the node hostname, unknown at template
+# time and not expressible as an RBAC resourceName wildcard. Grant on
+# configmaps within this namespace only. The namespace is expected to be
+# dedicated to the co-location workload (design §1.9, §10).
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create", "get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "mps-daemon.fullname" . }}-uuid-writer
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mps-daemon.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "mps-daemon.fullname" . }}-uuid-writer
+subjects:
+- kind: ServiceAccount
+  name: {{ include "mps-daemon.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}

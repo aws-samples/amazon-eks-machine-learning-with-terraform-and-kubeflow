@@ -1,0 +1,179 @@
+# A document assistant: one vision-language anchor and the four text stages around it. TWO SERVING
+# STACKS IN ONE FLEET, and the split is forced rather than chosen.
+#
+# The product is the same one as fleets/examples/g6e.48xlarge/qwen35-multimodal.yaml -- a person uploads
+# eight pages and asks questions about them -- but where that fleet is five multimodal stages, this one
+# is the multimodal anchor plus the text work that surrounds it: gate the incoming question, safety-check
+# the generated answer, title the document for the library, and answer follow-ups about a document
+# already on screen. Those four are text in and text out, which is what makes the mixed arrangement
+# possible.
+#
+# WHY IT IS MIXED, AND WHY THAT IS NOT A WORKAROUND.
+#
+# `vllm-triton-inference-server` cannot serve an image. The limitation is in Triton's
+# OpenAI-compatible frontend, not in the vLLM engine behind it: the frontend raises on any non-text
+# content part of a chat message, so both /v1/completions and /v1/chat/completions are closed to an
+# image request. (Checked in the 26.07 image and again in 26.08, so it is not a version to wait out.
+# The vLLM backend underneath does serve images -- through Triton's own protocol, as a base64 input
+# tensor -- but reaching it means sending this stack a different request shape than the sibling stack
+# gets, and then a measured difference between the two stacks would include the difference between two
+# protocols and could not be attributed to either.)
+#
+# So `docqa` states `engine: vllm-openai` and the four riders take the fleet's default. A tenant naming
+# its own stack is the designed arrangement, not an escape hatch: one multimodal tenant does not get to
+# decide the stack for the whole fleet. The fleet loader refuses an image tenant on a stack that cannot
+# serve images, before any GPU is touched.
+#
+# WHAT THIS FLEET MEASURES THAT NEITHER SINGLE-STACK FLEET DOES. A pocket on an anchor shard is a
+# memory pocket, and MPS enforces it per process regardless of whose process it is. This fleet asks
+# whether a rider served by one stack can ride the shards of an anchor served by another -- whether the
+# envelope is all that matters, or whether two servers sharing a card interfere in some way that the
+# envelope does not capture. It is the first fleet here that can ask.
+#
+# WHAT IT COSTS TO RUN. MORE than either single-stack `-2` fleet, and the reason is the mixing itself.
+# The environment key names the engine image, and a mixed fleet has no single one, so `fleet_image()`
+# comma-joins every image the fleet uses. That makes a third key, distinct from the pure-vLLM key and
+# from the pure-Triton key alike, and **nothing amortizes into or out of it**: not `docqa`'s rows from
+# qwen35-multimodal.yaml, though the tenant block is identical there, and not the four riders' rows
+# from glm-air-anchor-riders-2.yaml, though they are identical there. Every tenant in this file pays
+# for its own solo round the first time, five of them, and a row earned here buys nothing for any
+# fleet that is not also mixed the same way.
+#
+# That is deliberate and it is the conservative direction. A measured number describes the conditions
+# it was taken in; two engines on one card are a condition, and the key cannot leave it out and still
+# be an honest name for what was measured. The cost of joining the images is a re-measurement. The
+# cost of not joining them would be a number quoting a condition it was never taken in, which is the
+# one error the key exists to make impossible. Keeping the riders identical to the other `-2` fleets'
+# is still worth doing -- it makes the cross-stack comparison a comparison of one variable -- but it
+# does not save a round here, and an edit to a rider costs only this file.
+#
+# The anchor's `images:`, `max_pixels` and `isl_tokens` are the three things a multimodal tenant has to
+# state and a text one does not; the reasoning behind each number is in qwen35-multimodal.yaml and is
+# not repeated here, because one of the two files has to be the place it lives.
+
+hardware:
+  instance_type: g6e.48xlarge
+
+# The fleet default, which the four text riders take. `docqa` overrides it below.
+engine: vllm-triton-inference-server
+
+workload:
+  delivered_fraction_threshold: 0.99
+
+models:
+  # The anchor's model. Hybrid attention -- one layer in four holds a KV page and the rest hold a
+  # recurrent state -- so its cache per token depends on the context it is served at.
+  qwen35-9b:
+    model_id: Qwen/Qwen3.5-9B
+
+  # The riders' model, and a text model: these four stages never see an image, so nothing here pays
+  # for a vision tower it does not use.
+  qwen3-0-6b:
+    model_id: Qwen/Qwen3-0.6B
+
+tenants:
+  # THE ANCHOR: a document assistant. A person uploads eight pages and asks a question about them, and
+  # what they need is an answer that streams at reading speed once it starts. 60 ms is 16 tokens/s, and
+  # 512 output tokens at that rate is 31 s of answer -- so the ITL is the requirement and the TTFT
+  # bound is the concession.
+  #
+  # isl 8448 is 8 pages at 1024 visual tokens each, plus 256 tokens for the question, the chat
+  # template and the boundary tokens each image carries. Eight pages is a hardware limit, not a product
+  # one: a longer document is served by asking about it in parts.
+  - name: docqa
+    model: qwen35-9b
+    served_name: qwen35-9b-docqa
+    model_path: /fsx/pretrained-models/Qwen/Qwen3.5-9B
+    # THE EXCEPTION, and the whole reason this file exists. vLLM's own OpenAI server serves images;
+    # the fleet's default stack cannot. Stated on the tenant that needs it rather than by moving the
+    # whole fleet, because the other four tenants have no such constraint and the comparison with the
+    # Triton-only fleets is worth keeping for them.
+    engine: vllm-openai
+    rate_hz: 0.5
+    isl_tokens: 8448
+    osl_tokens: 512
+    images:
+      count: 8
+      pixels: 1048576
+    max_model_len: 16384
+    extra_args:
+      - --no-enable-prefix-caching
+      - --mm-processor-cache-gb=0
+      - '--limit-mm-per-prompt={"image": 8, "video": 0}'
+      - '--mm-processor-kwargs={"min_pixels": 262144, "max_pixels": 1048576}'
+    slo:
+      itl_mean_ms: 60.0
+      ttft_p95_ms: 12000.0
+
+  # RIDER 1, and the hardest target in the fleet. A classifier in front of everything else: it gates
+  # each incoming question, so its whole latency is added to the anchor's. 8 output tokens at 20 ms is
+  # 160 ms of decode on top of a 300 ms first-token bound, which is the budget a gate can have before
+  # the thing behind it stops feeling immediate. Highest rate here for the same reason -- it sees
+  # every request any other tenant sees.
+  - name: route
+    model: qwen3-0-6b
+    served_name: qwen3-06b-route
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 8.0
+    isl_tokens: 512
+    osl_tokens: 8
+    max_model_len: 1024
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 20.0
+      ttft_p95_ms: 300.0
+
+  # RIDER 2. A safety filter over the answer the anchor produced: it runs after a response exists, so
+  # it is not in the interactive path the way `route` is, but a reader is waiting on its verdict before
+  # the answer ships. 16 tokens at 80 ms is 1.3 s of decode behind a 500 ms first token.
+  - name: guard
+    model: qwen3-0-6b
+    served_name: qwen3-06b-guard
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 6.0
+    isl_tokens: 1024
+    osl_tokens: 16
+    max_model_len: 2048
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 80.0
+      ttft_p95_ms: 500.0
+
+  # RIDER 3, the prefill-heavy one. Titles and tags for the document's extracted text, for the library
+  # index -- nobody is waiting on it: 2048 input tokens for 24 output tokens, once a second, read
+  # whenever. The bursts of prefill are most of what this tenant does to its neighbours, and a loose
+  # ITL is honest here in a way it would not be for `route`.
+  - name: title
+    model: qwen3-0-6b
+    served_name: qwen3-06b-title
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 1.0
+    isl_tokens: 2048
+    osl_tokens: 24
+    max_model_len: 4096
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 150.0
+      ttft_p95_ms: 3000.0
+
+  # RIDER 4, the decode-heavy one. Follow-up questions about a document already on screen, answered
+  # from the text the anchor has already extracted rather than from the pages -- which is what keeps
+  # this stage text-only and therefore servable by the fleet's default stack. A document arrives at
+  # 0.5 Hz and gets about four questions, so 2 Hz. A human reads the answer as it streams: 50 ms is
+  # 20 tokens/s, comfortably faster than anyone reads.
+  #
+  # 256 output tokens at that rate is the largest KV pool of the four riders by a wide margin, which is
+  # why this tenant is in the fleet: it is the one that converts a stranded GiB on the anchor's card
+  # into a GPU the fleet does not need -- and here, across a stack boundary.
+  - name: followup
+    model: qwen3-0-6b
+    served_name: qwen3-06b-followup
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 2.0
+    isl_tokens: 512
+    osl_tokens: 256
+    max_model_len: 1024
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 50.0
+      ttft_p95_ms: 800.0

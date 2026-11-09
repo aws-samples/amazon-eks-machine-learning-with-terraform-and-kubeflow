@@ -1,0 +1,20 @@
+apiVersion: v2
+name: mps-daemon
+description: >-
+  NVIDIA MPS control daemon as a Deployment that requests every GPU on its node,
+  so it both creates the node (via Karpenter) and holds it. One per GPU node.
+  Publishes the MPS
+  pipe directory on a hostPath for tenant pods to share, and emits a
+  GPU-index->UUID ConfigMap that fan-out needs for UUID-keyed memory limits.
+  Ships the dcgm-exporter that instruments the captured node in the same release,
+  pinned to the daemon's node by pod affinity, because the instrument's useful
+  lifetime is exactly the node lease's.
+  Validated on g6e.48xlarge before the tenant charts were built on it.
+type: application
+# 0.2.0: dcgm-exporter merged in (templates/dcgm-exporter.yaml), one-daemon-per-node
+# stated as pod anti-affinity instead of inferred from gpuRequest, and the runtime UUID
+# ConfigMap given an ownerReference so it cannot outlive the pod that measured it. The
+# release is now expected to be installed per RUN rather than once by hand, which is what
+# made all three necessary.
+version: 0.2.0
+appVersion: "13000"  # MPS control binary version validated on g6e (test spec §1)

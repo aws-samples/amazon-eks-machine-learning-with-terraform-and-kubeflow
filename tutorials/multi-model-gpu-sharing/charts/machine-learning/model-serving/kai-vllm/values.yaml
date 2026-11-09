@@ -1,0 +1,34 @@
+# Every value is written by `colocation.kai deploy` (src/colocation/kai/plan.py, `release_values`).
+# Nothing here is a default worth installing by hand: the sizes are what fills each slot's card,
+# and a release installed out of order lands wherever binpack puts it.
+#
+# Exactly one of `plan` and `tenant` is set in a release.
+
+# The plan release: a ConfigMap holding the plan, which verify and teardown read by name, and
+# the drift recording rules.
+plan: {}
+#  name: kai-<deployment>-plan
+#  labels: {}
+#  planJson: "..."
+#  node: ""            # the first tenant's node, once it is bound
+#  rules: []           # recording rules: each tenant's drift figures over a rolling hour
+
+# A tenant release: one Deployment, one Service, and the ServiceMonitor that scrapes it.
+tenant: {}
+#  name: kai-<deployment>-<tenant>
+#  labels: {}          # on the Deployment and Service, and their selectors
+#  podLabels: {}       # labels plus the KAI queue
+#  container: vllm
+#  memory: 12345Mi     # the fraction: request and limit
+#  devices: 1          # shards; gpu-fraction-num-devices when above 1
+#  nodeSelector: {}    # the KAI node label, the instance type, and the first tenant's host
+#  taint: kai.scheduler/gpu
+#  fsxClaim: pv-fsx
+#  shmSizeGi: 16
+#  image: ""
+#  args: []
+#  env: []             # name/value pairs, an SM cap among them when the result has one
+#  port: 8000
+#  monitor:            # the ServiceMonitor Prometheus scrapes /metrics by
+#    targetLabels: []  # the deployment and tenant labels, copied onto every series
+#    interval: 15s

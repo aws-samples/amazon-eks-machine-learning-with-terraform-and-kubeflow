@@ -534,6 +534,10 @@ resource "aws_eks_addon" "cloudwatch_observability" {
   # cloudwatch_dcgm_exporter_enabled = false removes it, and with it the Container Insights
   # GPU dashboards. Container logs and node/pod metrics are unaffected. Default true, so this
   # is a no-op (configuration_values stays unset) unless explicitly asked for.
+  #
+  # Two keys, because they control different things. `accelerated_compute_metrics` stops the
+  # CloudWatch agent collecting GPU metrics. `dcgmExporter.enabled` removes the add-on's
+  # DcgmExporter resource, and with it the exporter itself; without it the resource stays.
   configuration_values = var.cloudwatch_dcgm_exporter_enabled ? null : jsonencode({
     agent = {
       config = {
@@ -545,6 +549,9 @@ resource "aws_eks_addon" "cloudwatch_observability" {
           }
         }
       }
+    }
+    dcgmExporter = {
+      enabled = false
     }
   })
 

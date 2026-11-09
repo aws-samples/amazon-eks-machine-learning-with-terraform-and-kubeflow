@@ -1,0 +1,133 @@
+# glm-air-anchor-riders, served by Triton Inference Server instead of vLLM's own server.
+#
+# THE DEMAND IS IDENTICAL TO fleets/examples/g6e.48xlarge/glm-air-anchor-riders.yaml, tenant for tenant
+# and number for number, for the reason spelled out in qwen-anchor-riders-2.yaml: one difference, so a
+# measured difference can be attributed to it.
+#
+# `route`, `guard` and `title` are still the same three riders as qwen-anchor-riders-2.yaml, so the
+# anchor is still the only difference between those two -- and now those rider rows amortize across the
+# Triton fleets exactly as their counterparts do across the vLLM ones.
+#
+# WHAT IT COSTS TO RUN. Six tenants, none of them amortized from the vLLM rows (the serving stack is
+# part of a row's identity), and the anchor's weights force four shards. That makes this the most
+# expensive of the three `-2` fleets to profile and the one whose baseline is tightest: 4 + 4 = 8 GPUs
+# with nothing shared, on an 8-GPU node.
+
+hardware:
+  instance_type: g6e.48xlarge
+
+# Triton's OpenAI-compatible frontend. Same requests as the sibling fleet sends; see
+# qwen-anchor-riders-2.yaml for why the native protocol is not used.
+engine: vllm-triton-inference-server
+
+workload:
+  delivered_fraction_threshold: 0.99
+
+models:
+  # 106.9B parameters, ~12.8B active per token, FP8. Every expert is resident whatever the routing
+  # does, so it is the weights that force the shard count -- sparsity buys compute, not memory. Its
+  # KV page is nearly twice that of the Qwen MoE in the companion fleet.
+  glm-4-5-air-fp8:
+    model_id: zai-org/GLM-4.5-Air-FP8
+
+  # The riders' model: cheap in weights, not cheap in cache.
+  qwen3-0-6b:
+    model_id: Qwen/Qwen3-0.6B
+
+tenants:
+  # THE ANCHOR. A research report: the caller submits a question and collects a finished answer, so
+  # the requirement is on TOTAL time -- 1024 output tokens at 80 ms is 82 seconds, and under two
+  # minutes for a report is what the product needs. Nobody watches the first token of an 82-second
+  # answer, so the TTFT bound is the loose half here, stated only so a queueing regression is caught.
+  #
+  # 0.5 Hz rather than 1: at 1 Hz this model needs more decode throughput than four shards of it
+  # deliver, and tp8 is worse on a node with no NVLink, so there is no wider degree to escape to. The
+  # rate is the knob -- 80 ms is what the endpoint needs and is not moved to fit a measurement.
+  - name: reason
+    model: glm-4-5-air-fp8
+    served_name: glm-45-air-reason
+    model_path: /fsx/pretrained-models/zai-org/GLM-4.5-Air-FP8
+    rate_hz: 0.5
+    isl_tokens: 1024
+    osl_tokens: 1024
+    max_model_len: 4096
+    # A CLI flag here, `enable_prefix_caching: false` in the model.json this stack's adapter writes.
+    # A fleet file states the demand, so the spelling does not change with the stack.
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 80.0
+      ttft_p95_ms: 4000.0
+
+  # RIDER 1, and the hardest target in the fleet. A classifier in front of everything else: it gates
+  # each request, so its whole latency is added to every other tenant's. 8 output tokens at 20 ms is
+  # 160 ms of decode on top of a 300 ms first-token bound, which is the budget a gate can have before
+  # the thing behind it stops feeling immediate. Highest rate here for the same reason -- it sees
+  # every request any other tenant sees.
+  - name: route
+    model: qwen3-0-6b
+    served_name: qwen3-06b-route
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 8.0
+    isl_tokens: 512
+    osl_tokens: 8
+    max_model_len: 1024
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 20.0
+      ttft_p95_ms: 300.0
+
+  # RIDER 2. A safety filter over generated text: it runs after a response exists, so it is not in the
+  # interactive path the way `route` is, but a caller is waiting on its verdict before the report
+  # ships. 16 tokens at 80 ms is 1.3 s of decode behind a 500 ms first token, and against a report
+  # that took 82 seconds to write, ~1.8 s to clear it is not what anybody notices -- which is why the
+  # ITL is loose here and the TTFT bound is the tight half.
+  - name: guard
+    model: qwen3-0-6b
+    served_name: qwen3-06b-guard
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 6.0
+    isl_tokens: 1024
+    osl_tokens: 16
+    max_model_len: 2048
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 80.0
+      ttft_p95_ms: 500.0
+
+  # RIDER 3, the prefill-heavy one. Titles and tags for a document nobody is waiting on: 2048 input
+  # tokens for 24 output tokens, once a second, read whenever. The bursts of prefill are most of what
+  # this tenant does to its neighbours, and a loose ITL is honest here in a way it would not be for
+  # `route` -- nothing downstream of this is interactive.
+  - name: title
+    model: qwen3-0-6b
+    served_name: qwen3-06b-title
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 1.0
+    isl_tokens: 2048
+    osl_tokens: 24
+    max_model_len: 4096
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 150.0
+      ttft_p95_ms: 3000.0
+
+  # RIDER 4, the decode-heavy one. Interactive follow-up questions about a report that has already
+  # landed: the report arrives at 0.5 Hz and gets about four questions, so 2 Hz. A human reads the
+  # answer as it streams and reading speed is the requirement -- 50 ms is 20 tokens/s, comfortably
+  # faster than anyone reads.
+  #
+  # 256 output tokens at that rate is the largest KV pool of the four riders by a wide margin, which
+  # is why this tenant is in the fleet: it is the one that converts a stranded GiB on an anchor shard
+  # into a GPU the fleet does not need.
+  - name: followup
+    model: qwen3-0-6b
+    served_name: qwen3-06b-followup
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 2.0
+    isl_tokens: 512
+    osl_tokens: 256
+    max_model_len: 1024
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 50.0
+      ttft_p95_ms: 800.0

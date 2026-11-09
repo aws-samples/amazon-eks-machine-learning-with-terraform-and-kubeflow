@@ -1,0 +1,103 @@
+# Two anchors that cannot share a card and four 0.6B riders, on g6e.12xlarge: the smallest fleet
+# that has to be split over two nodes with a TP>1 tenant on each. It exists to exercise the
+# multi-node path (a split search, a schema_version 2 export, one KAI deployment per node) on
+# instances easier to lease than g6e.48xlarge.
+#
+# Every tenant is three-teams.yaml's, number for number (the comments there and in its sources say
+# why). g-reason (GLM-4.5-Air-FP8) is TP=4 at about 34.5 GiB per card and q-reason (Qwen3-30B-A3B)
+# TP=2 at about 41 GiB per card, so no card holds a shard of each and one 4-card node cannot hold
+# both: every split puts them on different nodes. Which riders go with which is the split.
+
+hardware:
+  instance_type: g6e.12xlarge
+  max_nodes: 2
+
+workload:
+  delivered_fraction_threshold: 0.99
+
+models:
+  qwen3-0-6b:
+    model_id: Qwen/Qwen3-0.6B
+  qwen3-30b-a3b:
+    model_id: Qwen/Qwen3-30B-A3B-Base
+  glm-4-5-air-fp8:
+    model_id: zai-org/GLM-4.5-Air-FP8
+
+tenants:
+  - name: q-reason
+    model: qwen3-30b-a3b
+    served_name: q-qwen3-30b-reason
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-30B-A3B-Base
+    rate_hz: 1.0
+    isl_tokens: 1024
+    osl_tokens: 1024
+    max_model_len: 4096
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 60.0
+      ttft_p95_ms: 2000.0
+
+  - name: q-route
+    model: qwen3-0-6b
+    served_name: q-qwen3-06b-route
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 8.0
+    isl_tokens: 512
+    osl_tokens: 8
+    max_model_len: 1024
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 20.0
+      ttft_p95_ms: 300.0
+
+  - name: q-guard
+    model: qwen3-0-6b
+    served_name: q-qwen3-06b-guard
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 6.0
+    isl_tokens: 1024
+    osl_tokens: 16
+    max_model_len: 2048
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 80.0
+      ttft_p95_ms: 500.0
+
+  - name: g-reason
+    model: glm-4-5-air-fp8
+    served_name: g-glm-45-air-reason
+    model_path: /fsx/pretrained-models/zai-org/GLM-4.5-Air-FP8
+    rate_hz: 0.5
+    isl_tokens: 1024
+    osl_tokens: 1024
+    max_model_len: 4096
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 80.0
+      ttft_p95_ms: 4000.0
+
+  - name: g-guard
+    model: qwen3-0-6b
+    served_name: g-qwen3-06b-guard
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 6.0
+    isl_tokens: 1024
+    osl_tokens: 16
+    max_model_len: 2048
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 80.0
+      ttft_p95_ms: 500.0
+
+  - name: g-title
+    model: qwen3-0-6b
+    served_name: g-qwen3-06b-title
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+    rate_hz: 1.0
+    isl_tokens: 2048
+    osl_tokens: 24
+    max_model_len: 4096
+    extra_args: ["--no-enable-prefix-caching"]
+    slo:
+      itl_mean_ms: 150.0
+      ttft_p95_ms: 3000.0

@@ -1,0 +1,211 @@
+# dcgm-exporter, in the same chart and the same release as the daemon (2026-09-04).
+#
+# WHY IT IS HERE AND NOT INSTALLED SEPARATELY. The exporter is only useful on the node the
+# daemon captured, so it has the lease's lifetime exactly: one install, one readiness gate,
+# one uninstall, and no way for the two to end up on different nodes or for one to outlive
+# the other. Before this, the exporter was a hand-installed release called `dcgm-prototype`
+# and the harness reached it by a DNS name with that release name frozen into it
+# (render.py). That only works while there is exactly one of everything.
+#
+# A DEPLOYMENT, NOT A DAEMONSET, and this is the substantive change. Upstream ships a
+# DaemonSet behind a ClusterIP Service. With one GPU node that Service has one endpoint and
+# the arrangement is invisible; with N captured nodes it round-robins across all of them,
+# and because the harness joins DCGM series on UUID and keeps only the UUIDs it was told
+# about (harness/scrape.py), a scrape that lands on another run's node returns {} rather
+# than an error. The cause signals would go missing for ~(N-1)/N of samples with nothing
+# anywhere saying so. One replica pinned to the daemon's node gives the Service exactly one
+# endpoint and it is always the right one.
+#
+# PINNED BY POD AFFINITY, NOT BY NODE NAME. The captured node is not known at install time
+# -- it is whatever node the daemon pod ends up Running on, which is the definition of
+# capture. Pod affinity on the daemon's own labels makes "the same node as the daemon" a
+# fact the scheduler establishes, so a single `helm install` suffices: no second phase, no
+# node name written back into values, and no label that can outlive the pod it describes.
+{{- if .Values.dcgmExporter.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  # Release-prefixed. Upstream's is `exporter-metrics-config-map`, a fixed string, which is
+  # what makes two of its releases uninstallable side by side in one namespace.
+  name: {{ include "mps-daemon.exporterMetricsConfigMap" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mps-daemon.exporterLabels" . | nindent 4 }}
+data:
+  # Mounted over /etc/dcgm-exporter/default-counters.csv, which is the path the exporter's
+  # own `-f` argument points at. The upstream file name is misleading: default-counters.csv
+  # is the NON-profiling list, so an exporter that failed to get this mount would publish no
+  # DCGM_FI_PROF_* field at all -- and would look healthy doing it.
+  metrics: |
+{{ .Values.dcgmExporter.customMetrics | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mps-daemon.exporterName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mps-daemon.exporterLabels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # Recreate, for the same reason the daemon uses it and a different mechanism: two
+  # exporters on one node contend for the DCP profiling counters, which DCGM multiplexes
+  # across a fixed set of hardware units. A RollingUpdate would deliberately run two for a
+  # few seconds, during a run, on the node being measured.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "mps-daemon.exporterSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mps-daemon.exporterSelectorLabels" . | nindent 8 }}
+      annotations:
+        {{- with .Values.dcgmExporter.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      # DEPARTURE 1 from upstream: no priorityClassName. Upstream sets
+      # system-node-critical, which would let the instrument preempt the workload it exists
+      # to measure. Default priority (0) puts it level with the tenants, and it requests no
+      # GPUs, so on a g6e.48xlarge it has never anything to preempt for.
+      {{- with .Values.dcgmExporter.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      automountServiceAccountToken: false
+      # Same node as the daemon, established by the scheduler. `required`, not `preferred`:
+      # a preferred rule would let the exporter land on some other node and publish another
+      # node's GPUs under this release's Service name, which is worse than publishing
+      # nothing -- the harness cannot tell a wrong UUID set from an absent one.
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchLabels:
+                {{- include "mps-daemon.selectorLabels" . | nindent 16 }}
+      # Narrowed to the daemon's own nodeSelector rather than upstream's
+      # `karpenter.k8s.aws/instance-gpu-manufacturer: nvidia`. Redundant given the affinity
+      # above, and kept because it is what stops Karpenter from ever considering a node the
+      # daemon would not also accept while both pods are still Pending.
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      volumes:
+      - name: metrics-config
+        configMap:
+          name: {{ include "mps-daemon.exporterMetricsConfigMap" . }}
+          items:
+          - key: metrics
+            path: default-counters.csv
+      containers:
+      - name: exporter
+        image: {{ .Values.dcgmExporter.image | quote }}
+        imagePullPolicy: {{ .Values.dcgmExporter.imagePullPolicy }}
+        securityContext:
+          # SYS_ADMIN is REQUIRED, not defensive: it is what lets DCGM program the DCP
+          # profiling counters. Without it every DCGM_FI_PROF_* field disappears and the
+          # exporter's log blames a module that "is not currently loaded" -- the same
+          # misleading message DCGM 4.1.1 produced for an unrelated reason.
+          allowPrivilegeEscalation: false
+          capabilities:
+            add: ["SYS_ADMIN"]
+            drop: ["ALL"]
+          runAsNonRoot: false
+          runAsUser: 0
+        # The image itself carries NVIDIA_VISIBLE_DEVICES=all, which is how the container
+        # runtime gives this pod the devices despite it requesting none from the device
+        # plugin. Do not "fix" that by adding a GPU request: the daemon holds all 8, so an
+        # exporter asking for one would sit Pending forever, and a Pending pod under
+        # Karpenter is a purchase order for a second g6e.48xlarge.
+        args:
+          {{- toYaml .Values.dcgmExporter.arguments | nindent 8 }}
+        env:
+        # Rendered by upstream too, and overridden on the command line above.
+        # --kubernetes=false wins by urfave/cli precedence (an explicit flag beats the
+        # flag's EnvVars source). Left in place so the diff against upstream stays small;
+        # the guarantee is checked empirically instead, by asserting the pod/namespace/
+        # container labels are absent from the scrape.
+        - name: DCGM_EXPORTER_KUBERNETES
+          value: "true"
+        - name: DCGM_EXPORTER_LISTEN
+          value: ":{{ .Values.dcgmExporter.port }}"
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        ports:
+        - name: metrics
+          containerPort: {{ .Values.dcgmExporter.port }}
+        volumeMounts:
+        # DEPARTURE 2 from upstream: the /var/lib/kubelet/pod-resources hostPath is NOT
+        # mounted. That socket exists so the exporter can ask the device plugin which pod
+        # owns each GPU, and this design deliberately bypasses the plugin, so the answer is
+        # not merely unavailable but wrong -- measured, it attributed all 8 GPUs' series to
+        # the placeholder pod holding the plugin allocation. --kubernetes=false switches
+        # that lookup off, which makes the mount dead weight, and dropping a privileged
+        # hostPath is worth doing on its own account.
+        - name: metrics-config
+          mountPath: /etc/dcgm-exporter/default-counters.csv
+          subPath: default-counters.csv
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.dcgmExporter.port }}
+          initialDelaySeconds: 45
+          periodSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.dcgmExporter.port }}
+          initialDelaySeconds: 45
+        resources:
+          {{- toYaml .Values.dcgmExporter.resources | nindent 10 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mps-daemon.exporterName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mps-daemon.exporterLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: {{ .Values.dcgmExporter.port }}
+    targetPort: {{ .Values.dcgmExporter.port }}
+    protocol: TCP
+  # Selects this release's exporter only. With the Deployment above that is exactly one
+  # endpoint, on the node this release captured.
+  selector:
+    {{- include "mps-daemon.exporterSelectorLabels" . | nindent 4 }}
+{{- if and .Values.dcgmExporter.serviceMonitor.enabled (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1") }}
+---
+# Convenience only. The harness scrapes :9400 directly (harness/scrape.py header: the
+# cluster Prometheus keeps its TSDB on an emptyDir, so a restart destroys every sample).
+# Nothing in a record depends on this object existing.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "mps-daemon.exporterName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mps-daemon.exporterLabels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "mps-daemon.exporterSelectorLabels" . | nindent 6 }}
+  namespaceSelector:
+    matchNames: [{{ .Release.Namespace }}]
+  endpoints:
+  - port: metrics
+    interval: {{ .Values.dcgmExporter.serviceMonitor.interval }}
+{{- end }}
+{{- end }}

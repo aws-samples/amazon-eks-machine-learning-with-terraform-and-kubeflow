@@ -1,0 +1,133 @@
+# The g6e `qwen-anchor-riders` fleet, retargeted at 8x H100.
+#
+# The same five tenants and the same question as
+# `../g6e.48xlarge/qwen-anchor-riders.yaml` -- a dense 72B with four smaller
+# tenants sharing its GPUs -- so that the pair shows what changes when only the
+# machine changes. It is the simplest fleet here: text only, one serving stack,
+# no tenant needing more than two GPUs except the anchor.
+#
+# WHAT IT ESTABLISHED (run r1qxc4, 2026-09-15): baseline 9 GPUs, certified 7.
+#
+# And the finding that made the next fleet necessary. `chat` has the least room
+# of any tenant -- a 30 ms ceiling against 18.73 ms alone, 1.6x -- and it missed
+# in every placement where it shared a GPU with anything, three times, while
+# holding at 18.7 ms in all three where it did not. Nothing predicted that from a
+# memory floor: every placement measured, including the two that missed, cleared
+# every KV floor the solver set.
+#
+#   tenant    solo ITL   ceiling   headroom   measured slowdowns when sharing
+#   route       2.67       25.0      9.4x     1.84 / 1.93 / 3.31 / 4.24   all met
+#   guard       5.04       28.0      5.6x     1.20 / 2.03 / 2.45 / 2.88   all met
+#   extract     8.11       35.0      4.3x     1.00 / 1.82 / 1.85 / 1.96   all met
+#   analyst    21.93       80.0      3.7x     1.46                        met
+#   chat       18.73       30.0      1.6x     2.21 / 2.43                 MISSED x3
+#
+# Sharing on this hardware never cost less than about 1.2x and typically
+# 1.8-2.9x, so the rule that falls out -- a tenant with less than about 2x of
+# room cannot share -- picks out `chat` and nothing else, before any GPU time is
+# spent. That ratio is not an input to anything today.
+#
+# It also produced the only KV-exhaustion event in this work. Driven at a 40 GiB
+# quota, `chat`'s pool peaked at 98.5%, vLLM preempted 34 times, a mean of 47.8
+# requests sat waiting for admission, and TTFT p95 went to 19.9 s -- against
+# 211 ms at 41 GiB, one GiB more. Its ITL in that run was 37.87 ms, *faster* than
+# the 45.52 ms of a run that preempted nothing, because a full cache means a
+# smaller batch. The two failure modes point in opposite directions.
+
+hardware:
+  instance_type: p5.48xlarge
+
+workload:
+  delivered_fraction_threshold: 0.99
+
+models:
+  qwen25-72b:
+    model_id: Qwen/Qwen2.5-72B-Instruct
+  qwen3-32b:
+    model_id: Qwen/Qwen3-32B
+  qwen3-8b:
+    model_id: Qwen/Qwen3-8B
+  qwen3-4b:
+    model_id: Qwen/Qwen3-4B
+  qwen3-1-7b:
+    model_id: Qwen/Qwen3-1.7B
+
+tenants:
+  # Long-document analysis. Its weights are 1.71 cards, so four GPUs are forced
+  # by memory alone and most of each card is left unused -- the condition this
+  # whole exercise is about.
+  - name: analyst
+    model: qwen25-72b
+    served_name: qwen25-72b-analyst
+    model_path: /fsx/pretrained-models/Qwen/Qwen2.5-72B-Instruct
+    rate_hz: 0.5
+    isl_tokens: 4096
+    osl_tokens: 1024
+    max_model_len: 8192
+    extra_args:
+      - --no-enable-prefix-caching
+    slo:
+      itl_mean_ms: 80.0
+      ttft_p95_ms: 3000.0
+
+  # Interactive chat, and the tenant that decides this fleet. 1.6x of room is
+  # less than sharing has ever cost on this hardware.
+  - name: chat
+    model: qwen3-32b
+    served_name: qwen3-32b-chat
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-32B
+    rate_hz: 3.0
+    isl_tokens: 1024
+    osl_tokens: 256
+    max_model_len: 2048
+    extra_args:
+      - --no-enable-prefix-caching
+    slo:
+      itl_mean_ms: 30.0
+      ttft_p95_ms: 1500.0
+
+  # Structured extraction consumed by code: a 10 s enrichment deadline.
+  - name: extract
+    model: qwen3-8b
+    served_name: qwen3-8b-extract
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-8B
+    rate_hz: 2.0
+    isl_tokens: 2048
+    osl_tokens: 256
+    max_model_len: 4096
+    extra_args:
+      - --no-enable-prefix-caching
+    slo:
+      itl_mean_ms: 35.0
+      ttft_p95_ms: 1000.0
+
+  # Content moderation in front of the others, so its deadline is short and its
+  # output is a verdict.
+  - name: guard
+    model: qwen3-4b
+    served_name: qwen3-4b-guard
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-4B
+    rate_hz: 6.0
+    isl_tokens: 1024
+    osl_tokens: 32
+    max_model_len: 2048
+    extra_args:
+      - --no-enable-prefix-caching
+    slo:
+      itl_mean_ms: 28.0
+      ttft_p95_ms: 600.0
+
+  # Routing. The cheapest tenant here, and the one that fits anywhere.
+  - name: route
+    model: qwen3-1-7b
+    served_name: qwen3-1-7b-route
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-1.7B
+    rate_hz: 8.0
+    isl_tokens: 512
+    osl_tokens: 16
+    max_model_len: 1024
+    extra_args:
+      - --no-enable-prefix-caching
+    slo:
+      itl_mean_ms: 25.0
+      ttft_p95_ms: 400.0

@@ -1,0 +1,13 @@
+{{- with .Values.plan }}
+{{- if . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- toYaml .labels | nindent 4 }}
+data:
+  plan.json: {{ .planJson | quote }}
+  node: {{ .node | default "" | quote }}
+{{- end }}
+{{- end }}

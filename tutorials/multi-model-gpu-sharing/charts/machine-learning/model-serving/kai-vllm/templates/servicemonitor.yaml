@@ -1,0 +1,23 @@
+{{- /* Prometheus scrapes vLLM's /metrics, which `colocation.kai drift` reads back. Skipped where
+the Prometheus Operator's CRDs are absent, so a cluster without it still deploys. */ -}}
+{{- with .Values.tenant }}
+{{- if and . ($.Capabilities.APIVersions.Has "monitoring.coreos.com/v1/ServiceMonitor") }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .name }}
+  labels:
+    {{- toYaml .labels | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- toYaml .monitor.selector | nindent 6 }}
+  # Every series carries the deployment and the tenant, which is what the drift queries select on.
+  targetLabels:
+    {{- toYaml .monitor.targetLabels | nindent 4 }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .monitor.interval }}
+{{- end }}
+{{- end }}
