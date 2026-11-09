@@ -580,6 +580,35 @@ terraform destroy -var="profile=default" -var="region=us-west-2" \
   -var="import_path=s3://<YOUR_S3_BUCKET>/ml-platform/"
 ```
 
+#### Troubleshooting Destroy: Karpenter Leftovers
+
+`terraform destroy` can uninstall the Karpenter controller before the Karpenter objects it is responsible for cleaning up. Because nothing is left to process them, two errors can repeat on every retry:
+
+1. **`helm_release.karpenter-crd` fails with `uninstallation completed with 1 error(s): context deadline exceeded`.** The `EC2NodeClass` objects are stuck in deletion because the controller is gone and never clears their `karpenter.k8s.aws/termination` finalizer. Check for them, then remove the finalizers while the cluster is still reachable:
+
+   ```bash
+   kubectl get ec2nodeclasses -o custom-columns=NAME:.metadata.name,DELETING:.metadata.deletionTimestamp,FINALIZERS:.metadata.finalizers
+   for n in $(kubectl get ec2nodeclasses -o name); do
+     kubectl patch $n --type=merge -p '{"metadata":{"finalizers":null}}'
+   done
+   ```
+
+2. **Deleting the Karpenter node IAM role (`<cluster_name>-karpenter-node-...`) fails while removing it from instance profiles (`<cluster_name>_<number>`).** Karpenter creates one instance profile per `EC2NodeClass`, outside Terraform, and normally deletes them itself. Once its controller is gone, you have to detach the role from each profile and delete the profiles by hand. The identity running these commands needs `iam:ListInstanceProfilesForRole`, `iam:RemoveRoleFromInstanceProfile` and `iam:DeleteInstanceProfile`. If the identity running Terraform lacks those permissions, the error is `AccessDenied`. In that case, run the commands below as an IAM admin, for example from AWS CloudShell:
+
+   ```bash
+   # Role name as shown in the error message, e.g. my-eks-cluster-karpenter-node-<suffix>
+   ROLE=<KARPENTER_NODE_ROLE_NAME>
+   for p in $(aws iam list-instance-profiles-for-role --role-name $ROLE \
+       --query 'InstanceProfiles[].InstanceProfileName' --output text); do
+     aws iam remove-role-from-instance-profile --instance-profile-name $p --role-name $ROLE
+     aws iam delete-instance-profile --instance-profile-name $p
+   done
+   ```
+
+   To get the role name from the Terraform state instead of the error message, run `terraform state show -no-color 'module.karpenter[0].aws_iam_role.node[0]' | grep -E '^ +name +='` in `eks-cluster/terraform/aws-eks-cluster-and-nodegroup`.
+
+After both fixes, run the same `terraform destroy` command again, or use `./terraform_destroy_retry.sh`. Repeat until it reports `Destroy complete!`.
+
 ## Utilities
 
 ### Helper Scripts
