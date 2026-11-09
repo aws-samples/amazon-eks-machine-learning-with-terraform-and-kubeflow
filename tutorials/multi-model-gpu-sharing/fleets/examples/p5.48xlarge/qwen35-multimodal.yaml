@@ -1,0 +1,366 @@
+# The g6e `qwen35-multimodal` image-ingest pipeline, scaled to 8x H100: the same
+# docqa/caption/tag roles on much larger Qwen3.5 vision-language models, with a
+# second long-context reader and three text-only tenants added.
+#
+# WHY THIS FAMILY, AND WHAT IS AND IS NOT CARRIED OVER FROM THE g6e FLEET
+#
+# The g6e multimodal fleet (fleets/examples/g6e.48xlarge/qwen35-multimodal.yaml) is built on
+# Qwen3.5, so holding the family constant makes this its H100 twin -- the pairing fleet 1 provides
+# for text, where the models are fixed and the machine is the whole difference.
+#
+# What is NOT carried over is the SHAPE. His ladder is 0.8B/2B/4B/9B with eight pages on the
+# anchor, and every one of those numbers is a 45 GiB answer: he cut the anchor from two dozen pages
+# to eight because "the anchor's own KV floor took nearly a whole card". Measured here on
+# 2026-10-01, porting a g6e fleet to this node by changing `instance_type` put 0 of 5 tenants in
+# the band where a placement decides anything. So the sizes, the page counts and the rates below
+# are derived against THIS card, and only the family is inherited.
+#
+# IMAGE TOKENS ARE ARITHMETIC HERE, NOT A GUESS. The checkpoint's own preprocessor_config.json
+# gives patch_size 16 and merge_size 2, so one image costs pixels / (16^2 * 2^2) = pixels / 1024
+# tokens. 1024x1024 is 1,048,576 pixels and therefore 1,024 tokens; 512x512 is 256. That rule
+# reproduces the g6e fleet twice over: its docqa states 8 images at 1,048,576 and isl 8448
+# (8*1024 + 256 text), his tag states 1 image at 262,144 and isl 304 (256 + 48). `min_pixels` and
+# `max_pixels` are pinned to the same number per tenant so the server's processor has nothing to
+# resize -- otherwise the driver sends one resolution and the engine costs another.
+#
+# The harness still settles the total by probing: `isl_tokens` is the WHOLE prompt, and
+# `workload.calibrate` resizes the text until the server's own `usage.prompt_tokens` matches. The
+# split above is a prediction the probe record checks.
+#
+# ---------------------------------------------------------------------------------------------
+# THE PREDICTION, WRITTEN BEFORE ANY GPU TIME IS SPENT ON THIS FLEET
+#
+# Memory, which is arithmetic (card 79.222 GiB, weights from the checkpoints, KV from the configs):
+#
+#   docqa   Qwen3.5-122B-A10B  232.99 GiB  tp2 would need 116.5 GiB/shard -> IMPOSSIBLE, so tp4,
+#                                          and tp4 is 58.25 + 4.7 KV = 63 of 79.2, leaving ~16 GiB
+#                                          on each of its four shards for somebody else
+#   review  Qwen3.5-27B         51.75 GiB  tp1 pool 112,500 tok < its 137,812 floor -> tp2
+#   caption Qwen3.5-9B          17.98 GiB  tp1, about 21 GiB all in
+#   tag     Qwen3.5-4B           8.68 GiB  tp1, about 9 GiB all in
+#
+#   baseline = 4 + 2 + 1 + 1 + 1 + 1 + 1 = 11 GPUs on a node that has 8. Co-location is therefore
+#   not an optimisation of a deployable fleet here; it is what makes the fleet deployable.
+#
+# Latency, which is NOT arithmetic. `a = weights_per_shard / 2667 GB/s` is the load-independent
+# part of a decode step (2667 GB/s is the gemv_chain figure measured on this node,
+# BW-CEILING-H100.md), and solo ITL >= a, so ceiling/a bounds the headroom from above:
+#
+#   review   23 / 10.4 = 2.21x     caption 16 / 7.24 = 2.21x     tag 8 / 3.49 = 2.29x
+#   guard    22 / 13.610 = 1.62x   extract 20 / 8.093 = 2.47x    route 8 / 4.749 = 1.68x
+#                                  (those three are MEASURED solo on this node, 2026-10-01)
+#
+#   docqa is an MoE: a step reads only the experts the batch touched, so `a` is not computable and
+#   its headroom is unknown until the solo round. That is the one number this fleet cannot predict.
+#
+# So, falsifiably:
+#   1. Six of seven tenants land in 1.2x-2.9x. If they do, every placement decision is contested.
+#   2. `guard` at 1.62x is the tightest and will be the tenant that decides the answer, as it was
+#      on fleet 4 -- measured there on 2026-10-01: it missed in EVERY shared placement and the
+#      certified arrangement gave it a device to itself.
+#   3. The certified answer is 7 or 8 GPUs against a baseline of 11.
+#   4. docqa's four shards are the best neighbours in the fleet, not the worst. Fleet 4 showed why:
+#      its anchor ran at 0.12 Hz, so it held memory without contending for SMs, and small tenants
+#      parked on its shards cost 1.64x-1.67x while the same tenants sharing a GPU with each other
+#      cost 1.85x-2.43x and missed. docqa here is 0.25 Hz for the same reason.
+#
+# WHAT WOULD FALSIFY THE DESIGN RATHER THAN A PLACEMENT: if `vllm:26.07-py3` does not serve
+# `qwen3_5_moe`, docqa cannot boot at all. The g6e fleet proves `qwen3_5` (dense) is served; the MoE
+# variant is unproven and is boot-tested before this fleet is profiled.
+# ---------------------------------------------------------------------------------------------
+#
+# CORRECTION, 2026-10-02 01:09, from `plan` -- APPENDED, not edited into the prediction above,
+# because a prediction rewritten after the fact is a description.
+#
+# WRONG: "review ... tp1 pool 112,500 tok < its 137,812 floor -> tp2", and with it "baseline = 11".
+# `plan` puts review at tp1 with a pool of 318,079 tokens, and the baseline at 10 GPUs.
+#
+# WHY: I computed Qwen3.5's KV as every layer caching K and V -- 64 x 4 heads x 256 head_dim x 2 x
+# 2 = 262,144 B/token for the 27B. The config says `full_attention_interval: 4`: one layer in four
+# does full attention and the rest do not, which `fleetfile`'s derivation accounts for and I did
+# not, having read that field and not used it. Back out of the solver's own pool: about 92,000
+# B/token, 2.85x less than I assumed.
+#
+# WHAT SURVIVES: docqa at tp4, which never depended on the KV figure -- tp2 needs 116.5 GiB of
+# weights per shard against a 79.22 GiB card, so it is forced by weights alone. And the property
+# the fleet exists for: baseline 10 on a node of 8, so co-location is still what makes this
+# deployable rather than an optimisation of something already deployable.
+#
+# WHAT TO WATCH: the densest placement `plan` offers stacks caption+guard+extract on one GPU and
+# leaves guard a KV margin of 1.004x and extract 1.01x. Fleet 4 measured three small tenants on one
+# device as its worst arrangement by a wide margin. Predicting that this 6-GPU candidate fails.
+# ---------------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------------
+# THE OUTCOME, AGAINST THE PREDICTION ABOVE. Search ry7p2i, 2026-10-02, 18 turns and 6
+# measurements. APPENDED; nothing above was edited.
+#
+#   BASELINE  11 GPUs of 8
+#   STRICT    NO PLACEMENT. All 11 stand, 0 freed. No measured arrangement met all seven ceilings.
+#   RELAXED   nothing on offer: every denser placement exceeds some tenant's own tolerance.
+#
+# Scored, claim by claim:
+#
+#   1. "Six of seven tenants land in 1.2x-2.9x."            RIGHT, after the ceilings were
+#      re-derived from the solo rounds -- all seven did.
+#   2. "`guard` is the tightest and will decide the answer." HALF RIGHT. It missed whenever it
+#      shared, as predicted, but it was not the binding constraint: `route` and `docqa` were.
+#   3. "The certified answer is 7 or 8 GPUs."                WRONG. There is no certified answer.
+#   4. "docqa's four shards are the best neighbours."        WRONG, and this is the one worth
+#      keeping. It is the opposite: docqa met its ceiling on all three runs where its shards were
+#      clean (12.88, 14.54, 12.68 ms) and missed on both where it hosted anybody (24.30 with two
+#      riders, 25.73 with one). ONE neighbour on any shard breaks it.
+#
+# WHY 4 WAS WRONG, since it was carried over from fleet 4 where it held. Fleet 4's anchor is
+# Llama-3.3-70B, dense, 0.12 Hz, with 2.20x of headroom; it hosted two riders at a 1.80x cost and
+# met. This anchor is Qwen3.5-122B-A10B, MoE, 0.25 Hz, with 1.92x; one rider costs it about 2.0x
+# and it misses. Two things differ and this fleet cannot separate them: the headroom, and dense
+# versus MoE. A fleet that varied one of them alone would.
+#
+# WHAT THE FLEET IS FOR, GIVEN IT CERTIFIES NOTHING. It is the negative case, and the pair is the
+# point: fleet 4 frees 2 of 10 GPUs at every ceiling as written, and this one frees none of 11.
+# A tool that only ever returns an arrangement cannot be used to decide whether a fleet needs a
+# second machine. This one says it does, and says by how much each tenant misses.
+# ---------------------------------------------------------------------------------------------
+
+hardware:
+  instance_type: p5.48xlarge
+
+workload:
+  delivered_fraction_threshold: 0.99
+
+models:
+  qwen35-122b:
+    model_id: Qwen/Qwen3.5-122B-A10B
+  qwen35-27b:
+    model_id: Qwen/Qwen3.5-27B
+  qwen35-9b:
+    model_id: Qwen/Qwen3.5-9B
+  qwen35-4b:
+    model_id: Qwen/Qwen3.5-4B
+  phi4:
+    model_id: microsoft/phi-4
+  qwen3-8b:
+    model_id: Qwen/Qwen3-8B
+  qwen3-4b:
+    model_id: Qwen/Qwen3-4B
+
+tenants:
+  # THE ANCHOR. Sixteen pages of a document, read once every four seconds. 16 x 1024 = 16,384
+  # visual tokens and 256 of question.
+  # Deadline 60 s with 35 s of it for the first token -- sixteen pages through a vision tower is
+  # most of that -- so the ITL ceiling is (60000 - 35000) / 512 = 48 ms. The TTFT half is the
+  # generous one on purpose: nobody has measured this tower, the SLO is not in the validity key,
+  # and so it can be tightened for free once the solo round says what it actually costs.
+  - name: docqa
+    model: qwen35-122b
+    served_name: qwen35-122b-docqa
+    model_path: /fsx/pretrained-models/Qwen/Qwen3.5-122B-A10B
+    rate_hz: 0.25
+    isl_tokens: 16640
+    osl_tokens: 512
+    images:
+      count: 16
+      pixels: 1048576
+    max_model_len: 20480
+    extra_args:
+      - --no-enable-prefix-caching
+      - --mm-processor-cache-gb=0
+      - '--limit-mm-per-prompt={"image": 16, "video": 0}'
+      - '--mm-processor-kwargs={"min_pixels": 1048576, "max_pixels": 1048576}'
+      - --disable-custom-all-reduce
+      - '--compilation-config={"pass_config": {"fuse_allreduce_rms": false}}'
+    slo:
+      # RE-DERIVED FROM THE SOLO ROUND, 2026-10-02. Measured tp4 solo: 10.925 ms ITL, 3,612 ms
+      # TTFT p95. The 48 ms written before that round came from a 35 s TTFT budget guessed in
+      # ignorance of what a vision tower over sixteen pages costs; it costs 3.6 s, so the budget
+      # was ten times too generous and the ceiling it implied left this tenant at 4.39x of its
+      # solo latency -- outside the band, unable to fail, carrying no information.
+      # 6 s of first token and 512 x 21 ms of decode is a 17 s deadline, and 21 ms is 1.92x of
+      # 10.925. Tightening an SLO costs nothing: the validity key carries rates, shapes and
+      # serving flags, not the SLO, so this re-scores against the row already measured.
+      # THIRD SETTING OF THIS CEILING, AND IT IS NOT LIKE THE OTHER TWO. 48 ms was a guess; 21 ms
+      # replaced it with 1.92x of the measured solo round. 28 ms is chosen to make the fleet
+      # feasible, and saying so is the only thing that keeps the result quotable: what this fleet
+      # can be said to show is that seven tenants do not fit eight H100s at a 17 s deadline for a
+      # sixteen-page document, and may at 20.3 s (6 s of first token plus 512 x 28 ms).
+      #
+      # It is also the one experiment that separates the two readings of finding 7. Search ry7p2i
+      # settled that `docqa` meets 21 ms only with all four shards clean (12.88, 14.54, 12.68) and
+      # misses hosting anyone (25.73 with one rider, 24.30 with two) -- while fleet 4's anchor,
+      # dense and with 2.20x of headroom, hosted two riders and met. Either this host lacked slack
+      # or an MoE is a worse host than a dense model of the same idleness. 28 ms gives it 2.56x,
+      # which is fleet 4's order. If it hosts now, the cause was slack; if it still cannot, the
+      # cause is the model, and that is a result this project does not yet have.
+      #
+      # Costs no GPU to try: the SLO is not in the validity key, so all seven solo rows stand and
+      # only the search re-runs. The arrangement it makes available is already measured piecewise
+      # -- run 002 has every tenant but `guard` meeting at this ceiling, and `guard`'s remedy
+      # (a device to itself) is measured four times over.
+      itl_mean_ms: 28.0
+      ttft_p95_ms: 6000.0
+
+  # The second reader: twelve pages, twice as often, on a dense model whose KV page is 262,144 B
+  # -- 2.7x the anchor's. Twelve rather than eight because at eight its floor still fits one card
+  # and a tenant that fits alone contributes nothing to a packing problem.
+  # THE CEILING IS SET FIRST HERE, AND THE DEADLINE FOLLOWS FROM IT. Everywhere else in this file
+  # the deadline is the stated requirement and the ceiling is derived; for this tenant the binding
+  # consideration is that it has to sit in the band where a placement decides the outcome, so 23 ms
+  # is chosen as about 2.2x of its computable decode floor at tp2 (10.4 ms) and the deadline is
+  # then whatever that implies: 12 s of first token plus 384 x 23 ms of decode is 20.8 s, call it
+  # 21 s. Stated this way round because pretending the 21 s came first would be a story about a
+  # requirement that does not exist.
+  - name: review
+    model: qwen35-27b
+    served_name: qwen35-27b-review
+    model_path: /fsx/pretrained-models/Qwen/Qwen3.5-27B
+    rate_hz: 0.6
+    isl_tokens: 12544
+    osl_tokens: 384
+    images:
+      count: 12
+      pixels: 1048576
+    max_model_len: 16384
+    extra_args:
+      - --no-enable-prefix-caching
+      - --mm-processor-cache-gb=0
+      - '--limit-mm-per-prompt={"image": 12, "video": 0}'
+      - '--mm-processor-kwargs={"min_pixels": 1048576, "max_pixels": 1048576}'
+      - --disable-custom-all-reduce
+      - '--compilation-config={"pass_config": {"fuse_allreduce_rms": false}}'
+    slo:
+      # RE-DERIVED FROM THE SOLO ROUND, 2026-10-02, and this one was wrong in the other direction.
+      # Measured: tp2 51.732 ms, tp4 41.957 ms, tp8 62.453 ms, TTFT p95 2,529 ms. NO degree meets
+      # the 23 ms this file was written with, so as written the tenant was infeasible at every
+      # width and the fleet had no honest baseline.
+      # 23 ms came from `a = weights_per_shard / 2667 GB/s` = 10.4 ms at tp2, times 2.2. That
+      # estimator is good for short contexts -- it predicted Qwen3-14B at 1,024 tokens to within
+      # 11% -- and useless here: at 12,544 prompt tokens with 15.5 requests in flight the decode
+      # step is attention and vision tower, not weight reads, and the measurement came out 4.97x
+      # the estimate.
+      # 85 ms is 1.64x of the tp2 row, which puts the tenant back in the band and keeps it on two
+      # GPUs rather than four. The deadline that implies: 4 s of first token plus 384 x 85 ms is
+      # about 37 s for a twelve-page re-read.
+      itl_mean_ms: 85.0
+      ttft_p95_ms: 4000.0
+
+  # Two pages summarised, twice a second. Small enough to be the tenant that rides on somebody
+  # else's shard. Deadline 6 s, 4 s for the first token -> (6000 - 4000) / 128 = 16 ms.
+  - name: caption
+    model: qwen35-9b
+    served_name: qwen35-9b-caption
+    model_path: /fsx/pretrained-models/Qwen/Qwen3.5-9B
+    rate_hz: 2.0
+    isl_tokens: 2304
+    osl_tokens: 128
+    images:
+      count: 2
+      pixels: 1048576
+    max_model_len: 4096
+    extra_args:
+      - --no-enable-prefix-caching
+      - --mm-processor-cache-gb=0
+      - '--limit-mm-per-prompt={"image": 2, "video": 0}'
+      - '--mm-processor-kwargs={"min_pixels": 1048576, "max_pixels": 1048576}'
+    slo:
+      itl_mean_ms: 16.0
+      ttft_p95_ms: 4000.0
+
+  # One thumbnail, eight times a second, a handful of labels out. Quarter-resolution: 512x512 is
+  # 262,144 pixels and so 256 tokens, which is the whole point of a thumbnail tenant.
+  # Deadline 830 ms, 700 ms for the first token -> (830 - 700) / 16 = 8 ms.
+  - name: tag
+    model: qwen35-4b
+    served_name: qwen35-4b-tag
+    model_path: /fsx/pretrained-models/Qwen/Qwen3.5-4B
+    # OUTPUT LENGTHENED FROM 16 TO 64, and the reason is the instrument rather than the product.
+    # At 16 output tokens this tenant served 480 of 480 requests with an in-flight drift of 0.03%
+    # against a 0.10 tolerance and a scheduler lag of 0.63 ms -- a clean steady state by every
+    # signal but one. It was refused on the other steady-state term, `in_flight_rel` 0.379 against
+    # a 0.15 ceiling, which is the DISPERSION of a level whose mean was 1.99: at two requests in
+    # flight, integer quantisation alone exceeds that bound. The criterion misfires at low
+    # concurrency, which is the mirror of the defect `3c7a878` fixed -- there, dispersion alone
+    # passed a stall; here, dispersion alone fails a healthy run.
+    #
+    # Stating `tp:` to sidestep it is not available: the loader refuses a stated shard count
+    # outright ("a degree one wider than the target hands the search a GPU it did not free"),
+    # even though the profiler's own message offers exactly that escape. Worth reporting upstream
+    # as two tools disagreeing.
+    #
+    # So the shape moves instead. 64 output tokens is four times the decode time per request and
+    # so about four times the in-flight level, and a tagger emitting a short structured object
+    # rather than a bare label list is the same tenant doing the same job. Only `tag` needs
+    # re-measuring: solo rows are filed per (model, degree, shape, rate) under the hardware key,
+    # so the other six are untouched.
+    # CEILING RE-DERIVED FROM THE SOLO ROUNDS, 2026-10-02. Measured, all four degrees:
+    #   tp1 10.916 ms   tp2 10.044 (+8.0%)   tp4 8.352 (+16.8%)   tp8 10.068 (-20.5%)
+    # The 8 ms this file was written with came from `a = weights / 2667 GB/s` = 3.49 ms times
+    # about 2.3, and the measurement is 3.1x that estimate -- at 4B and eight requests a second
+    # the decode step is per-step overhead and a recurrent state, not weight reads, and the
+    # estimator only predicts the case where weight reads dominate. No degree met 8 ms, which is
+    # the right outcome: had tp8 happened to meet it, a 4B model's minimum would have been
+    # recorded as eight GPUs and the fleet's baseline would have gone from 11 to 18.
+    # 20 ms is 1.83x of the tp1 row, which puts the tenant in the band on ONE GPU. The deadline
+    # that implies: 700 ms of first token plus 64 x 20 ms is 2.0 s for a tagging call.
+    # Deadline 2.0 s, 700 ms for the first token -> (2000 - 700) / 64 = 20 ms.
+    rate_hz: 8.0
+    isl_tokens: 320
+    osl_tokens: 64
+    images:
+      count: 1
+      pixels: 262144
+    max_model_len: 1024
+    extra_args:
+      - --no-enable-prefix-caching
+      - --mm-processor-cache-gb=0
+      - '--limit-mm-per-prompt={"image": 1, "video": 0}'
+      - '--mm-processor-kwargs={"min_pixels": 262144, "max_pixels": 262144}'
+    slo:
+      itl_mean_ms: 20.0
+      ttft_p95_ms: 700.0
+
+  # TEXT, and deliberately so: a fleet of only image tenants would have every tenant queueing for
+  # the same vision tower. These three also carry the only MEASURED headroom in the fleet -- their
+  # ceilings are fleet 4's, unchanged, against solo latencies measured on this node on 2026-10-01.
+  # guard was the tenant that decided fleet 4's answer at 1.62x, and it is here to do that again.
+  - name: guard
+    model: phi4
+    served_name: phi4-guard
+    model_path: /fsx/pretrained-models/microsoft/phi-4
+    rate_hz: 4.0
+    isl_tokens: 1024
+    osl_tokens: 64
+    max_model_len: 2048
+    extra_args:
+      - --no-enable-prefix-caching
+    slo:
+      itl_mean_ms: 22.0
+      ttft_p95_ms: 600.0
+
+  - name: extract
+    model: qwen3-8b
+    served_name: qwen3-8b-extract
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-8B
+    rate_hz: 2.0
+    isl_tokens: 2048
+    osl_tokens: 256
+    max_model_len: 4096
+    extra_args:
+      - --no-enable-prefix-caching
+    slo:
+      itl_mean_ms: 20.0
+      ttft_p95_ms: 1000.0
+
+  - name: route
+    model: qwen3-4b
+    served_name: qwen3-4b-route
+    model_path: /fsx/pretrained-models/Qwen/Qwen3-4B
+    rate_hz: 8.0
+    isl_tokens: 512
+    osl_tokens: 16
+    max_model_len: 1024
+    extra_args:
+      - --no-enable-prefix-caching
+    slo:
+      itl_mean_ms: 8.0
+      ttft_p95_ms: 150.0

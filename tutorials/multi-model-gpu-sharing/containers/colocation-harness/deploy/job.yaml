@@ -1,0 +1,170 @@
+# One measurement run = one Job. Replace IMAGE and CONFIG before applying; see
+# USER-GUIDE.md §3 for the build and push commands.
+#
+# VALUES THAT ARE THIS CLUSTER'S AND NOT YOURS. `search` patches the image and the
+# ConfigMap name per run (src/colocation/agent/measure.py) and nothing else, so the
+# rest of this file is read as written. Edit these before the first run — every one
+# of them fails as a Job that sits Pending with no event explaining why, which is
+# the most expensive way to learn it (../../../USER-GUIDE.md, step 3):
+#   - `metadata.namespace`, and the namespace in the ConfigMap command below.
+#   - `karpenter.sh/nodepool` and the `compute-tier` toleration, which are the
+#     platform repo's CPU nodepool and its taint. A different nodepool layout needs
+#     both changed together.
+#
+# Placement is not incidental:
+#   - `cpu-compute` nodepool, never the g6e node. The load driver on the node under
+#     test would compete for the CPU feeding the GPUs, so the instrument would
+#     perturb what it measures.
+#   - No zone, and no AZ written anywhere in this repo. The agent pins each Job to the
+#     zone of the node under test (src/colocation/agent/measure.py), so the driver and
+#     the engines it drives always share an AZ and the network path between them is the
+#     same on every run. That matters because `calibrate` reports between-run spread,
+#     and placement left free would sometimes cross an AZ and sometimes not, inflating
+#     the one quantity that is supposed to measure the instrument's own repeatability.
+#
+#     This file hardcoded `us-west-2b` until 2026-09-14, on the reasoning that FSx for
+#     Lustre is single-AZ and a Job pinned elsewhere "cannot mount the claim". That
+#     reasoning is wrong: Lustre is mounted by IP within the VPC, single-AZ describes
+#     where the data lives and its failure domain rather than who may mount it, and
+#     neither `pv-fsx` PV carries a `nodeAffinity`. Measured the day it was removed: an
+#     FS in ap-northeast-2a, mounted by an engine on a node in ap-northeast-2b, 30B of
+#     weights read from it. What the constant did cost was a Job that could not schedule
+#     at all once the cluster moved region -- Pending for 6 minutes with `no instance type
+#     met the scheduling requirements`, which is precisely the failure this header warns
+#     about, three lines above where the constant was written.
+#   - The nodepool carries a NoSchedule taint, so the toleration is required or the
+#     Job sits Pending with no obvious cause.
+#
+# The `colocation-harness-run` ConfigMap this mounts is NOT defined here on purpose.
+# A placeholder copy in this file would silently overwrite the real run config every
+# time the Job is re-applied, and the run would measure something other than what you
+# configured. Create it from a file instead:
+#
+#   kubectl create configmap colocation-harness-run \
+#     --from-file=run.yaml=examples/smoke-4x-qwen3-0.6b.yaml \
+#     -n kubeflow-user-example-com --dry-run=client -o yaml | kubectl apply -f -
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: colocation-harness
+  namespace: kubeflow-user-example-com
+spec:
+  # No retries. A rerun is a new observation with its own run id, not a retry of
+  # this one -- between-run spread is a quantity the design measures (design §8.1),
+  # so silently repeating a run would conflate it with within-run precision.
+  backoffLimit: 0
+  # 6h. Ample for one run under the ceilings in the config; a Job still alive past
+  # it is stuck, not slow.
+  activeDeadlineSeconds: 21600
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: colocation-harness
+      annotations:
+        # Karpenter may not take the node out from under a measurement in progress. Added
+        # 2026-09-09 after it did exactly that: profile-r1b7yb-000-solo-tp4 was 10 minutes
+        # into the anchor's solo round when its node was disrupted for `Drifted`, the pod
+        # was evicted, and with `backoffLimit: 0` the Job failed and the agent aborted --
+        # costing the run's 4.5 minutes of weight loading and the measurement itself.
+        #
+        # Note what this is NOT protected by. `consolidationPolicy: WhenEmpty` on the
+        # nodepool means consolidation will not touch a node running this pod, and that is
+        # what makes the omission easy to miss: drift is a SEPARATE disruption reason and
+        # is not gated by the consolidation policy. An AMI or nodeclass change makes every
+        # node of that pool a candidate however busy it is.
+        #
+        # Every other pod in the measurement path already carries this -- the vLLM chart,
+        # the MPS daemon, and manifests/gpu-node-holder.yaml -- which is why the GPU node
+        # survives and the load driver's node did not. The instrument was the one thing
+        # left unprotected.
+        karpenter.sh/do-not-disrupt: "true"
+        # No Envoy in the measurement path. The namespace has istio-injection=enabled,
+        # so without this the harness gets a sidecar. The tenant pods already carry this
+        # same annotation (they need privileged/hostPID/hostIPC for MPS), so the harness
+        # sidecar is the only Envoy between the driver and the servers.
+        #
+        # Measured cost of that hop, run 5 (sidecar) vs run 6 (none), same load, same
+        # image, four tenants:
+        #   TTFT  14.8 -> 14.2, 14.2 -> 13.9, 13.4 -> 13.1, 13.6 -> 13.2 ms
+        #   ITL   2.629 -> 2.626, 2.613 -> 2.612, 2.232 -> 2.231, 2.237 -> 2.236 ms
+        # So the proxy costs ~0.4ms once per request and nothing measurable per token --
+        # it does not buffer or re-frame individual SSE chunks. 0.4ms on a 13-15ms TTFT
+        # is ~3%, which is worth removing from a number the model is fitted to, but the
+        # per-chunk concern that first motivated this annotation was unfounded.
+        #
+        # Safe to remove: there is no PeerAuthentication in the mesh, so mTLS is
+        # permissive and a sidecar-less client is still accepted, and the only
+        # AuthorizationPolicy lives in the `ingress` namespace, not this one.
+        #
+        # This also CLEARS istio as the cause of the chunk-observation loss. With no
+        # sidecar at all the client still observed fewer SSE chunks than the server's
+        # completion_tokens (m1 121-128 -> 125-128, but t2 125-128 -> 122-128: the
+        # ranges move in both directions, so it is noise, not the proxy). Both ends of
+        # the connection are now bare, so the remaining suspects are the client's SSE
+        # reader and vLLM's own output batching under concurrency. Not chased further:
+        # the gate reads the server's count and the divergence is recorded per run.
+        sidecar.istio.io/inject: "false"
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        karpenter.sh/nodepool: cpu-compute
+        # No `topology.kubernetes.io/zone` here on purpose -- the agent adds one, set to
+        # the zone of the node under test. See the header. For a hand apply, either add
+        # one yourself or leave it off; the claim mounts from any AZ in the VPC.
+      tolerations:
+        - key: compute-tier
+          operator: Equal
+          value: heavy-cpu
+          effect: NoSchedule
+      containers:
+        - name: harness
+          # Patched per run by the agent from --harness-image / $COLOCATION_HARNESS_IMAGE.
+          # For a hand apply, substitute your own registry:
+          #   <account>.dkr.ecr.<region>.amazonaws.com/colocation-harness:<tag>
+          image: IMAGE
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config=/config/run.yaml
+          env:
+            # The record names the node the Job ran on. That is the harness's node,
+            # not the node under test -- the tenants' node is identified by the GPU
+            # UUIDs in the config, which is the only attribution that survives MPS.
+            - name: HARNESS_NODE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: HARNESS_RUN_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            # Generous on CPU on purpose. Under-provisioning the driver makes it miss
+            # its own schedule, which turns an open-loop generator into a closed-loop
+            # one and destroys the measurement. `schedule_lag_max_ms` in the record is
+            # how you check this actually held.
+            requests:
+              cpu: "8"
+              memory: 8Gi
+            limits:
+              cpu: "16"
+              memory: 16Gi
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: fsx
+              mountPath: /fsx
+              readOnly: true
+            - name: efs
+              mountPath: /efs
+      volumes:
+        - name: config
+          configMap:
+            name: colocation-harness-run
+        - name: fsx
+          persistentVolumeClaim:
+            claimName: pv-fsx
+        - name: efs
+          persistentVolumeClaim:
+            claimName: pv-efs

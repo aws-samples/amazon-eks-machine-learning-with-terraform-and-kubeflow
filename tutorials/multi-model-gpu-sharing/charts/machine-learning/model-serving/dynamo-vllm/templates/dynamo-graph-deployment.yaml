@@ -1,0 +1,288 @@
+{{- include "dynamo-vllm.validate" . -}}
+{{- /*
+One tenant = one DynamoGraphDeployment with two components: a Frontend and ONE
+aggregated vLLM worker. The Dynamo operator (dynamo-platform chart, cluster-wide)
+turns it into two pods. Only the worker attaches to MPS and holds an envelope;
+the frontend is CPU-only, routes the tenant's requests to its worker, and is what
+the Service below fronts.
+
+Discovery is through the Kubernetes API, and each graph gets its own Dynamo
+namespace, so a frontend sees only its own graph's worker. That is what lets N
+tenants share a node without a frontend routing one tenant's requests to
+another's model.
+*/ -}}
+apiVersion: nvidia.com/v1beta1
+kind: DynamoGraphDeployment
+metadata:
+  name: {{ include "dynamo-vllm.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dynamo-vllm.labels" . | nindent 4 }}
+  annotations:
+    colocation/model-path: {{ .Values.model.path | quote }}
+    colocation/model-revision: {{ .Values.model.revision | quote }}
+    colocation/gpu-uuids: {{ join "," .Values.placement.gpu_uuids | quote }}
+    colocation/mps-memory-limit-gib: {{ .Values.mps.memory_limit_gib | quote }}
+spec:
+  backendFramework: vllm
+  components:
+  # ---------------------------------------------------------------------------
+  # Frontend. No GPU, no MPS environment: it never creates a CUDA context, so it
+  # has no envelope to respect and must not be given one to verify.
+  # ---------------------------------------------------------------------------
+  - name: Frontend
+    type: frontend
+    replicas: 1
+    podTemplate:
+      metadata:
+        labels:
+          {{- include "dynamo-vllm.podLabels" . | nindent 10 }}
+          colocation/role: frontend
+        annotations:
+          {{- with .Values.podAnnotations }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
+          {{- if .Values.disruption.doNotDisrupt }}
+          karpenter.sh/do-not-disrupt: "true"
+          {{- end }}
+      spec:
+        # Same node as the worker. Not for the GPUs -- it has none -- but so that
+        # the request path the harness measures is one node's loopback-and-pod-
+        # network hop on every stack, not a cross-node hop on this one alone.
+        nodeName: {{ .Values.placement.node }}
+        tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+        volumes:
+        - name: fsx
+          persistentVolumeClaim:
+            claimName: {{ .Values.storage.fsxClaimName }}
+        containers:
+        # The operator keys off a container named "main" when it injects the
+        # discovery environment.
+        - name: main
+          image: {{ .Values.image }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["python3"]
+          args:
+          - -m
+          - dynamo.frontend
+          - --http-port={{ .Values.service.port }}
+          env:
+          - name: HF_HUB_OFFLINE
+            value: "1"
+          - name: TRANSFORMERS_OFFLINE
+            value: "1"
+          - name: HF_HOME
+            value: /tmp/hf
+          - name: DO_NOT_TRACK
+            value: "1"
+          ports:
+          - name: http
+            containerPort: {{ .Values.service.port }}
+          # Ready means ROUTABLE: the worker has registered and this frontend
+          # lists the tenant's model. A frontend answers /health and /v1/models
+          # with 200 long before any worker exists, so an HTTP probe would pass
+          # the readiness gate with nothing behind it.
+          readinessProbe:
+            exec:
+              command:
+              - python3
+              - -c
+              - |
+                import json, sys, urllib.request
+                d = json.load(urllib.request.urlopen("http://127.0.0.1:{{ .Values.service.port }}/v1/models", timeout=5))
+                sys.exit(0 if any(m.get("id") == {{ .Values.model.served_name | quote }} for m in d.get("data", [])) else 1)
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+            timeoutSeconds: 10
+          volumeMounts:
+          # The frontend tokenizes: it reads the tokenizer from the path the
+          # worker registered, which is on FSx.
+          - name: fsx
+            mountPath: {{ .Values.storage.fsxMountPath }}
+            readOnly: true
+          {{- with .Values.frontend.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+  # ---------------------------------------------------------------------------
+  # Worker. Everything the sibling charts put on their one pod goes here: the
+  # node pin, host PID and IPC, privilege, the MPS environment, the pipe mount
+  # and the verification init container. The operator preserves all of them
+  # (checked on the operator this chart was written against, 1.5.0).
+  # ---------------------------------------------------------------------------
+  - name: VllmWorker
+    type: worker
+    replicas: 1
+    # The operator mounts /dev/shm itself at this size, so the chart does not:
+    # a second volume at the same mountPath is a pod the API server rejects.
+    sharedMemorySize: {{ printf "%dGi" (int .Values.shmSizeGi) | quote }}
+    podTemplate:
+      metadata:
+        labels:
+          {{- include "dynamo-vllm.podLabels" . | nindent 10 }}
+          colocation/role: worker
+        annotations:
+          {{- with .Values.podAnnotations }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
+          {{- if .Values.disruption.doNotDisrupt }}
+          karpenter.sh/do-not-disrupt: "true"
+          {{- end }}
+      spec:
+        nodeName: {{ .Values.placement.node }}
+        hostPID: true
+        hostIPC: true
+        # EVERY container here runs as root, and that is an MPS requirement, not a convenience.
+        # The control daemon runs one server per Unix user and only one user's server at a time: a
+        # client of a second UID waits, silently and for ever, until the first user's server has no
+        # clients left. This image runs as UID 1000; the compat init container's image, and every
+        # sibling stack's, runs as 0. Measured without this line: the first tenant came up (the
+        # root init container's server was idle, so it was swapped for a UID-1000 one), and the
+        # next worker's init container then hung in `deviceQuery` behind a co-tenant's UID-1000
+        # server -- "NEW CLIENT from user 0: Server is not ready, push client to pending list".
+        # The frontend attaches to nothing and keeps the image's own user.
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+        {{- with .Values.nodeSelector }}
+        nodeSelector:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+        volumes:
+        - name: mps-pipe
+          hostPath:
+            path: {{ .Values.mps.pipeHostPath }}
+            type: Directory
+        - name: fsx
+          persistentVolumeClaim:
+            claimName: {{ .Values.storage.fsxClaimName }}
+        - name: verify
+          configMap:
+            name: {{ include "dynamo-vllm.fullname" . }}-verify
+        - name: compat-script
+          configMap:
+            name: {{ include "dynamo-vllm.fullname" . }}-compat
+        - name: compat
+          emptyDir: {}
+        initContainers:
+        # -------------------------------------------------------------------
+        # The daemon's driver, if the daemon is on a compat driver. Runs in the
+        # DAEMON's image, through its entrypoint, under the tenant's MPS
+        # environment -- see configmap-compat.yaml. First, because both
+        # containers after it load libcuda from what it leaves in /compat.
+        # -------------------------------------------------------------------
+        - name: compat-driver
+          image: {{ .Values.compat.image }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          securityContext:
+            privileged: true
+          env:
+          {{- include "dynamo-vllm.mpsEnv" . | nindent 10 }}
+          command: ["/opt/nvidia/nvidia_entrypoint.sh"]
+          args: ["python3", "/compat-script/copy_compat_driver.py", {{ .Values.compat.mountPath | quote }}]
+          volumeMounts:
+          - name: mps-pipe
+            mountPath: {{ .Values.mps.pipeMountPath }}
+          - name: compat-script
+            mountPath: /compat-script
+          - name: compat
+            mountPath: {{ .Values.compat.mountPath }}
+        {{- if .Values.verification.enabled }}
+        # -------------------------------------------------------------------
+        # Verification (impl §4.4), in the SERVER's image and on the server's
+        # libcuda, or it verifies a different client than the one that will run.
+        # This image has no nvidia_entrypoint.sh, so the library path is set by
+        # hand, exactly as for the worker below.
+        # -------------------------------------------------------------------
+        - name: verify-mps-limit
+          image: {{ .Values.image }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          securityContext:
+            privileged: true
+          env:
+          {{- include "dynamo-vllm.mpsEnv" . | nindent 10 }}
+          - name: EXPECTED_FREE_GIB
+            value: {{ include "dynamo-vllm.expectedFreeGib" . | quote }}
+          - name: TOLERANCE_GIB
+            value: {{ .Values.verification.tolerance_gib | quote }}
+          command: ["sh", "-c", "export LD_LIBRARY_PATH={{ .Values.compat.mountPath }}:$LD_LIBRARY_PATH; exec \"$@\"", "sh"]
+          args: ["python3", "/verify/verify_mps_limit.py"]
+          volumeMounts:
+          - name: mps-pipe
+            mountPath: {{ .Values.mps.pipeMountPath }}
+          - name: verify
+            mountPath: /verify
+          - name: compat
+            mountPath: {{ .Values.compat.mountPath }}
+        {{- end }}
+        containers:
+        - name: main
+          image: {{ .Values.image }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          securityContext:
+            privileged: true
+          env:
+          {{- include "dynamo-vllm.mpsEnv" . | nindent 10 }}
+          - name: HF_HUB_OFFLINE
+            value: "1"
+          - name: TRANSFORMERS_OFFLINE
+            value: "1"
+          - name: HF_HOME
+            value: /tmp/hf
+          - name: VLLM_NO_USAGE_STATS
+            value: "1"
+          - name: DO_NOT_TRACK
+            value: "1"
+          {{- with .Values.extraEnv }}
+          # Diagnostics only, and server-only by design -- see values.yaml.
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
+          # ---------------------------------------------------------------------
+          # The compat directory goes FIRST on the image's own library path, which
+          # is why this is a shell and not an `env:` entry: an `env:` value
+          # replaces the image's LD_LIBRARY_PATH (NIXL's and CUDA's directories)
+          # rather than extending it. `exec "$@"` hands the argv below over
+          # untouched, so an extra_args entry carrying JSON reaches the parser as
+          # written, with no shell quoting in between.
+          #
+          # CONSEQUENCE FOR THE VALIDITY KEY: on this node every measurement on
+          # this stack is taken through the daemon's compat driver 610.43.02, as
+          # on the siblings, and not through the image's own choice (the host's
+          # 580.178.04).
+          # ---------------------------------------------------------------------
+          command: ["sh", "-c", "export LD_LIBRARY_PATH={{ .Values.compat.mountPath }}:$LD_LIBRARY_PATH; exec \"$@\"", "sh"]
+          args:
+          - python3
+          - -m
+          - dynamo.vllm
+          - --model={{ .Values.model.path }}
+          - --served-model-name={{ .Values.model.served_name }}
+          - --tensor-parallel-size={{ .Values.dynamo_vllm.tensor_parallel_size }}
+          - --gpu-memory-utilization={{ .Values.dynamo_vllm.gpu_memory_utilization }}
+          - --max-num-seqs={{ .Values.dynamo_vllm.max_num_seqs }}
+          - --max-num-batched-tokens={{ .Values.dynamo_vllm.max_num_batched_tokens }}
+          - --max-model-len={{ .Values.dynamo_vllm.max_model_len }}
+          - --dtype={{ .Values.dynamo_vllm.dtype }}
+          {{- with .Values.dynamo_vllm.extra_args }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
+          volumeMounts:
+          - name: mps-pipe
+            mountPath: {{ .Values.mps.pipeMountPath }}
+          - name: fsx
+            mountPath: {{ .Values.storage.fsxMountPath }}
+            readOnly: true
+          - name: compat
+            mountPath: {{ .Values.compat.mountPath }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}

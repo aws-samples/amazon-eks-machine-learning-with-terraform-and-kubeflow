@@ -1,0 +1,206 @@
+{{- include "vllm-openai.validate" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vllm-openai.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vllm-openai.labels" . | nindent 4 }}
+  annotations:
+    colocation/model-path: {{ .Values.model.path | quote }}
+    colocation/model-revision: {{ .Values.model.revision | quote }}
+    colocation/gpu-uuids: {{ join "," .Values.placement.gpu_uuids | quote }}
+    colocation/mps-memory-limit-gib: {{ .Values.mps.memory_limit_gib | quote }}
+spec:
+  replicas: 1
+  # Recreate, NOT RollingUpdate. A rolling update would bring up a second engine
+  # that attaches to MPS and claims its envelope while the outgoing one still
+  # holds its own — double-booking the GPU and invalidating any measurement in
+  # flight. Tenants are stateful with respect to the memory budget.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "vllm-openai.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "vllm-openai.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.disruption.doNotDisrupt }}
+        karpenter.sh/do-not-disrupt: "true"
+        {{- end }}
+    spec:
+      # Pinned: placement is per-GPU-index and the index->UUID mapping is
+      # node-specific, so the pod must land on the node whose UUIDs the
+      # configuration references (impl §7).
+      nodeName: {{ .Values.placement.node }}
+      # Cross-pod MPS requires the client to share PID and IPC namespaces with
+      # the control daemon (finding 6).
+      hostPID: true
+      hostIPC: true
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      volumes:
+      - name: mps-pipe
+        hostPath:
+          path: {{ .Values.mps.pipeHostPath }}
+          type: Directory
+      - name: fsx
+        persistentVolumeClaim:
+          claimName: {{ .Values.storage.fsxClaimName }}
+      - name: verify
+        configMap:
+          name: {{ include "vllm-openai.fullname" . }}-verify
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: {{ .Values.shmSizeGi }}Gi
+      {{- if .Values.verification.enabled }}
+      initContainers:
+      # ---------------------------------------------------------------------
+      # Verification (impl §4.4). Must carry the SAME MPS environment, privilege
+      # and namespace settings as the main container, or it verifies a different
+      # envelope than the engine will get.
+      # ---------------------------------------------------------------------
+      - name: verify-mps-limit
+        image: {{ .Values.image }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        securityContext:
+          privileged: true
+        env:
+        {{- include "vllm-openai.mpsEnv" . | nindent 8 }}
+        - name: EXPECTED_FREE_GIB
+          value: {{ include "vllm-openai.expectedFreeGib" . | quote }}
+        - name: TOLERANCE_GIB
+          value: {{ .Values.verification.tolerance_gib | quote }}
+        # MUST go through the image's entrypoint, not straight to python3 — see the
+        # long note on the engine container below. Same reason, and this container is
+        # where the failure surfaced: it hung forever in torch.cuda.init().
+        command: ["/opt/nvidia/nvidia_entrypoint.sh"]
+        args: ["python3", "/verify/verify_mps_limit.py"]
+        volumeMounts:
+        - name: mps-pipe
+          mountPath: {{ .Values.mps.pipeMountPath }}
+        - name: verify
+          mountPath: /verify
+        - name: dshm
+          mountPath: /dev/shm
+      {{- end }}
+      containers:
+      - name: vllm
+        image: {{ .Values.image }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        securityContext:
+          privileged: true
+        env:
+        {{- include "vllm-openai.mpsEnv" . | nindent 8 }}
+        # Weights are on FSx; never reach out to the Hub at serve time. An
+        # unpinned online resolve would also silently break the validity key.
+        - name: HF_HUB_OFFLINE
+          value: "1"
+        - name: TRANSFORMERS_OFFLINE
+          value: "1"
+        - name: HF_HOME
+          value: /tmp/hf
+        - name: VLLM_NO_USAGE_STATS
+          value: "1"
+        - name: DO_NOT_TRACK
+          value: "1"
+        {{- with .Values.extraEnv }}
+        # Diagnostics only, and engine-only by design — see values.yaml. Deliberately
+        # NOT applied to the verification init container: that container's whole
+        # purpose is to measure the environment the engine will run under, so giving
+        # it a different one would make it verify nothing.
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        # ---------------------------------------------------------------------
+        # DO NOT bypass the image's entrypoint (finding 11, measured 2026-09-02).
+        #
+        # This was `command: ["python3", "-m", ...]`, which overrides the image
+        # ENTRYPOINT. On nvcr.io/nvidia/vllm:26.07-py3 that hangs the pod FOREVER --
+        # no error, no log line, blocked in pipe_read inside torch.cuda.init().
+        #
+        # Why: the image's CUDA runtime is 13.3 and this node's kernel driver is
+        # 580.178.04 (CUDA 13.0), so the image ships a forward-compatibility driver
+        # at /usr/local/cuda/compat/lib.real/libcuda.so.610.43.02. The decision to
+        # USE it lives in /etc/shinit_v2, a SHELL-INIT script: it runs
+        # /usr/local/bin/cudaCheck against the compat lib and, only if that returns
+        # "CUDA Driver OK", creates the compat/lib symlink and prepends the real
+        # directory to LD_LIBRARY_PATH. /usr/local/cuda/compat/lib is already on
+        # LD_LIBRARY_PATH via image ENV, but until the symlink exists it resolves to
+        # nothing, so the loader falls through to ld.so.cache and picks up the HOST
+        # driver's libcuda.so.580.178.04.
+        #
+        # A CUDA 13.3 client on the 580 libcuda works fine for plain CUDA (measured:
+        # 44988 MiB free, no MPS) but HANGS INDEFINITELY when attaching through MPS.
+        # That is the whole failure: not the image, not the memory limit, not
+        # /dev/shm, not the verify script. Exec'ing into the same container appeared
+        # to work only because `kubectl exec ... bash` sources /etc/bash.bashrc ->
+        # /etc/shinit_v2 and fixes the symlink as a side effect.
+        #
+        # nvidia_entrypoint.sh is bash, so BASH_ENV=/etc/bash.bashrc pulls in the
+        # compat logic before our argv is exec'd. It also prints, into the engine log,
+        # exactly which driver pair is in force:
+        #   NOTE: CUDA Forward Compatibility mode ENABLED.
+        #     Using CUDA 13.3 driver version 610.43.02 with kernel driver version
+        #     580.178.04.
+        #
+        # Prefer this over hardcoding LD_LIBRARY_PATH=/usr/local/cuda/compat/lib.real
+        # (which also works): the entrypoint is gated on cudaCheck actually
+        # initializing, so it self-disables if the node driver is later upgraded past
+        # the compat lib. A hardcoded path would keep loading a too-old libcuda.
+        #
+        # CONSEQUENCE FOR THE VALIDITY KEY: every measurement on this image is taken
+        # through the forward-compat driver 610.43.02, NOT the node's 580.178.04.
+        # ---------------------------------------------------------------------
+        command: ["/opt/nvidia/nvidia_entrypoint.sh"]
+        args:
+        - python3
+        - -m
+        - vllm.entrypoints.openai.api_server
+        - --host=0.0.0.0
+        - --port={{ .Values.service.port }}
+        - --model={{ .Values.model.path }}
+        - --served-model-name={{ .Values.model.served_name }}
+        - --tensor-parallel-size={{ .Values.vllm.tensor_parallel_size }}
+        # Consumed from the solver, never computed here (§4.2).
+        - --gpu-memory-utilization={{ .Values.vllm.gpu_memory_utilization }}
+        - --max-num-seqs={{ .Values.vllm.max_num_seqs }}
+        - --max-num-batched-tokens={{ .Values.vllm.max_num_batched_tokens }}
+        - --max-model-len={{ .Values.vllm.max_model_len }}
+        - --dtype={{ .Values.vllm.dtype }}
+        {{- with .Values.vllm.extra_args }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.service.port }}
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+          failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+        volumeMounts:
+        - name: mps-pipe
+          mountPath: {{ .Values.mps.pipeMountPath }}
+        - name: fsx
+          mountPath: {{ .Values.storage.fsxMountPath }}
+          readOnly: true
+        - name: dshm
+          mountPath: /dev/shm
+        {{- with .Values.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}

@@ -1,0 +1,239 @@
+{{- include "vllm-tis.validate" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vllm-tis.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vllm-tis.labels" . | nindent 4 }}
+  annotations:
+    colocation/model-path: {{ .Values.model.path | quote }}
+    colocation/model-revision: {{ .Values.model.revision | quote }}
+    colocation/gpu-uuids: {{ join "," .Values.placement.gpu_uuids | quote }}
+    colocation/mps-memory-limit-gib: {{ .Values.mps.memory_limit_gib | quote }}
+spec:
+  replicas: 1
+  # Recreate, NOT RollingUpdate. A rolling update would bring up a second server
+  # that attaches to MPS and claims its envelope while the outgoing one still
+  # holds its own — double-booking the GPU and invalidating any measurement in
+  # flight. Tenants are stateful with respect to the memory budget.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "vllm-tis.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "vllm-tis.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.disruption.doNotDisrupt }}
+        karpenter.sh/do-not-disrupt: "true"
+        {{- end }}
+    spec:
+      # Pinned: placement is per-GPU-index and the index->UUID mapping is
+      # node-specific, so the pod must land on the node whose UUIDs the
+      # configuration references (impl §7).
+      nodeName: {{ .Values.placement.node }}
+      # Cross-pod MPS requires the client to share PID and IPC namespaces with
+      # the control daemon (finding 6).
+      hostPID: true
+      hostIPC: true
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      volumes:
+      - name: mps-pipe
+        hostPath:
+          path: {{ .Values.mps.pipeHostPath }}
+          type: Directory
+      - name: fsx
+        persistentVolumeClaim:
+          claimName: {{ .Values.storage.fsxClaimName }}
+      - name: verify
+        configMap:
+          name: {{ include "vllm-tis.fullname" . }}-verify
+      # The generated model repository. Mounted at the model's own directory
+      # rather than at the repository root, so that the repository root stays a
+      # plain writable container directory and the two generated files land at
+      # <root>/<served_name>/config.pbtxt and <root>/<served_name>/1/model.json.
+      # `items[].path` may contain a slash even though a ConfigMap key may not,
+      # which is what puts model.json in the version subdirectory without an init
+      # container copying anything.
+      #
+      # Expect two complaints in the server log and ignore both. A projected
+      # ConfigMap is a symlink farm over `..data` and a timestamped directory,
+      # and Triton scans the model directory for version subdirectories, so it
+      # reports the ones it does not recognise:
+      #   failed to open text file for read .../..data: Is a directory
+      # The version it does recognise is `1/`, which is the one that matters.
+      - name: model-repository
+        configMap:
+          name: {{ include "vllm-tis.fullname" . }}-model-repository
+          items:
+          - key: config.pbtxt
+            path: config.pbtxt
+          - key: model.json
+            path: 1/model.json
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: {{ .Values.shmSizeGi }}Gi
+      {{- if .Values.verification.enabled }}
+      initContainers:
+      # ---------------------------------------------------------------------
+      # Verification (impl §4.4). Must carry the SAME MPS environment, privilege
+      # and namespace settings as the main container, or it verifies a different
+      # envelope than the server will get.
+      # ---------------------------------------------------------------------
+      - name: verify-mps-limit
+        image: {{ .Values.image }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        securityContext:
+          privileged: true
+        env:
+        {{- include "vllm-tis.mpsEnv" . | nindent 8 }}
+        - name: EXPECTED_FREE_GIB
+          value: {{ include "vllm-tis.expectedFreeGib" . | quote }}
+        - name: TOLERANCE_GIB
+          value: {{ .Values.verification.tolerance_gib | quote }}
+        # MUST go through the image's entrypoint, not straight to python3 — see the
+        # long note on the server container below. Same reason, and on the sibling
+        # image this container is where the failure surfaced: it hung forever in
+        # torch.cuda.init().
+        command: ["/opt/nvidia/nvidia_entrypoint.sh"]
+        args: ["python3", "/verify/verify_mps_limit.py"]
+        volumeMounts:
+        - name: mps-pipe
+          mountPath: {{ .Values.mps.pipeMountPath }}
+        - name: verify
+          mountPath: /verify
+        - name: dshm
+          mountPath: /dev/shm
+      {{- end }}
+      containers:
+      - name: triton
+        image: {{ .Values.image }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        securityContext:
+          privileged: true
+        env:
+        {{- include "vllm-tis.mpsEnv" . | nindent 8 }}
+        # Weights are on FSx; never reach out to the Hub at serve time. An
+        # unpinned online resolve would also silently break the validity key.
+        # These matter twice on this stack: the frontend loads the tokenizer from
+        # --tokenizer, and the backend loads the weights from model.json.
+        - name: HF_HUB_OFFLINE
+          value: "1"
+        - name: TRANSFORMERS_OFFLINE
+          value: "1"
+        - name: HF_HOME
+          value: /tmp/hf
+        - name: VLLM_NO_USAGE_STATS
+          value: "1"
+        - name: DO_NOT_TRACK
+          value: "1"
+        {{- with .Values.extraEnv }}
+        # Diagnostics only, and server-only by design — see values.yaml. Deliberately
+        # NOT applied to the verification init container: that container's whole
+        # purpose is to measure the environment the server will run under, so giving
+        # it a different one would make it verify nothing.
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        # ---------------------------------------------------------------------
+        # DO NOT bypass the image's entrypoint (finding 11, measured 2026-09-02 on
+        # the sibling image; this image is built the same way and ships the same
+        # compat driver, 610.43.02).
+        #
+        # Overriding the image ENTRYPOINT with a bare `python3` hangs the pod
+        # FOREVER — no error, no log line, blocked in pipe_read inside
+        # torch.cuda.init().
+        #
+        # Why: the image's CUDA runtime is newer than this node's kernel driver
+        # (580.178.04), so the image ships a forward-compatibility driver at
+        # /usr/local/cuda/compat/lib.real/libcuda.so.610.43.02. The decision to USE
+        # it lives in /etc/shinit_v2, a SHELL-INIT script: it runs
+        # /usr/local/bin/cudaCheck against the compat lib and, only if that returns
+        # "CUDA Driver OK", creates the compat/lib symlink and prepends the real
+        # directory to LD_LIBRARY_PATH. /usr/local/cuda/compat/lib is already on
+        # LD_LIBRARY_PATH via image ENV, but until the symlink exists it resolves to
+        # nothing, so the loader falls through to ld.so.cache and picks up the HOST
+        # driver's libcuda.
+        #
+        # A client on the host libcuda works fine for plain CUDA but HANGS
+        # INDEFINITELY when attaching through MPS, because the MPS control daemon
+        # is itself running on the compat driver and a client must load the same
+        # libcuda the server did.
+        #
+        # nvidia_entrypoint.sh is bash, so BASH_ENV=/etc/bash.bashrc pulls in the
+        # compat logic before our argv is exec'd. It also prints, into the server
+        # log, exactly which driver pair is in force:
+        #   NOTE: CUDA Forward Compatibility mode ENABLED.
+        #
+        # Prefer this over hardcoding LD_LIBRARY_PATH=/usr/local/cuda/compat/lib.real
+        # (which also works): the entrypoint is gated on cudaCheck actually
+        # initializing, so it self-disables if the node driver is later upgraded past
+        # the compat lib. A hardcoded path would keep loading a too-old libcuda.
+        #
+        # CONSEQUENCE FOR THE VALIDITY KEY: every measurement on this image is taken
+        # through the forward-compat driver 610.43.02, NOT the node's 580.178.04.
+        # ---------------------------------------------------------------------
+        command: ["/opt/nvidia/nvidia_entrypoint.sh"]
+        # Triton's OpenAI-compatible frontend, NOT `tritonserver` itself. The
+        # frontend starts an in-process Triton core (so there is one process tree,
+        # one MPS client, one memory envelope) and puts /v1/completions,
+        # /v1/chat/completions and /v1/models in front of it. Chosen so that both
+        # stacks answer the SAME requests from the same driver: a request shape is
+        # not part of what is being compared.
+        #
+        # Note which frontends are NOT started. Without --enable-kserve-frontends
+        # the KServe HTTP and gRPC ports never open, so this pod listens on exactly
+        # one port and nothing can reach the engine by a second route with
+        # different defaults.
+        args:
+        - python3
+        - /opt/tritonserver/python/openai/openai_frontend/main.py
+        - --model-repository={{ .Values.triton.modelRepositoryPath }}
+        # The frontend loads the tokenizer itself, to apply chat templates and to
+        # count tokens. Pointed at the same local weights directory the engine
+        # loads, so there is no second copy and no Hub lookup.
+        - --tokenizer={{ .Values.model.path }}
+        - --backend={{ .Values.triton.backend }}
+        - --host=0.0.0.0
+        - --openai-port={{ .Values.service.port }}
+        - --tritonserver-log-verbose-level={{ .Values.triton.logVerboseLevel }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.service.port }}
+        readinessProbe:
+          httpGet:
+            # /health/ready, not /health. This frontend's readiness path differs
+            # from the sibling's, which is exactly why the harness asks its engine
+            # adapter for the path instead of hardcoding one.
+            path: /health/ready
+            port: http
+          initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+          periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+          failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+        volumeMounts:
+        - name: mps-pipe
+          mountPath: {{ .Values.mps.pipeMountPath }}
+        - name: fsx
+          mountPath: {{ .Values.storage.fsxMountPath }}
+          readOnly: true
+        - name: model-repository
+          mountPath: {{ include "vllm-tis.modelDir" . }}
+        - name: dshm
+          mountPath: /dev/shm
+        {{- with .Values.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}

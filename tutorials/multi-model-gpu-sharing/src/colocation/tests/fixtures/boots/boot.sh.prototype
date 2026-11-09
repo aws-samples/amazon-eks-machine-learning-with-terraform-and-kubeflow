@@ -1,0 +1,41 @@
+#!/bin/bash
+# Diagnostic boot of one Qwen3.5 tenant on the held node. GPUS env var selects devices.
+# vllm serve forks a VLLM::EngineCore that does NOT die with the parent and keeps its GPU
+# allocation; kill the process group and confirm the GPU is free, or the next run's memory
+# profile is silently wrong.
+label="$1"; shift
+LOG=/fsx/.stage/boot-$label.log
+: > "$LOG"
+export CUDA_VISIBLE_DEVICES=${GPUS:-0}
+export VLLM_LOGGING_LEVEL=INFO
+
+setsid vllm serve /fsx/pretrained-models/Qwen/Qwen3.5-9B \
+  --served-model-name qwen3.5-9b \
+  --max-model-len 8192 \
+  --max-num-seqs 64 \
+  --gpu-memory-utilization 0.86 \
+  --mm-processor-cache-gb 0 \
+  --port 8000 \
+  "$@" >> "$LOG" 2>&1 &
+pid=$!
+pgid=$(ps -o pgid= -p $pid | tr -d " ")
+
+status=TIMEOUT
+for i in $(seq 1 600); do
+  grep -qE "Application startup complete|Uvicorn running" "$LOG" && { status="READY(${i}s)"; break; }
+  grep -qE "^(ERROR|Traceback)|Error:|ValueError|RuntimeError" "$LOG" && { status="FAILED(${i}s)"; break; }
+  kill -0 $pid 2>/dev/null || { status="EXITED(${i}s)"; break; }
+  sleep 1
+done
+echo "status=$status"
+
+kill -TERM -"$pgid" 2>/dev/null
+for i in $(seq 1 30); do
+  [ "$(nvidia-smi --query-compute-apps=pid --format=csv,noheader | wc -l)" -eq 0 ] && break
+  sleep 1
+done
+kill -9 -"$pgid" 2>/dev/null
+pkill -9 -f "VLLM::EngineCore" 2>/dev/null
+sleep 3
+echo "gpus_after=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader | tr "\n" " ")"
+echo "log=$LOG lines=$(wc -l < "$LOG")"

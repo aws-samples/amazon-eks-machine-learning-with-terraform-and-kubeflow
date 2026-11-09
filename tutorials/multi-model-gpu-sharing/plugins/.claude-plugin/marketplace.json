@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "colocation-plugins",
+  "description": "Plugins for the multi-model GPU sharing tutorial",
+  "owner": {
+    "name": "amazon-eks-machine-learning-with-terraform-and-kubeflow"
+  },
+  "plugins": [
+    {
+      "name": "colocation-pipeline",
+      "description": "Runs the GPU co-location pipeline on a model fleet file, with hooks that refuse the commands which destroy a live run.",
+      "category": "workflow",
+      "source": "./colocation-pipeline"
+    }
+  ]
+}

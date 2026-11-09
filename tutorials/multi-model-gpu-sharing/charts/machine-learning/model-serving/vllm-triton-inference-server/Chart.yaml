@@ -1,0 +1,23 @@
+apiVersion: v2
+name: vllm-triton-inference-server
+description: >-
+  One Triton Inference Server tenant running the vLLM backend behind Triton's
+  OpenAI-compatible frontend, attached to the node's MPS control daemon under a
+  UUID-keyed pinned-memory envelope. The sibling chart vllm-openai serves the
+  same models through vLLM's own OpenAI server; everything outside the
+  triton_vllm block is deliberately identical between the two, because a
+  difference measured between two stacks is only readable if nothing else
+  differs.
+type: application
+version: 0.1.0
+# The server. Read out of the image, not assumed: Triton 2.71.0.
+#
+# What makes this chart worth having is the version BELOW the server. The vLLM
+# build inside nvcr.io/nvidia/tritonserver:26.07-vllm-python-py3 is
+# 0.24.0+092c4842.dev -- byte for byte the same engine build as
+# nvcr.io/nvidia/vllm:26.07-py3, which the sibling chart uses -- on the same
+# torch (2.13.0a0+9186a08b2c.nv26.07) and the same forward-compatibility driver
+# (libcuda.so.610.43.02). So a delta between the two charts is a delta between
+# two servers wrapping one engine, which is a readable result, rather than a
+# delta between two engine versions, which would not be.
+appVersion: "2.71.0"

@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dynamo-vllm.fullname" . }}-compat
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "dynamo-vllm.labels" . | nindent 4 }}
+data:
+  # Finding 11, from the other side. Under MPS a client must load the libcuda the
+  # control daemon loaded, or its attach HANGS FOREVER with no error. The daemon
+  # runs in the mps-daemon chart's image through that image's entrypoint, so it is
+  # on whatever that entrypoint chose -- on this node, the 26.07 forward-
+  # compatibility driver libcuda.so.610.43.02. The Dynamo image ships no compat
+  # driver at all and loads the host's 580.178.04.
+  #
+  # So this runs IN THE DAEMON'S IMAGE, through the same entrypoint and under the
+  # same MPS environment as a tenant of that image, and asks the loader which
+  # libcuda it resolved. Not a copy of the entrypoint's decision -- the decision
+  # itself, taken again by the same code. If it resolved the compat driver, that
+  # directory is copied for the Dynamo containers to put first on their library
+  # path. If it resolved the host driver, nothing is copied, the Dynamo
+  # containers fall through to the host driver too, and the pair still matches.
+  # That second branch is what keeps this correct after a node driver upgrade that
+  # makes the entrypoint stop enabling compat; a hard-coded copy would not.
+  #
+  # Measured 2026-09-29 on a g6e.48xlarge, vllm-runtime:1.5.0 under the 26.07
+  # daemon: as shipped, the attach hung (killed at 180 s); with the copied driver
+  # first on LD_LIBRARY_PATH, it attached at free=7.58 GiB of an 8 GiB envelope,
+  # cuDriverGetVersion 13030.
+  copy_compat_driver.py: |
+    import ctypes, os, subprocess, sys
+
+    dest = sys.argv[1]
+    ctypes.CDLL("libcuda.so.1")
+    maps = [l.split()[-1] for l in open("/proc/self/maps") if "libcuda.so" in l]
+    if not maps:
+        sys.stderr.write("libcuda.so.1 loaded but is not in /proc/self/maps\n")
+        sys.exit(1)
+    real = os.path.realpath(maps[0])
+    print("the daemon's image resolves libcuda to %s" % real)
+    if "/compat/" not in real:
+        print("host driver, not a compat driver: nothing to copy, and this tenant "
+              "will load the host driver as the daemon does")
+        sys.exit(0)
+    src = os.path.dirname(real)
+    subprocess.check_call(["cp", "-a", src + "/.", dest + "/"])
+    print("copied %s -> %s: %s" % (src, dest, " ".join(sorted(os.listdir(dest)))))

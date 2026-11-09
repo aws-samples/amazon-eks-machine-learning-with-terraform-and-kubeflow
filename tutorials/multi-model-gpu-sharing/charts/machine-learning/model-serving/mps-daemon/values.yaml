@@ -1,0 +1,358 @@
+# mps-daemon values
+#
+# Requirements established by early hardware testing:
+#   - NVIDIA_VISIBLE_DEVICES=all (finding 7). A daemon restricted to a subset
+#     creates server contexts whose device numbering clients cannot address.
+#   - hostPID / hostIPC / privileged (finding 6).
+#   - pipe directory on a hostPath, mounted by tenants at the same path.
+#   - no nvidia.com/gpu resource request (finding 1, device-plugin bypass).
+#     SUPERSEDED 2026-09-03: this chart now requests every GPU on the node. The
+#     finding still holds for what it actually established -- the plugin cannot
+#     express sharing, so device SELECTION must not come from it -- and visibility
+#     is still NVIDIA_VISIBLE_DEVICES=all. The request is a scheduling reservation
+#     only. See `gpuRequest` below. Tenants still request no GPUs.
+#   - toleration for nvidia.com/gpu:NoSchedule.
+#   - one daemon per node is sufficient — limits are per client connection,
+#     not baked into the server (finding 10, §10.3).
+
+# Switched 2026-09-02 to match the tenant chart, so the node runs one image and
+# nobody later has to ask why the two differ.
+#
+# This tag does NOT select an MPS version, and that is worth being explicit about
+# because the opposite was believed here earlier. `nvidia-cuda-mps-control`,
+# `nvidia-cuda-mps-server`, and the client-side MPS implementation in `libcuda`
+# are all injected from the HOST DRIVER by the NVIDIA container runtime under
+# NVIDIA_DRIVER_CAPABILITIES=compute,utility -- proven byte-identical (md5) in
+# this image and the 25.08 one it replaced, which were built a year apart, while
+# the image-provided CUDA runtime (libcudart) differs between them.
+#
+# Consequences:
+#   - appVersion "13000" below is a property of driver 580.178.04, not of this tag.
+#
+# CORRECTION, later the same day (2026-09-02). The paragraph above is right about the
+# BINARIES and was wrong about the conclusion it drew. It went on to say "a tenant
+# image change does NOT require changing this chart ... Do not infer a coupling that
+# does not exist." A coupling DOES exist, by a different route than the one that was
+# refuted, and it is load-bearing:
+#
+# This image bundles a CUDA forward-compatibility driver
+# (/usr/local/cuda/compat/lib.real/libcuda.so.610.43.02). /etc/shinit_v2 enables it
+# from SHELL INIT when cudaCheck passes. This chart launches the control daemon
+# via `bash -c`, so shell init runs, so the mps servers this daemon forks inherit the
+# compat driver. Measured on the running node: nvidia-cuda-mps-server has
+# libcuda.so.610.43.02 mapped, NOT the host's 580.178.04.
+#
+# MPS client and server must load the SAME libcuda. A tenant on host libcuda 580
+# attaching to this 610 server hangs forever in torch.cuda.init() -- no error, no log
+# (see vllm-openai/templates/deployment.yaml, finding 11). So the daemon image and the
+# tenant image are coupled through which libcuda the compat mechanism selects, even
+# though the mps binaries themselves are host-injected and byte-identical across tags.
+#
+# What survives from the retraction: the tag does not select an MPS *version*, and
+# appVersion "13000" is a driver property. What does not: the two charts' images are
+# not independent. Change one, re-verify the other.
+#
+#   - all this container contributes is a filesystem, a shell to launch the driver's
+#     control daemon from, and -- unavoidably -- the userspace driver that shell
+#     init puts on the path.
+image: nvcr.io/nvidia/vllm:26.07-py3
+imagePullPolicy: IfNotPresent
+
+# Image used by the sidecar that publishes the GPU-index->UUID ConfigMap.
+# Needs kubectl AND a shell (the sidecar runs `bash -c`), which rules out the
+# distroless registry.k8s.io/kubectl image. Not bitnami/kubectl: Bitnami withdrew
+# its public Docker Hub catalog in 2025 and `bitnami/kubectl:1.30` now 404s.
+# Tag tracks the EKS control-plane minor version.
+kubectlImage: alpine/k8s:1.35.6
+kubectlImagePullPolicy: IfNotPresent
+
+# Deployment, not DaemonSet, since 2026-09-03. See templates/deployment.yaml.
+replicas: 1
+
+# Number of GPUs this pod requests from Kubernetes. Set to the node's FULL GPU count.
+#
+# This is a RESERVATION, not consumption. The daemon does not need an allocation to
+# function -- it is privileged, runs with NVIDIA_VISIBLE_DEVICES=all, and the device
+# plugin is bypassed by design (finding 1). The request buys three things the previous
+# DaemonSet could not:
+#
+#   1. The node gets CREATED. A DaemonSet only follows nodes that already exist, so
+#      something else had to conjure the GPU node first. That something was `test-gpu`,
+#      a hand-written pod requesting all 8 GPUs, living in the OTHER repo
+#      (eks-cluster/tests/test-gpu.yaml) and load-bearing only by convention -- the
+#      standing instruction "never delete test-gpu" was the only thing protecting it.
+#      Now the chart that needs the node is the chart that asks for it. `test-gpu` is
+#      superseded by ../../../../manifests/gpu-node-holder.yaml, which does the same job
+#      only while this chart is UNinstalled, and yields to it by preemption. Read that
+#      file's header before a teardown: re-applying it is a required manual step with a
+#      ~600s deadline.
+#   2. The node is HELD. A pod requesting every GPU on the node cannot be consolidated
+#      elsewhere, so Karpenter leaves it alone. `karpenter.sh/do-not-disrupt` still set,
+#      belt and braces.
+#   3. The node is EXCLUSIVE. k8s now believes all 8 GPUs are taken, so no other GPU
+#      workload can be scheduled onto the measurement node. That is not merely tidy:
+#      a stray co-tenant would perturb exactly the latency the harness (§6) measures.
+#
+# And it makes the whole stack start/stoppable, which is real money on a g6e.48xlarge:
+# scale to 0 and Karpenter reclaims the node.
+#
+# THREE HAZARDS, all of them sharp:
+#
+#   a. Do not deploy this while another pod holds the GPUs AT EQUAL OR HIGHER PRIORITY.
+#      Such a pod cannot be displaced, so this one sits Pending -- and a Pending pod in a
+#      Karpenter cluster is a purchase order, not a stall. It will provision a SECOND
+#      g6e.48xlarge. `gpu-node-holder` (manifests/gpu-node-holder.yaml) is built to be
+#      the exception: priority -1000, so installing this chart preempts it and inherits
+#      its node, no hand-deletion. `test-gpu`, at the default priority 0, is NOT the
+#      exception -- delete it first, or replace it with the holder.
+#   b. FIXED 2026-09-04, kept for the record. One-daemon-per-node used to be IMPLICIT:
+#      it held only because a pod requesting 8 GPUs cannot share a node with another
+#      such pod, which is silently false on any instance type with fewer GPUs than
+#      `gpuRequest`. It is now stated as pod anti-affinity -- see `antiAffinity` below.
+#   c. The node is now EPHEMERAL, and tenant values files are node-specific. Scale to
+#      0 and the replacement node has a different name AND different GPU UUIDs, which
+#      makes `placement.node` and `placement.gpu_uuids` in every vllm-openai values
+#      file stale -- and a stale UUID fails SILENTLY as an unbounded engine (finding 9).
+#      Re-render tenant values from the UUID ConfigMap after every node replacement.
+#      Under the old DaemonSet-plus-test-gpu arrangement the node was effectively
+#      immortal, which hid this. It is the price of being able to turn the fleet off.
+#      Mitigation, not a fix: apply manifests/gpu-node-holder.yaml immediately after
+#      uninstalling this chart and the SAME node survives the teardown, UUIDs intact.
+#      The mitigation is manual and has a ~600s window; treat re-rendering tenant
+#      `placement` blocks as the default assumption and the holder as the shortcut.
+#
+# Set to null/0 to omit the request entirely and restore the old behaviour (daemon
+# schedules anywhere its nodeSelector allows, holds nothing).
+gpuRequest: 8
+
+nodeSelector:
+  karpenter.sh/nodepool: cuda
+  node.kubernetes.io/instance-type: g6e.48xlarge
+
+# One daemon per node, and therefore one RUN per node. Required pod anti-affinity on
+# the chart name over topology kubernetes.io/hostname; see templates/deployment.yaml.
+#
+# This became load-bearing when releases started being installed per run rather than
+# once by hand: the node is the unit a run leases, the daemon pod reaching Running IS
+# the capture, and this rule is what makes one run's capture exclude another's on any
+# instance type -- not just on one whose GPU count happens to equal `gpuRequest`.
+#
+# It does NOT exclude another run's TENANTS, which request no GPUs and set nodeName
+# directly. That exclusion holds by construction (each run pins its tenants to the node
+# its own daemon captured) and would need a taint to be enforced. Optional hardening,
+# not done.
+#
+# Set false only to reproduce the pre-2026-09-04 behaviour.
+antiAffinity:
+  enabled: true
+
+mps:
+  pipeHostPath: /var/run/nvidia-mps   # hostPath; tenants mount the same path
+  pipeMountPath: /mps
+  logDir: /tmp/mps-log
+
+# Karpenter must not consolidate a node mid-run (impl §7).
+disruption:
+  doNotDisrupt: true
+
+# Emit a ConfigMap mapping GPU index -> UUID at startup, read from `nvidia-smi -L`.
+# Fan-out needs UUIDs and cannot obtain them from inside tenant pods (finding 2).
+# The ConfigMap is per-node, keyed by the node's hostname, so a fleet across
+# many nodes produces one entry per node in a single ConfigMap is NOT safe
+# (concurrent writers); instead each node writes its own ConfigMap suffixed with
+# the node name. See templates/deployment.yaml.
+#
+# The ConfigMap is created at RUNTIME by kubectl, so it is not part of the Helm release
+# manifest and `helm uninstall` does not delete it. Observed 2026-09-04: one survived an
+# uninstall and would have handed the next run a UUID set for a node it did not hold.
+# Since then the sidecar sets an ownerReference to its own pod, so the kubelet's garbage
+# collector removes it -- see templates/deployment.yaml. A reader should still treat a
+# ConfigMap it did not just watch appear as suspect: it is a cache, and the pod is the
+# only thing that proves the node is held.
+uuidConfigMap:
+  enabled: true
+  # base name; the node name is appended per-node. Defaults to
+  # "<release>-gpu-uuids" if unset.
+  name: ""
+
+livenessProbe:
+  periodSeconds: 30
+  # verifies the control SOCKET responds, not merely that the process exists
+
+resources: {}
+
+# Injected Istio sidecar adds latency to measurements; disabled on tenants, and
+# kept off here for consistency.
+podAnnotations:
+  sidecar.istio.io/inject: "false"
+  # Pinned off for the same reason as in the vllm-openai chart (impl §4.2.3), though for
+  # a different failure mode. This workload was NOT observed being injected — the
+  # amazon-cloudwatch-observability webhook that instrumented the tenant Deployments left
+  # it alone — so this is precaution, not a fix. It is worth having: the control daemon is
+  # the process every tenant's memory limit depends on, its liveness probe is what detects
+  # a dead MPS server, and an injected agent or sidecar changes its startup and its
+  # process tree. Inert on clusters without the operator.
+  instrumentation.opentelemetry.io/inject-python: "false"
+  instrumentation.opentelemetry.io/inject-java: "false"
+  instrumentation.opentelemetry.io/inject-nodejs: "false"
+  instrumentation.opentelemetry.io/inject-dotnet: "false"
+
+# ==========================================================================================
+# dcgm-exporter — the §6.5 cause-signal instrument, in this chart since 2026-09-04.
+# ==========================================================================================
+#
+# It used to be a separate hand-installed release of the upstream nvidia chart (called
+# `dcgm-prototype`, configured by ../../../../observability/dcgm-exporter-values.yaml).
+# Three things forced the move, and only the third is about tidiness:
+#
+#   1. Upstream cannot be installed twice in one namespace. Its metrics ConfigMap
+#      (`exporter-metrics-config-map`) and Role (`dcgm-exporter-read-cm`) are fixed
+#      strings with no release prefix, so a second per-run release fails install with
+#      "resource already exists and is not owned by this release".
+#   2. Upstream is a DaemonSet behind a ClusterIP. That Service round-robins across every
+#      GPU node, and the harness -- which joins DCGM series on UUID and keeps only the
+#      UUIDs it was told about -- cannot distinguish a scrape of the wrong node from a
+#      node with nothing to report. Invisible with one GPU node; silent data loss with
+#      two. See templates/dcgm-exporter.yaml.
+#   3. The exporter is only useful on the node the daemon captured, so it has exactly the
+#      lease's lifetime. One release means one install, one teardown, and no orphan.
+#
+# WHERE THE CONFIGURATION CAME FROM. Every setting below is transcribed from
+# observability/dcgm-exporter-values.yaml, which remains the long-form justification for
+# each one -- why 4.4.2/4.7.1 and not 4.1.1 (its Low-Overhead Profiling path rejects Ada
+# and silently drops all seven PROF fields), why ubuntu22.04 and not distroless (finding
+# the above needed dcgmi and a shell), why --collect-interval=5000 is the difference
+# between a signal and a constant, why the resource floor is measured rather than guessed,
+# and why the Kubernetes pod-attribution is switched off rather than merely unused. Read
+# that file before changing anything here.
+#
+# THIS CHART CANNOT SHARE A GPU WITH ANOTHER DCGM EXPORTER. A GPU allows exactly one DCGM
+# host engine to own its profiling (DCP) fields; the second to ask exits with "The
+# third-party Profiling module returned an unrecoverable error" and crash-loops, and the run
+# it was instrumenting then writes records with no per_gpu block while still reporting
+# success. The usual other engine is the amazon-cloudwatch-observability EKS addon's own
+# dcgm-exporter DaemonSet, which is ON BY DEFAULT on a fresh cluster and must be switched off
+# at the addon (deleting its DaemonSet or its DcgmExporter CR is undone by its operator):
+#
+#   aws eks update-addon --cluster-name $CLUSTER --region $REGION \
+#     --addon-name amazon-cloudwatch-observability \
+#     --configuration-values '{"dcgmExporter":{"enabled":false}}' --resolve-conflicts OVERWRITE
+#
+# Measured 2026-09-14; see USER-GUIDE.md §0, "Only one DCGM exporter per GPU". This is
+# not left to whoever installs the chart: agent/capture.py refuses a capture while another
+# exporter is on the cluster, before the install that orders a node.
+#
+# THREE COPIES OF THE FIELD LIST, and the sync is now checked rather than asserted:
+#   - this file                      -> what the measurement exporter publishes (source of truth)
+#   - harness/scrape.py DCGM_FIELDS  -> what a record's per_gpu block can contain
+#   - terraform helm_release         -> the cluster-wide exporter, survives a rebuild
+# The first two are compared by a self-test (src/colocation/tests/selftest.py), because
+# they had already drifted: the harness asked for DCGM_FI_DEV_GPU_UTIL and
+# DCGM_FI_DEV_MEM_COPY_UTIL, which nothing published, while the exporter published
+# DCGM_FI_DEV_FB_TOTAL and DCGM_FI_DEV_GPU_TEMP, which nothing read. Both lists were 15
+# long, which is how that survived. The union is 17 and is what both now carry.
+dcgmExporter:
+  enabled: true
+
+  # Pinned, and the pin is part of the validity key: DCP profiling field availability is
+  # driver- and DCGM-version-dependent. 4.4.2 = DCGM, 4.7.1 = exporter.
+  image: nvcr.io/nvidia/k8s/dcgm-exporter:4.4.2-4.7.1-ubuntu22.04
+  imagePullPolicy: IfNotPresent
+  port: 9400
+
+  # Deliberately unset. Upstream's chart sets system-node-critical, which would let the
+  # instrument preempt the tenants it is measuring.
+  priorityClassName: ""
+
+  # --collect-interval=5000 is NOT tuning. At the exporter's own default of 30000 ms,
+  # DCGM_FI_PROF_SM_ACTIVE returned a byte-identical value for nine consecutive scrapes
+  # and changed twice in 40 s: a 45 s measurement batch would be aliased away. 5 s is the
+  # coarsest window that still tiles a batch; 1 s buys variance, not coverage, because
+  # DCGM multiplexes the DCP counters across fixed hardware units.
+  #
+  # The -f path must be restated because adding any argument replaces the chart's default
+  # argument list.
+  arguments:
+  - "-f"
+  - "/etc/dcgm-exporter/default-counters.csv"
+  - "--kubernetes=false"
+  - "--collect-interval=5000"
+
+  podAnnotations:
+    # This namespace has istio-injection=enabled, and a sidecar in front of the scrape
+    # target adds latency to the very signal being collected.
+    sidecar.istio.io/inject: "false"
+    # The CloudWatch/OTel auto-instrumentation webhook injected four init containers into
+    # this pod on its first install. Inert against a Go binary, but any cluster-side
+    # injector that mutates the pod belongs to the validity key and must be pinned off.
+    instrumentation.opentelemetry.io/inject-python: "false"
+    instrumentation.opentelemetry.io/inject-java: "false"
+    instrumentation.opentelemetry.io/inject-nodejs: "false"
+    instrumentation.opentelemetry.io/inject-dotnet: "false"
+
+  # MEASURED, not chosen. The chart default of 256Mi is ~2x BELOW this process's idle
+  # working set once the profiling module loads 15 fields across 8 GPUs, and it
+  # CrashLoopBackOff'd with exitCode 137 immediately after "NVML provider successfully
+  # initialized!". Measured working set: 486-516Mi idle, 528-532Mi under load, and moving
+  # from a 30 s to a 5 s collect interval cost nothing -- the footprint is set by
+  # (fields x GPUs) plus the fixed hostengine cache, not by request volume.
+  #
+  # requests reflect what the process actually holds, so a container sitting 2x above its
+  # request is not Burstable-QoS eviction bait on a node whose whole purpose is to be
+  # packed to the edge. The limit is ~2.4x the measured peak and deliberately NOT tightened
+  # to 2x: the peak tracks the field list, the field list is expected to grow, and the
+  # failure mode of getting it wrong is an OOMKill that silently drops a batch's cause
+  # signals. Do not tighten below the idle floor under any rule.
+  resources:
+    requests:
+      cpu: 200m
+      memory: 640Mi
+    limits:
+      cpu: "2"
+      memory: 1280Mi
+
+  serviceMonitor:
+    # Convenience only, and skipped automatically if the CRD is absent. The harness scrapes
+    # :9400 itself, because the cluster Prometheus keeps its TSDB on an emptyDir.
+    enabled: true
+    # 15s against the cluster default of 30s. Stated even though it matches the upstream
+    # chart default, because a chart bump must not change it silently. Note this value did
+    # nothing at all until --collect-interval was fixed: scrape rate is a ceiling on
+    # freshness, never a source of it.
+    interval: 15s
+
+  # THE SOURCE OF TRUTH FOR THE FIELD LIST. 17 fields. Rendered verbatim into a ConfigMap
+  # mounted over /etc/dcgm-exporter/default-counters.csv.
+  customMetrics: |
+    # --- envelope accounting: does a tenant hold what the solver promised it? (§4.2, §9) ---
+    DCGM_FI_DEV_FB_USED,  gauge, framebuffer memory used (MiB)
+    DCGM_FI_DEV_FB_FREE,  gauge, framebuffer memory free (MiB)
+    DCGM_FI_DEV_FB_TOTAL, gauge, framebuffer memory total (MiB)
+    # --- contention for the SMs: the primary co-location cause signal (§6.5, §10) ---
+    DCGM_FI_PROF_GR_ENGINE_ACTIVE,   gauge, fraction of time any graphics/compute engine was active
+    DCGM_FI_PROF_SM_ACTIVE,          gauge, fraction of time at least one warp was resident on an SM
+    DCGM_FI_PROF_SM_OCCUPANCY,       gauge, resident warps as a fraction of the maximum supported
+    DCGM_FI_PROF_PIPE_TENSOR_ACTIVE, gauge, fraction of cycles the tensor pipes were active
+    # --- device memory bandwidth: the OTHER shared resource besides SMs ---
+    DCGM_FI_PROF_DRAM_ACTIVE, gauge, fraction of cycles the device memory interface was active
+    # --- host-staged traffic volume: the only visible proxy for TP collectives (§4.2.1) ---
+    DCGM_FI_PROF_PCIE_TX_BYTES, counter, bytes sent over PCIe
+    DCGM_FI_PROF_PCIE_RX_BYTES, counter, bytes received over PCIe
+    # --- the coarse NVML utilization pair. Added 2026-09-04: the harness had been asking
+    #     for both since it was written and NOTHING PUBLISHED THEM, so they were absent
+    #     from every record's per_gpu block and scrape_dcgm's name filter never said so.
+    #     Kept rather than deleted from the harness because they need no DCP profiling
+    #     module, which makes them the only SM/bandwidth signal that survives a DCGM
+    #     version whose profiling path rejects the architecture -- exactly the 4.1.1
+    #     failure this file's image pin exists to prevent.
+    DCGM_FI_DEV_GPU_UTIL,      gauge, percent of time the GPU had any kernel resident (NVML)
+    DCGM_FI_DEV_MEM_COPY_UTIL, gauge, percent of time device memory was being read or written (NVML)
+    # --- the confounder. Eight L40S in one chassis can clock down under load, and a clock
+    #     drop caused by a power cap is INDISTINGUISHABLE from one caused by co-location
+    #     unless the cap is recorded. §4.2.1 already cost one misattribution of exactly
+    #     this shape; these four fields are what stop the second one.
+    DCGM_FI_DEV_SM_CLOCK,          gauge, SM clock (MHz)
+    DCGM_FI_DEV_POWER_USAGE,       gauge, power draw (W)
+    DCGM_FI_DEV_GPU_TEMP,          gauge, GPU temperature (C)
+    DCGM_FI_DEV_POWER_VIOLATION,   counter, throttling attributable to the power cap (us)
+    DCGM_FI_DEV_THERMAL_VIOLATION, counter, throttling attributable to thermal limits (us)

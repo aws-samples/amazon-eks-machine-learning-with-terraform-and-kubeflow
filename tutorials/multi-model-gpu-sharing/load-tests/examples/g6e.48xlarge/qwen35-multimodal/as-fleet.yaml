@@ -1,0 +1,5 @@
+# Every tenant at the demand its fleet file states: the traffic the search certified this
+# deployment for, so `drift` should read close to 0% on demand and inside the targets on latency.
+fleet: fleets/examples/g6e.48xlarge/qwen35-multimodal.yaml
+hours: 2
+tenants: {}

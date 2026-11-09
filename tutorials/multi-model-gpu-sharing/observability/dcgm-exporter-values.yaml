@@ -1,0 +1,305 @@
+# NVIDIA dcgm-exporter — the §6.5 cause-signal instrument.
+#
+# ==========================================================================================
+# NO LONGER THE MEASUREMENT EXPORTER, AND NO LONGER THE SOURCE OF TRUTH (2026-09-04).
+# ==========================================================================================
+#
+# What this file configures now is the CLUSTER-WIDE exporter: the upstream chart, as a
+# DaemonSet, in kube-system, owned by terraform. General GPU observability.
+#
+# The exporter that instruments a MEASUREMENT moved into the mps-daemon chart
+# (charts/machine-learning/model-serving/mps-daemon, values key `dcgmExporter`), because a
+# run now installs its own daemon and the instrument's useful lifetime is exactly that node
+# lease's. Three reasons the upstream chart could not be a subchart, none cosmetic:
+#
+#   1. It cannot be installed twice in one namespace: its metrics ConfigMap
+#      (`exporter-metrics-config-map`) and Role (`dcgm-exporter-read-cm`) are fixed strings
+#      with no release prefix, so a second per-run release fails install.
+#   2. A DaemonSet behind a ClusterIP round-robins across every GPU node. The harness joins
+#      DCGM series on UUID and keeps only the UUIDs it was told about, so a scrape landing
+#      on another run's node returns {} — indistinguishable from an idle GPU. Invisible with
+#      one GPU node; silent data loss with two.
+#   3. One release means the exporter cannot outlive the node it was measuring, or be absent
+#      from a node that was captured.
+#
+# THE FIELD LIST IS NOW OWNED BY THE CHART, and this copy follows it. There are three
+# copies and two of them are now checked against each other by
+# src/colocation/tests/selftest.py:
+#
+#   mps-daemon/values.yaml dcgmExporter.customMetrics  <- source of truth, 17 fields
+#   harness/scrape.py DCGM_FIELDS                      <- checked equal to the above
+#   this file + the terraform heredoc                  <- kept in step by hand
+#
+# Everything below still stands as the WHY for each setting — the image pin, the collect
+# interval, the resource floor, the disabled pod attribution — and the chart's values file
+# points here rather than repeating it. Read this file before changing that one.
+#
+# It is upstreamed verbatim into the cluster's terraform repo
+# (aws-eks-cluster-and-nodegroup/main.tf, helm_release "dcgm_exporter",
+# var.dcgm_exporter_enabled). Prototyped here by hand first so the field list is proven on
+# L40S-under-MPS before terraform owns it.
+#
+# DO NOT RUN THIS ON A CAPTURED NODE while a measurement exporter is there. Two exporters on
+# one node contend for the DCP profiling counters, which DCGM multiplexes across a fixed set
+# of hardware units. That contention is why the pre-install baseline below was captured under
+# load rather than at idle.
+#
+# WHY A SECOND EXPORTER EXISTS AT ALL. The cluster already runs a dcgm-exporter, but it
+# belongs to the amazon-cloudwatch-observability EKS addon, which publishes only 10 fields
+# and does NOT include DCGM_FI_PROF_SM_ACTIVE or DCGM_FI_PROF_DRAM_ACTIVE — the two §6.5
+# names outright. Its field list (/etc/dcgm-exporter/dcp-metrics-included.csv) is managed
+# by amazon-cloudwatch-agent-operator and reverts if edited in place, and it serves over
+# self-signed TLS. Since PROF_PIPE_TENSOR_ACTIVE *is* present there, the DCP profiling
+# module demonstrably works on L40S under MPS: the absence is a config choice, not a
+# capability limit. Hence: own the config.
+#
+# PER-GPU, NOT PER-TENANT. dcgm-exporter attributes metrics to pods by reading the kubelet
+# /pod-resources socket, i.e. by asking the device plugin who owns each GPU. Our tenants
+# bypass the device plugin (design §1.9), so that attribution cannot work —
+# and, measured, it does not fail quietly but produces a confidently WRONG pod label (see
+# --kubernetes=false below). The mapping is therefore switched off and every series here is
+# labelled by GPU/UUID only. That is workable — the harness knows each tenant's UUID set from
+# its own values file and joins on the UUID label — but it means DCGM can never independently
+# confirm which co-tenant caused what on a shared device.
+#
+# WHAT THIS STILL CANNOT MEASURE. §6.5 originally claimed DCGM_FI_PROF_DRAM_ACTIVE would
+# price the host-staged AllReduce term (§10). It cannot: DRAM_ACTIVE is the *device* GDDR
+# interface, not host memory. Host DRAM saturation needs uncore IMC counters, which are not
+# exposed on virtualized EC2, and node_exporter carries no bandwidth counters either.
+# PCIE_TX/RX_BYTES below give the host-staged traffic VOLUME, not whether the host memory
+# system is saturated. The §10 term therefore has to be established behaviorally —
+# TP vs no-TP at fixed MPS — not read off an instrument.
+
+image:
+  # Pinned. DCGM 4.4.2 / exporter 4.7.1 joins the validity key: DCP profiling field
+  # availability is driver- and DCGM-version-dependent, which is the whole reason this
+  # file exists. Install with --version 4.7.1 to match.
+  #
+  # DO NOT GO BACK TO 4.1.1-4.0.4. This file was first prototyped on DCGM 4.1.1 and every
+  # DCGM_FI_PROF_* field silently vanished. The exporter's own log blamed a module:
+  #   "Not collecting DCP metrics: This request is serviced by a module of DCGM that is not
+  #    currently loaded"
+  # which reads like contention with the CloudWatch addon's exporter, and isn't. Running
+  # nv-hostengine at --log-level debug in a privileged pod on this node gave the real reason:
+  #   DEBUG [[Profiling]] gpuId 7, id SmActive ... is supported      <- all our metrics OK
+  #   ERROR [[Profiling]] Unsupported GPU architecture: 8            <- Ada, compute 8.9
+  #   ERROR [[Profiling]] No GPU with LOP support were found.
+  #   ERROR [[Profiling]] DcgmModuleProfiling failed to initialize.
+  # DCGM 4.1.1's Low-Overhead Profiling path rejects this architecture, no GPU qualifies, so
+  # the entire profiling module fails to load and all seven PROF fields are dropped. Probed
+  # one image at a time on this node, single variable: 3.3.9 OK, 4.1.1 BROKEN, 4.3.1 OK,
+  # 4.4.2 OK. Chart 4.7.1 ships 4.4.2.
+  #
+  # ubuntu22.04, not the newer distroless (chart 4.8.x / DCGM 4.6.0): finding the above needed
+  # dcgmi, nv-hostengine and a shell in the container, and distroless has none of them. For an
+  # instrument whose failure mode is a misleading log line, that is worth more than image size.
+  tag: 4.4.2-4.7.1-ubuntu22.04
+
+# Chart default is already ["-f", "/etc/dcgm-exporter/default-counters.csv"], and
+# customMetrics below is rendered into a ConfigMap mounted over exactly that path. So the
+# field list needs no argument change. NOTE the chart default file name is misleading:
+# default-counters.csv is the NON-profiling list upstream, and enabling this release
+# without customMetrics would publish no PROF fields at all.
+#
+# customMetrics is UNDOCUMENTED in chart 4.7.1's values.yaml -- it was dropped from the docs
+# but templates/metrics-configmap.yaml still keys off it. Verified by pulling the chart and
+# grepping the templates, not assumed from the 4.0.4 behaviour.
+#
+# --kubernetes=false is added, so the -f path must be restated here. See the pod-label
+# discussion below for why the Kubernetes mapping is turned OFF.
+#
+# NOTE the chart still renders env DCGM_EXPORTER_KUBERNETES=true regardless, and this relies
+# on urfave/cli precedence -- an explicit command-line flag beats the flag's EnvVars source.
+# Setting extraEnv instead was tried and rejected: it renders a SECOND
+# DCGM_EXPORTER_KUBERNETES entry in the same env list and leans on implicit kubelet last-wins,
+# which is worse. Either way the guarantee is not on the face of the manifest, so it is
+# checked empirically: the pod/namespace/container labels must be absent from the scrape.
+#
+# --collect-interval=5000 IS NOT TUNING, IT IS THE DIFFERENCE BETWEEN A SIGNAL AND A CONSTANT.
+# Measured 2026-09-02 under the 45s/16-concurrent load below: DCGM_FI_PROF_SM_ACTIVE{gpu="0"}
+# returned the byte-identical value 0.063042 for NINE consecutive scrapes ~3.5s apart, then
+# jumped to 0.302966 -- i.e. it changed exactly twice in 40s, 31s apart. dcgm-exporter collects
+# on a background timer and every scrape reads that cache, so the exporter's own default
+# (--collect-interval 30000, confirmed from `dcgm-exporter --help` and from the absence of
+# DCGM_EXPORTER_INTERVAL in the rendered pod env) was the sampling rate, not the scrape.
+#
+# This also CORRECTS an earlier attribution in this file's history: the ~30s staleness first
+# noticed on the CloudWatch addon's PIPE_TENSOR_ACTIVE was blamed on the addon's config. It is
+# the upstream exporter default, and our own release had it too. Nothing about the addon.
+#
+# Chosen so the metric window is <= the harness sample period: with a 5s window the harness
+# samples 5s apart and gets ~9 NON-OVERLAPPING windows per 45s §6.4 batch, so the batch mean
+# actually covers the batch. At 30s a 45s batch yields one and a half windows, both of which
+# straddle the batch boundaries and mix in idle time -- which is precisely why the first
+# fully-loaded sample above read 0.063 (a window that was mostly ramp-up) rather than 0.30.
+#
+# NOT 1000ms. DCGM multiplexes the DCP profiling counters across a fixed set of hardware
+# units, so sub-second windows buy variance rather than coverage, and the hostengine work
+# scales with 15 fields x 8 GPUs. 5s is the coarsest window that still tiles a batch.
+#
+# The 15s serviceMonitor scrape below now samples every third window instead of re-reading one
+# value three times. Prometheus remains the convenience view; the harness scrapes :9400 itself.
+arguments: ["-f", "/etc/dcgm-exporter/default-counters.csv", "--kubernetes=false", "--collect-interval=5000"]
+
+# POD LABELS ARE TURNED OFF BECAUSE THEY ARE WRONG HERE, NOT MERELY ABSENT.
+#
+# Measured 2026-09-02, and it contradicted the prediction. dcgm-exporter attributes metrics
+# to pods by reading the kubelet /pod-resources socket, i.e. by asking the device plugin who
+# owns each GPU. The expectation was that our device-plugin bypass would leave those labels
+# EMPTY. Instead the exporter emitted:
+#
+#   DCGM_FI_DEV_FB_USED{gpu="0",UUID="GPU-00010000-...",container="test-gpu",
+#                       namespace="kubeflow-user-example-com",pod="test-gpu"} 7732
+#
+# That 7732 MiB belongs to tenant m1. It is labelled test-gpu -- the Karpenter placeholder
+# that requests nvidia.com/gpu: 8, holds the device-plugin allocation for all eight devices,
+# and does no GPU work whatsoever. So every DCGM series on this node is attributed, with
+# total confidence, to the one pod that cannot be responsible for any of it.
+#
+# This is a permanent property of the design, not a transient: tenants bypass the plugin
+# (design §1.9) and test-gpu holds the allocation to pin the node against Karpenter. A
+# harness that joined on `pod` would attribute all co-location effects to an idle placeholder.
+# An instrument that emits a confidently wrong label is worse than one that emits none, so
+# the mapping is disabled and the join is on UUID, which is correct by construction.
+
+podAnnotations:
+  # This namespace has istio-injection=enabled. A sidecar in front of the scrape target adds
+  # latency to, and can mangle, the very signal being collected.
+  sidecar.istio.io/inject: "false"
+  # The CloudWatch/OTel auto-instrumentation webhook (§4.2.3) injected FOUR init containers
+  # into this pod and set PYTHONPATH, JAVA_TOOL_OPTIONS, NODE_OPTIONS, CORECLR_ENABLE_PROFILING
+  # and DOTNET_STARTUP_HOOKS on the exporter container -- the same webhook that was found
+  # running an agent inside the vLLM engine process. Inert against a Go binary, but the
+  # generalized rule the serving charts follow applies to instruments too: any cluster-side
+  # injector that mutates the pod belongs to the validity key and must be pinned off.
+  # Verified missing from the first prototype install, which is how the injection was seen.
+  instrumentation.opentelemetry.io/inject-python: "false"
+  instrumentation.opentelemetry.io/inject-java: "false"
+  instrumentation.opentelemetry.io/inject-nodejs: "false"
+  instrumentation.opentelemetry.io/inject-dotnet: "false"
+
+customMetrics: |
+  # --- envelope accounting: does a tenant hold what the solver promised it? (§4.2, §9) ---
+  DCGM_FI_DEV_FB_USED,  gauge, framebuffer memory used (MiB)
+  DCGM_FI_DEV_FB_FREE,  gauge, framebuffer memory free (MiB)
+  DCGM_FI_DEV_FB_TOTAL, gauge, framebuffer memory total (MiB)
+  # --- contention for the SMs: the primary co-location cause signal (§6.5, §10) ---
+  DCGM_FI_PROF_GR_ENGINE_ACTIVE,   gauge, fraction of time any graphics/compute engine was active
+  DCGM_FI_PROF_SM_ACTIVE,          gauge, fraction of time at least one warp was resident on an SM
+  DCGM_FI_PROF_SM_OCCUPANCY,       gauge, resident warps as a fraction of the maximum supported
+  DCGM_FI_PROF_PIPE_TENSOR_ACTIVE, gauge, fraction of cycles the tensor pipes were active
+  # --- device memory bandwidth: the OTHER shared resource besides SMs ---
+  DCGM_FI_PROF_DRAM_ACTIVE, gauge, fraction of cycles the device memory interface was active
+  # --- host-staged traffic volume: the only visible proxy for TP collectives (§4.2.1) ---
+  DCGM_FI_PROF_PCIE_TX_BYTES, counter, bytes sent over PCIe
+  DCGM_FI_PROF_PCIE_RX_BYTES, counter, bytes received over PCIe
+  # --- the coarse NVML utilization pair. Added 2026-09-04, when the merge into the
+  #     mps-daemon chart forced a comparison of this list against harness/scrape.py's
+  #     DCGM_FIELDS and found they had drifted: the harness had been asking for both of
+  #     these since it was written, nothing published them, and because scrape_dcgm
+  #     filters by name they were simply absent from every record's per_gpu block with
+  #     nothing anywhere saying so. Both lists were 15 long, which is how that survived.
+  #     Kept rather than dropped from the harness because they need no DCP profiling
+  #     module, which makes them the only SM/bandwidth signal that survives a DCGM build
+  #     whose profiling path rejects the architecture — the exact 4.1.1 failure the image
+  #     pin above exists to prevent.
+  DCGM_FI_DEV_GPU_UTIL,      gauge, percent of time the GPU had any kernel resident (NVML)
+  DCGM_FI_DEV_MEM_COPY_UTIL, gauge, percent of time device memory was being read or written (NVML)
+  # --- the confounder. Eight L40S in one chassis can clock down under load, and a clock
+  #     drop caused by a power cap is INDISTINGUISHABLE from one caused by co-location
+  #     unless the cap is recorded. §4.2.1 already cost us one misattribution of exactly
+  #     this shape; these four fields are what stop the second one.
+  DCGM_FI_DEV_SM_CLOCK,          gauge, SM clock (MHz)
+  DCGM_FI_DEV_POWER_USAGE,       gauge, power draw (W)
+  DCGM_FI_DEV_GPU_TEMP,          gauge, GPU temperature (C)
+  DCGM_FI_DEV_POWER_VIOLATION,   counter, throttling attributable to the power cap (us)
+  DCGM_FI_DEV_THERMAL_VIOLATION, counter, throttling attributable to thermal limits (us)
+
+# MEASURED NECESSITY, not tuning. Chart 4.0.4 shipped resources: {} and chart 4.7.1 introduced
+# defaults of limits {cpu: 200m, memory: 256Mi}. On this node that default is fatal: the pod
+# CrashLoopBackOff'd with exitCode 137 / OOMKilled, dying immediately after "NVML provider
+# successfully initialized!" -- i.e. exactly where DCGM 4.4.2 loads the profiling module and
+# programs 15 fields across 8 GPUs, work the broken 4.1.1 build never got to do. The version
+# bump that fixed the metrics is what made the new ceiling binding.
+#
+# Raised deliberately rather than removed. Unbounded is not safer here -- this DaemonSet shares
+# the node with the vLLM tenants. But the instrument must not be the thing that dies mid-run: an
+# OOMKill during a measurement loses the cause signals for that batch silently. And 200m CPU
+# would throttle a 15s scrape of ~120 series, putting jitter into the signal being collected.
+# On a 192-vCPU / 1.5 TiB g6e.48xlarge these numbers are rounding error.
+#
+# NOW MEASURED, no longer a guess. working-set during the 45s/16-concurrent load run
+# (2026-09-02, 15 fields x 8 GPUs): 511-516Mi idle, 532Mi peak under load. Two consequences:
+#
+#   1. The 256Mi chart default was not marginal, it was ~2x below the IDLE working set. The
+#      OOMKill was inevitable on this node the moment the profiling module actually loaded,
+#      which is why it appeared only after the 4.1.1 -> 4.4.2 fix.
+#   2. requests: 256Mi was ALSO wrong, for a quieter reason. A container whose steady-state
+#      usage sits 2x above its request is Burstable-QoS eviction bait under node memory
+#      pressure -- on a node whose whole purpose is to be packed to the edge with vLLM
+#      tenants. The request now reflects what the process actually holds, so the scheduler
+#      accounts for it truthfully and the instrument is not the first thing reaped.
+#
+# Re-measured at the 5s collect interval, since that raises the collection rate 6x:
+# cgroup memory.peak = 553197568 B = 527.6Mi under load, against a 486Mi idle high-watermark.
+# The 6x rate cost nothing. Both runs agree, which says the footprint is set by
+# (field count x GPU count) and the fixed hostengine cache, NOT by request volume -- it moved
+# 41Mi between idle and 16-concurrent load.
+#
+# requests.memory 640Mi ~= idle high-watermark + 30%. limits.memory 1280Mi ~= 2.4x the measured
+# peak, deliberately NOT tightened to the 2x (~1055Mi) this file previously promised. The reason
+# 2x is the wrong rule here: the peak tracks the field list, and the field list in this file is
+# expected to grow as §6.5 adds cause signals. A limit derived as a tight multiple of today's
+# peak would have to be re-derived on every field addition, and the failure mode of getting that
+# wrong is an OOMKill that silently drops the cause signals for a batch. The 225Mi of extra
+# headroom is 0.015% of this node's 1.5TiB. Do not tighten below the idle floor under any rule.
+resources:
+  requests:
+    cpu: 200m
+    memory: 640Mi
+  limits:
+    cpu: "2"
+    memory: 1280Mi
+
+serviceMonitor:
+  enabled: true
+  # 15s, against the cluster Prometheus global default of 30s. §6.4 batches are short enough
+  # that 30s samples too coarsely to separate a batch from its neighbours. Stated explicitly
+  # even though chart 4.7.1's own default is also 15s, because it is load-bearing here and a
+  # chart bump must not change it silently.
+  #
+  # NOTE this value was doing nothing until --collect-interval was fixed: scraping a 30s-old
+  # cached window every 15s just returns each window twice. Scrape rate is a ceiling on
+  # freshness, never a source of it.
+  interval: 15s
+
+# Verified present on the g6e node; the taint is real, so the toleration is required.
+nodeSelector:
+  karpenter.k8s.aws/instance-gpu-manufacturer: nvidia
+tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+# Left at the chart default (false) ON PURPOSE, unlike the CloudWatch addon's exporter.
+# Plain HTTP on :9400 means the harness can scrape the exporter directly without trusting
+# a self-signed cert, and Prometheus is then a convenience view rather than a dependency —
+# which matters because the cluster Prometheus stores its TSDB on an emptyDir.
+tlsServerConfig:
+  enabled: false
+
+# ---------------------------------------------------------------------------------------
+# SYNC WITH TERRAFORM. This file and the values heredoc in helm_release "dcgm_exporter"
+# (aws-eks-cluster-and-nodegroup/main.tf) must carry the same 17 fields; the terraform copy
+# is the one that survives a cluster rebuild, this one is what gets iterated on. The only
+# key that legitimately differs is podAnnotations: the terraform release lands in
+# kube-system, which has no istio injection, so it needs no sidecar suppression.
+#
+# The tab bug that made the terraform release unrunnable for its entire existence was
+# invisible to terraform validate, because terraform never parses a heredoc as YAML. So:
+#
+#   python3 -c "import re,textwrap,yaml; \
+#     [yaml.safe_load(textwrap.dedent(b)) for b in \
+#      re.findall(r'<<-EOT\n(.*?)\n\s*EOT', open('main.tf').read(), re.S)]"
+#
+# is the check that would have caught it, and it is worth running after any values edit.

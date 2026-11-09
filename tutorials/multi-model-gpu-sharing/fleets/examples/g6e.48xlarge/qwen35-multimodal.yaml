@@ -1,0 +1,203 @@
+# An image-ingest pipeline on four Qwen3.5 vision-language models: one long-context anchor and four
+# riders, all of them multimodal.
+#
+# Five stages of one product, each a real endpoint with its own latency requirement: an upload is
+# screened (`thumb`), moderated and labelled (`tag`), given alt text for accessibility (`alt`) and a
+# caption for the library (`caption`), and a person can then ask questions about a whole document
+# (`docqa`). The shapes below are the shapes those five things have -- one image and a short prompt
+# for the riders, eight page images and a question for the anchor.
+#
+# Nothing in this family is too big for one card: the largest checkpoint is 17.5 GiB. What makes the
+# anchor the big tenant is its CONTEXT -- eight pages is a 9k-token request, and it needs a KV pool
+# sized to hold several of those in flight on top of its weights. Eight pages is also what this
+# hardware holds: the pool grows with the page count, and a couple of dozen pages needs nearly a whole
+# card for one tenant, which leaves nothing to offer and nothing to co-locate. At eight the pool is
+# smaller than the weights beside it, the anchor fits one card with room left on it, and that room is
+# what this fleet offers a rider. The mechanism is still context rather than weights, which is what
+# makes this fleet different from the weight-bound anchors in the other two here.
+#
+# THREE THINGS A MULTIMODAL FLEET HAS TO STATE THAT A TEXT ONE DOES NOT:
+#
+#   1. `images:` -- how many images the driver sends per request and at what resolution. Image cost
+#      follows resolution and not content, so the synthetic images the harness sends are faithful, and
+#      they rotate per request so nothing can cache the vision tower's result.
+#   2. `max_pixels`, which is a memory decision rather than an image-quality one. A visual token is
+#      16x16 pixels merged 2x2, so 1024 pixels per token. Left unstated, the engine sizes its encoder
+#      budget for the largest image the checkpoint allows -- 16,384 visual tokens -- and that costs
+#      about 1.5 GiB of KV pool per shard. Keep it at or below `max_num_batched_tokens x 1024`.
+#   3. `isl_tokens` counts visual tokens plus text, and it needs slack for the text: at exactly
+#      8 x 1024 the images spend the whole input and there is no room left for the question.
+#
+# Prefix caching is off on every tenant, and so is the processed-multimodal cache: the harness sends
+# one fixed-length prompt per tenant, and either cache would make repeated work free.
+
+hardware:
+  instance_type: g6e.48xlarge
+
+workload:
+  delivered_fraction_threshold: 0.99
+
+models:
+  # The anchor's model, and the largest here at 17.5 GiB. Hybrid attention -- one layer in four holds
+  # a KV page and the rest hold a recurrent state -- so its cache per token depends on the context
+  # each tenant serves it at.
+  qwen35-9b:
+    model_id: Qwen/Qwen3.5-9B
+  # Same attention geometry as the 9B at half the weights. Its vision tower is 0.62 GiB, which is the
+  # whole price of multimodality in weights and is small.
+  qwen35-4b:
+    model_id: Qwen/Qwen3.5-4B
+  # Half the KV heads of the two above, so a cheaper page as well as cheaper weights.
+  qwen35-2b:
+    model_id: Qwen/Qwen3.5-2B
+  # The cheapest model in the fleet, and the only one two tenants share. `alt` and `thumb` serve it at
+  # different context lengths, which on this family means genuinely different cache per token.
+  qwen35-0-8b:
+    model_id: Qwen/Qwen3.5-0.8B
+
+tenants:
+  # THE ANCHOR: a document assistant. A person uploads eight pages and asks a question about them, and
+  # what they need is an answer that streams at reading speed once it starts. 60 ms is 16 tokens/s, and
+  # 512 output tokens at that rate is 31 s of answer -- so the ITL is the requirement and the TTFT
+  # bound is the concession.
+  #
+  # isl 8448 is 8 pages at 1024 visual tokens each, plus 256 tokens for the question, the chat
+  # template and the boundary tokens each image carries. Eight pages is a hardware limit, not a product
+  # one: a longer document is served by asking about it in parts.
+  - name: docqa
+    model: qwen35-9b
+    served_name: qwen35-9b-docqa
+    model_path: /fsx/pretrained-models/Qwen/Qwen3.5-9B
+    rate_hz: 0.5
+    isl_tokens: 8448
+    osl_tokens: 512
+    images:
+      count: 8
+      pixels: 1048576
+    # 8,960 tokens per request, so this holds one with room, and it is still the only tenant here
+    # needing a window past 8k. The model allows 262,144; what decides this is the KV pool. On this
+    # hybrid family the window is also what the per-sequence recurrent state is amortised over, so a
+    # narrower window is not a straight saving -- it raises the price of each token. The saving here
+    # comes from the shorter request, and the window follows it so the cache is not priced for a
+    # context this tenant is never served at.
+    max_model_len: 16384
+    extra_args:
+      - --no-enable-prefix-caching
+      - --mm-processor-cache-gb=0
+      # 8 pages, no video. The bound the engine profiles and reserves against, so it belongs here
+      # rather than in whatever a client happens to send.
+      - '--limit-mm-per-prompt={"image": 8, "video": 0}'
+      # 1024 visual tokens per page.
+      - '--mm-processor-kwargs={"min_pixels": 262144, "max_pixels": 1048576}'
+    slo:
+      itl_mean_ms: 60.0
+      # The loosest bound in the fleet: 8 images go through the vision tower and 8,448 tokens of prefill
+      # arrive in chunks before the first token can exist. A document assistant that answers in twelve
+      # seconds is usable. The bound is generous for this shape rather than tight against it, and
+      # tightening it is a decision about the product, not about the hardware.
+      ttft_p95_ms: 12000.0
+
+  # RIDER 1, and the heaviest of them: captioning for a media library. Nobody is waiting on any one
+  # caption, but the queue is continuous -- 6 uploads a second, each a full-resolution image -- so what
+  # this tenant does to its neighbours is a steady 6,500 tokens/s of prefill. The largest compute
+  # demand in the fleet next to one of the smaller latency requirements, which is the pairing
+  # co-location has to survive.
+  - name: caption
+    model: qwen35-4b
+    served_name: qwen35-4b-caption
+    model_path: /fsx/pretrained-models/Qwen/Qwen3.5-4B
+    rate_hz: 6.0
+    # 1024 visual tokens at max_pixels 1048576, plus a 64-token instruction.
+    isl_tokens: 1088
+    osl_tokens: 96
+    images:
+      count: 1
+      pixels: 1048576
+    max_model_len: 2048
+    extra_args:
+      - --no-enable-prefix-caching
+      - --mm-processor-cache-gb=0
+      - '--limit-mm-per-prompt={"image": 1, "video": 0}'
+      - '--mm-processor-kwargs={"min_pixels": 262144, "max_pixels": 1048576}'
+    slo:
+      itl_mean_ms: 60.0
+      ttft_p95_ms: 2000.0
+
+  # RIDER 2: moderation and labelling on the ingest path. Every upload passes through it and nothing
+  # downstream starts until it answers, so its latency is added to every other stage's. 16 labels at
+  # 30 ms is 480 ms of decode behind a 400 ms first token.
+  - name: tag
+    model: qwen35-2b
+    served_name: qwen35-2b-tag
+    model_path: /fsx/pretrained-models/Qwen/Qwen3.5-2B
+    rate_hz: 8.0
+    # One thumbnail-resolution image at 256 visual tokens plus a 48-token label schema.
+    isl_tokens: 304
+    osl_tokens: 16
+    images:
+      count: 1
+      pixels: 262144
+    max_model_len: 1024
+    extra_args:
+      - --no-enable-prefix-caching
+      - --mm-processor-cache-gb=0
+      - '--limit-mm-per-prompt={"image": 1, "video": 0}'
+      # 256 visual tokens. A moderation pass does not need resolution, and paying for it would show up
+      # as encoder budget rather than as accuracy.
+      - '--mm-processor-kwargs={"min_pixels": 262144, "max_pixels": 262144}'
+    slo:
+      itl_mean_ms: 30.0
+      ttft_p95_ms: 400.0
+
+  # RIDER 3: alt text for accessibility, generated while the upload dialog is still open. A short
+  # sentence a screen reader will use, so it is interactive and it is short -- 48 tokens at 25 ms is
+  # 1.2 s of decode behind a 300 ms first token.
+  - name: alt
+    model: qwen35-0-8b
+    served_name: qwen35-0-8b-alt
+    model_path: /fsx/pretrained-models/Qwen/Qwen3.5-0.8B
+    rate_hz: 6.0
+    # 256 visual tokens for the image and 64 for the prompt: at 288 the chat template and the image's
+    # boundary tokens leave almost nothing for the instruction.
+    isl_tokens: 320
+    osl_tokens: 48
+    images:
+      count: 1
+      pixels: 262144
+    max_model_len: 1024
+    # The same resolution as `thumb`: the encoder budget is a fixed cost per shard, and keeping the two
+    # stages on one resolution keeps that cost comparable between them.
+    extra_args:
+      - --no-enable-prefix-caching
+      - --mm-processor-cache-gb=0
+      - '--limit-mm-per-prompt={"image": 1, "video": 0}'
+      - '--mm-processor-kwargs={"min_pixels": 262144, "max_pixels": 262144}'
+    slo:
+      itl_mean_ms: 25.0
+      ttft_p95_ms: 300.0
+
+  # RIDER 4: the screen at the front of everything. Eight tokens -- a verdict and a confidence --
+  # twelve times a second, on every upload before it is stored at all. The tightest pair of bounds in
+  # the fleet on the cheapest model in it, which is what a gate should be.
+  - name: thumb
+    model: qwen35-0-8b
+    served_name: qwen35-0-8b-thumb
+    model_path: /fsx/pretrained-models/Qwen/Qwen3.5-0.8B
+    rate_hz: 12.0
+    # 256 visual tokens plus 64 of prompt, for `alt`'s reason.
+    isl_tokens: 320
+    osl_tokens: 8
+    images:
+      count: 1
+      pixels: 262144
+    # 328 tokens per request, so the narrowest window in the fleet. Stated rather than left at the
+    # default: a window wider than the tenant is served at would misprice its cache.
+    max_model_len: 512
+    extra_args:
+      - --no-enable-prefix-caching
+      - --mm-processor-cache-gb=0
+      - '--limit-mm-per-prompt={"image": 1, "video": 0}'
+      - '--mm-processor-kwargs={"min_pixels": 262144, "max_pixels": 262144}'
+    slo:
+      itl_mean_ms: 20.0
+      ttft_p95_ms: 250.0

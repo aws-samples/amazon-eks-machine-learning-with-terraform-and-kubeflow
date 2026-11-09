@@ -1,0 +1,212 @@
+# vllm-triton-inference-server values
+#
+# THIS SCHEMA IS THE SOLVER'S OUTPUT SCHEMA, and it is the SAME schema the
+# vllm-openai chart takes, with one block swapped. Everything here except
+# `triton_vllm:` is Kubernetes, MPS and FSx, which no serving stack gets a say
+# in; `triton_vllm:` is this stack's own vocabulary and is written by its
+# adapter (src/colocation/engines/vllm_triton_inference_server.py). Nothing here
+# is configurable that the solver does not decide.
+#
+# Requirements established by early hardware testing, all
+# of which are properties of MPS and the node rather than of the server, and so
+# are carried over unchanged:
+#   - the pinned-memory limit MUST be keyed by GPU UUID, never ordinal. An
+#     ordinal key references nothing and fails SILENTLY (§10.1, finding 9).
+#   - NVIDIA_VISIBLE_DEVICES=all with isolation via CUDA_VISIBLE_DEVICES. This
+#     is the reverse of the obvious arrangement and is required (design §1.9).
+#   - hostPID / hostIPC / privileged, and the daemon's pipe directory mounted at
+#     the same path the daemon uses (finding 6).
+#   - no nvidia.com/gpu resource request — the device plugin is bypassed
+#     (finding 1).
+
+name: qwen3-0-6b-a          # release-unique tenant name; must be RFC-1123
+
+# Which serving stack these values describe. NO TEMPLATE IN THIS CHART READS IT.
+# It is here because `agent/deploy.py` holds a values file when it has to decide
+# which chart to install a tenant from, and a fleet may state `engine:` per
+# tenant — so the decision is per tenant and the values are what carry it. It is
+# also provenance: `helm get values` on a live release says which stack it is.
+engine: vllm-triton-inference-server
+
+# The NGC Triton image that carries the vLLM backend. `-vllm-python-py3` is the
+# variant that has it; the plain `-py3` tag does not.
+#
+# THE 26.07 LINE IS NOT A FREE CHOICE. The engine does not run on the node's
+# driver, it runs on the forward-compatibility driver bundled in the image, and
+# under MPS a client and the MPS server must load the SAME libcuda. This image
+# ships libcuda.so.610.43.02, which is what the mps-daemon's image
+# (nvcr.io/nvidia/vllm:26.07-py3) ships too, so the pair matches. A client that
+# ends up on a different libcuda HANGS FOREVER with no error (finding 11).
+#
+# Checked, so the next person does not have to: tritonserver:26.08-vllm-python-py3
+# ships libcuda.so.615.65.02 and vLLM 0.27.1, so moving to it means moving the
+# daemon's image with it AND re-measuring every memory fact. 26.06 and 25.08
+# exist as well. Both the image and the compat driver it selects are part of the
+# VALIDITY KEY.
+#
+# Measured in-image, 2026-09-19: Triton 2.71.0, vLLM 0.24.0+092c4842.dev, torch
+# 2.13.0a0+9186a08b2c.nv26.07, python 3.12. The vLLM build and the torch build
+# are identical to the sibling chart's image, which is the whole point of
+# pinning this tag rather than a newer one.
+image: nvcr.io/nvidia/tritonserver:26.07-vllm-python-py3
+imagePullPolicy: IfNotPresent
+
+model:
+  # Weights on FSx, as with the sibling chart: /fsx/pretrained-models/<org>/<model>,
+  # where the platform's hf-snapshot chart puts them (SNAPSHOT_ROOT default).
+  path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+  # This is BOTH the model id a client sends and the directory name inside the
+  # generated Triton model repository, because Triton's OpenAI frontend serves a
+  # model under its Triton model name. There is no second place to keep in sync.
+  served_name: qwen3-0-6b
+  revision: ""              # enters the validity key
+
+placement:
+  # NO DEFAULTS HERE, and there cannot be any. The GPU-index->UUID mapping is
+  # node-specific, so a placement names one physical machine and the individual
+  # GPUs in it (impl §7) — nothing about it is portable, not even to another node
+  # of the same instance type. `vllm-tis.validate` fails the render if any of the
+  # three is missing, which is what stops a hand `helm install` from inheriting
+  # somebody else's node.
+  #
+  # For a hand install, read the pairing off the mps-daemon's ConfigMap on the
+  # node you mean to use:
+  #   kubectl get cm -n <ns> <daemon-release>-gpu-uuids-<node-dns-name> -o yaml
+  node:                     # e.g. ip-10-0-1-23.ap-northeast-2.compute.internal
+  gpu_indices: []           # host ordinals -> CUDA_VISIBLE_DEVICES, e.g. [0]
+  gpu_uuids: []             # from the ConfigMap; ORDER MUST MATCH gpu_indices
+
+mps:
+  pipeHostPath: /var/run/nvidia-mps   # must equal the daemon's pipeHostPath
+  pipeMountPath: /mps
+  memory_limit_gib: 8                 # -> UUID-keyed limit string (§4.1)
+  active_thread_percentage: null       # unset by default; see design §1.4
+
+# This stack's own block. The one part of the schema the server gets a say in.
+triton_vllm:
+  # vLLM engine arguments, by their PYTHON names, exactly as the Triton vLLM
+  # backend reads them: it does `AsyncEngineArgs(**json.load(model.json))`, so a
+  # name that is not an AsyncEngineArgs field fails the model load loudly rather
+  # than being ignored. That is why a fleet file's `extra_args` — which are
+  # written as CLI flags, because the other stack takes a command line — are
+  # converted in the adapter and not here.
+  #
+  # `model` and `served_model_name` are NOT in this block. The chart writes the
+  # model path from `model.path` above, so there is one place for it.
+  engine_args:
+    tensor_parallel_size: 1
+    # Computed by the solver, consumed here. Same meaning and same arithmetic as
+    # the sibling chart's `vllm.gpu_memory_utilization`, because it reaches the
+    # same vLLM engine:
+    #   gpu_memory_utilization =
+    #       ((memory_limit_gib - mps_reserve_gib) * headroom) / physical_total_gib
+    # with headroom 0.95 and physical_total_gib MEASURED, read from the hardware
+    # store, never typed in. The two corrections behind that formula are written
+    # out in the sibling chart's values.yaml and they are properties of MPS and
+    # of vLLM's startup gate, not of the server around them: under MPS `free` is
+    # the envelope while `total` stays PHYSICAL, and the reserve has to be
+    # subtracted before the headroom multiply because the offset is constant.
+    #
+    # WHAT IS NOT YET MEASURED HERE: `mps_reserve_gib` covers everything resident
+    # that the utilisation fraction does not account for, and this server adds
+    # resident memory the other one does not have — the Triton core and the
+    # python backend stub process sit in the same envelope as the engine. The
+    # default reserve (1.0 GiB, 1.5 at TP>=2) is the figure measured on the
+    # sibling image, so treat it as a starting point and take the
+    # `measured_reserve_gib` a solo profile round reports on THIS image as the
+    # real one.
+    gpu_memory_utilization: 0.150
+    max_num_seqs: 64
+    max_num_batched_tokens: 2048
+    max_model_len: 4096
+    dtype: bfloat16
+
+triton:
+  # Where the chart's generated model repository is mounted. One directory per
+  # tenant pod holding exactly one model, which is what makes the Triton model
+  # name and the served model name the same string.
+  modelRepositoryPath: /model-repository
+  # Passed as `--backend`, which fixes the request format the frontend builds
+  # (input and output tensor names). Stated rather than left to detection: the
+  # frontend's fallback reads the loaded model's config, and a silent
+  # misdetection would send well-formed requests a backend cannot answer.
+  backend: vllm
+  # Triton's own log verbosity. 0 is info-level, which is what the readiness
+  # gate's diagnostics are read from; higher numbers are for a hang.
+  logVerboseLevel: 0
+
+verification:
+  # Observed free sits ~0.41 GiB below the requested envelope (test spec T5:
+  # limit 8G -> free 7.59; 16G -> 15.59), so a 0.5 GiB tolerance around the
+  # nominal limit is the smallest that passes a correct configuration while
+  # still catching a silently-ignored one (which reads back the full capacity).
+  enabled: true
+  expected_free_gib: null   # null -> defaults to mps.memory_limit_gib
+  tolerance_gib: 0.5
+
+service:
+  # One port. Triton's KServe HTTP and gRPC frontends are deliberately NOT
+  # enabled, so this is the OpenAI frontend's port and nothing else is listening.
+  port: 8000
+
+# Shared memory. Two independent claims on it here: NCCL worker IPC for a TP
+# group, as in the sibling chart, and Triton's python backend, which talks to
+# its stub process through POSIX shared memory in /dev/shm. The container
+# default (64 MiB) is far too small for either.
+#
+# The mount is a pod-local emptyDir, which is also what keeps two tenants on one
+# node from colliding: the pods share an IPC namespace (hostIPC, required for
+# MPS) but not a /dev/shm, so the python backend's shm region names cannot clash.
+shmSizeGi: 16
+
+storage:
+  fsxClaimName: pv-fsx
+  fsxMountPath: /fsx
+
+readinessProbe:
+  # Weight load from FSx-for-Lustre is an HSM pull from S3 on first read and can
+  # dominate startup (impl §13). Generous failureThreshold, not a long period,
+  # so a healthy server is detected promptly.
+  periodSeconds: 10
+  failureThreshold: 180     # 30 min ceiling
+  initialDelaySeconds: 30
+
+resources: {}
+
+# Extra environment for the SERVER container only (not the verification init
+# container, which must run under exactly the MPS environment the server gets and
+# nothing else — otherwise it verifies a different envelope; impl §4.4).
+#
+# Empty by default, and for diagnostics only: anything set here is outside the
+# validity key, so an entry that turns out to be load-bearing belongs in the
+# chart proper, recorded as a finding. The motivating case is NCCL on a PCIe-only
+# card under MPS, where the failure mode is a HANG at the first collective:
+#   extraEnv:
+#   - name: NCCL_DEBUG
+#     value: "INFO"
+extraEnv: []
+
+nodeSelector: {}
+
+podAnnotations:
+  # Mandatory, not cosmetic: the namespace has istio-injection=enabled, and the
+  # sidecar adds latency to exactly the measurements the search depends on.
+  sidecar.istio.io/inject: "false"
+  # Same reasoning, different injector. This cluster runs the CloudWatch
+  # Application Signals OpenTelemetry operator, which was found injecting into
+  # every tenant pod during early hardware testing: four init containers, four volume
+  # mounts, and — the part that matters — PYTHONPATH pointed at the OTel agent's
+  # auto-instrumentation, so CPython loads it at interpreter startup and the
+  # agent runs INSIDE the serving process. On this stack that process is a FastAPI
+  # app, which is precisely what the OTel ASGI instrumentation taxes, so the
+  # confound is if anything more direct here than on the sibling chart.
+  #
+  # Set unconditionally: an annotation naming an absent injector is inert, so it
+  # is safe on clusters without the operator and documents the hazard either way.
+  instrumentation.opentelemetry.io/inject-python: "false"
+  instrumentation.opentelemetry.io/inject-java: "false"
+  instrumentation.opentelemetry.io/inject-nodejs: "false"
+  instrumentation.opentelemetry.io/inject-dotnet: "false"
+
+disruption:
+  doNotDisrupt: true

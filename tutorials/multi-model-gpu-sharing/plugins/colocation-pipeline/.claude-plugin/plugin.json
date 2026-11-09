@@ -1,0 +1,8 @@
+{
+  "name": "colocation-pipeline",
+  "version": "1.0.0",
+  "description": "Runs the GPU co-location pipeline on a model fleet file: harness image, plan, demand sweep, profile, plan again, search, read, export. Carries the sequence as one skill and serving an export on KAI GPU fractions as a second, a command for each step and for each KAI action, and hooks that refuse the commands which destroy a live run.",
+  "author": {
+    "name": "amazon-eks-machine-learning-with-terraform-and-kubeflow"
+  }
+}

@@ -1,0 +1,77 @@
+{{- include "vllm-tis.validate" . -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vllm-tis.fullname" . }}-model-repository
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vllm-tis.labels" . | nindent 4 }}
+data:
+  # A Triton model repository, generated. This is the one structural difference
+  # between this stack and the sibling: vLLM's own server takes its whole
+  # configuration on the command line, and Triton takes it from a DIRECTORY TREE
+  # it reads off disk at startup:
+  #
+  #   <modelRepositoryPath>/<served_name>/config.pbtxt   <- which backend, how to batch
+  #   <modelRepositoryPath>/<served_name>/1/model.json   <- the vLLM engine arguments
+  #
+  # The tree is built from these two keys by the ConfigMap volume in
+  # deployment.yaml, which maps the second one to the path "1/model.json" — a
+  # ConfigMap key cannot contain a slash, but the `items[].path` it is mapped to
+  # can, so the version subdirectory is made there rather than by an init
+  # container copying files around.
+  #
+  # Generating it, rather than shipping a file per model, is what keeps the
+  # solver in charge: every number in model.json below comes from the values the
+  # solver wrote, exactly as the sibling chart's command line does.
+
+  config.pbtxt: |
+    # No `name:` here. Triton takes the model name from the directory this file
+    # sits in, and a `name:` that disagreed with the directory is a load error.
+    # So the served name is written once, as model.served_name, and this file
+    # does not get a chance to contradict it.
+    backend: "{{ .Values.triton.backend }}"
+
+    # Triton does no batching: vLLM's own continuous batching does all of it, and
+    # two schedulers stacked on each other would make `max_num_seqs` mean
+    # nothing. This is also what the backend's own auto-complete sets, so it is
+    # written out here to say it is intended rather than inherited.
+    max_batch_size: 0
+
+    # One request may produce many responses (every streamed token is one), which
+    # in Triton requires the decoupled transaction policy. Without it a streaming
+    # request is an error, and streaming is how the driver observes
+    # time-to-first-token and inter-token latency at all.
+    model_transaction_policy {
+      decoupled: True
+    }
+
+    # KIND_MODEL IS LOAD-BEARING AND MUST NOT BECOME KIND_GPU.
+    #
+    # Under KIND_GPU the vLLM backend overwrites CUDA_VISIBLE_DEVICES with
+    # Triton's own device id (model.py::_validate_device_config), which would
+    # throw away this tenant's placement: the process would run on whatever GPU
+    # Triton chose while its MPS envelope stays pinned to the UUID of a GPU it is
+    # no longer using. That combination does not fail loudly — it produces a
+    # tenant on the wrong device with no memory bound.
+    #
+    # KIND_MODEL means "the model manages its own devices", and as long as no
+    # GPU_DEVICE_IDS parameter is set below, the backend leaves the variable
+    # exactly as the pod set it. That is deliberately left unset: the isolation
+    # is the chart's job, in one place, for both stacks.
+    instance_group [
+      {
+        count: 1
+        kind: KIND_MODEL
+      }
+    ]
+
+  # vLLM AsyncEngineArgs, by Python name. The backend does
+  # `AsyncEngineArgs(**json.load(...))`, so an unknown key raises at model load
+  # instead of being ignored — which is the property that makes a fleet file's
+  # `extra_args` safe to pass through: a flag that does not exist here fails the
+  # pod rather than quietly not applying.
+  #
+  # `model` is added here and nowhere else, from model.path.
+  model.json: |
+    {{- merge (dict "model" .Values.model.path) .Values.triton_vllm.engine_args | toPrettyJson | nindent 4 }}

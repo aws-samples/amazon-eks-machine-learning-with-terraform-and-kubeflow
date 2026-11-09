@@ -1,0 +1,86 @@
+# LOADER TEST FIXTURE -- not a fleet, and not a template.
+#
+# This file exists so `tests/selftest.py` can exercise the fleet-file loader against real YAML: it
+# edits this text to check what the loader accepts and what it refuses (a named node, a duplicated
+# instance type, a second `hardware:` key, a `validity_key:` block). Nothing here is a
+# recommendation, and nothing measured through it is evidence about whether co-location pays -- it
+# predates the method's baseline rule (USER-GUIDE.md §8) and was written as an actuator check, to reproduce numbers
+# that already existed so a difference would be attributable to the machinery.
+#
+# Do not copy it to start a fleet. See `USER-GUIDE.md` §7 and `fleets/examples/`.
+
+# NO `tp:` ANYWHERE, and it is not an omission. Since 2026-09-08 the fleet file may not state a
+# shard count at all: a shard count asserts that a narrower degree would miss a latency target, and
+# a latency claim is the one input this file cannot check. It is also the number impl §0 scores the
+# whole result against, so a degree one wider than needed hands the baseline a GPU the search then
+# appears to have freed. The degree is resolved instead -- memory floor, then the narrowest degree
+# whose SOLO measurement meets the tenant's own target (`agent/fleetfile.resolve_tp`).
+#
+# These four tenants state no latency target either, so nothing here can be resolved from a
+# measurement: the selftest loads this file with `allow_unresolved_tp=True` and gets memory floors,
+# which is what `plan` and `profile` do. Two consequences when reading tests against it. The degrees
+# are all tp1, so this fleet no longer exercises a mixed-TP load through the loader -- the resolved
+# mixed case is built in `selftest.py` from a fake profile store instead. And `r2`/`t2`, and the
+# served names `qwen3-0-6b-r2`/`qwen3-0-6b-tp2`, are historical: they were the two tp2 tenants when
+# a degree could be typed in. The names are kept so the checks that reference them keep working.
+#
+# ---------------------------------------------------------------------------------------------
+# Four Qwen3-0.6B tenants, 16 Hz each. The co-residency sweep fleet (test spec §14 item 3).
+#
+# The rate is the only difference from loader-2hz.yaml, and it is the difference that makes the
+# sweep able to say anything. Co-residency contends for SMs; at 2 Hz a 0.6B model leaves the SMs
+# idle most of the time, so a shared GPU and a disjoint one would measure the same and the result
+# would be "no effect" where the truth is "no load". 16 Hz is 8x that, chosen to put real decode
+# work on the device while staying far from the saturation rate an 0.6B model reaches on an L40S.
+#
+# 16 Hz is not itself a measured saturation fraction -- solo saturation has not been probed on
+# this image -- so `alpha` stays unset and `offered_rates_hz` carries the load level in the
+# validity key. This fleet therefore hashes to a *different* directory than the 2 Hz one, which
+# is the correct outcome: their ITLs are not comparable and must not be averaged into one cell.
+
+hardware:
+  # See loader-2hz.yaml: an instance type, not a node. The node is captured, and everything about
+  # the hardware is derived from this line and then checked against the machine that was leased.
+  instance_type: g6e.48xlarge
+
+workload:
+  # Nothing to state. The sequence shape is on each tenant (design §8.3) and so is the tokenizer,
+  # which defaults to that tenant's own `model_path` -- which for this fleet is the same directory
+  # for all four, so the prompts are byte-identical and prefill cost is held constant between
+  # them. `delivered_fraction_threshold` is the only fleet-wide field left, and 0.99 is its
+  # default, so this block could be deleted entirely; it is kept as the place that says so.
+  delivered_fraction_threshold: 0.99
+
+models:
+  # An id and nothing else. The weight bytes and the KV page size used to be written here and are
+  # now read off the checkpoint itself (store/hubfacts.py); the suite serves them from a cached
+  # manifest in fixtures/hubfacts/ rather than from the network (tests/hubfixture.py).
+  qwen3-0.6b:
+    model_id: Qwen/Qwen3-0.6B
+
+tenants:
+  - {name: m1, model: qwen3-0.6b, served_name: qwen3-0-6b-a,   rate_hz: 16.0,
+     isl_tokens: 512, osl_tokens: 128,
+     model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B}
+  - {name: r1, model: qwen3-0.6b, served_name: qwen3-0-6b-i3a, rate_hz: 16.0,
+     isl_tokens: 512, osl_tokens: 128,
+     model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B}
+  - {name: r2, model: qwen3-0.6b, served_name: qwen3-0-6b-r2,  rate_hz: 16.0,
+     isl_tokens: 512, osl_tokens: 128,
+     model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B}
+  - {name: t2, model: qwen3-0.6b, served_name: qwen3-0-6b-tp2, rate_hz: 16.0,
+     isl_tokens: 512, osl_tokens: 128,
+     model_path: /fsx/pretrained-models/Qwen/Qwen3-0.6B}
+
+# NO `validity_key:` BLOCK, and it is refused rather than ignored if one is added back. The key is
+# derived: its environment half is what the leased node reports about itself -- product, count,
+# addressable MiB, enforced power limit, link matrix -- plus the engine image and how the GPUs are
+# shared, and the driver version is recorded on each row as provenance instead of addressing
+# anything (`store/environment.py`). Its workload half is read off the tenants above. The image is
+# `spec.DEFAULT_IMAGE`, `nvcr.io/nvidia/vllm:26.07-py3` (vLLM 0.24.0, torch 2.13.0a0, CUDA 13.3,
+# NCCL 2.30.7), which is what the chart defaults to; state `image:` at the top level or per tenant
+# to change it, and the whole fleet must agree on one.
+#
+# alpha stays unset: solo saturation has not been measured on this image, so there is no fraction to
+# express these rates as. `offered_rates_hz` carries the load level instead -- without it a 2 Hz and
+# a 16 Hz run of this fleet would hash to the same directory.

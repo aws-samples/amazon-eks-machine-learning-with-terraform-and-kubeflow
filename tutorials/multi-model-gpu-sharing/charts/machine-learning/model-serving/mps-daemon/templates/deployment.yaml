@@ -1,0 +1,251 @@
+# Was a DaemonSet until 2026-09-03. Now a Deployment that REQUESTS EVERY GPU ON THE
+# NODE. The reasoning is in values.yaml under `gpuRequest`; the short version is that
+# the MPS control daemon is the right thing to hold the node against Karpenter, and a
+# DaemonSet cannot do that because it only follows nodes that already exist.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mps-daemon.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mps-daemon.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  # MANDATORY, not a preference. A RollingUpdate would try to start a second daemon
+  # pod before terminating the old one, and the new pod requests every GPU on the
+  # node while the old pod still holds them. It would sit Pending, which in a
+  # Karpenter cluster is not a stall but a PURCHASE ORDER: Karpenter would provision
+  # a second GPU node to satisfy it. Recreate frees the GPUs first.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "mps-daemon.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mps-daemon.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.disruption.doNotDisrupt }}
+        karpenter.sh/do-not-disrupt: "true"
+        {{- end }}
+    spec:
+      {{- if .Values.uuidConfigMap.enabled }}
+      serviceAccountName: {{ include "mps-daemon.serviceAccountName" . }}
+      {{- end }}
+      # Cross-pod MPS requires the daemon to share PID and IPC namespaces with
+      # its clients (finding 6).
+      hostPID: true
+      hostIPC: true
+      # Deliberately NOT pinned with nodeName: the whole point of the GPU request is
+      # to let the scheduler place this pod, and to let Karpenter create a node for it
+      # if none exists. nodeSelector still constrains WHICH instance type is acceptable.
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.antiAffinity.enabled }}
+      # One daemon per node, stated rather than inferred. It used to hold only as a
+      # side effect of `gpuRequest` equalling the node's GPU count -- two pods each
+      # asking for 8 of 8 GPUs cannot share a node -- which is true here and silently
+      # false on any instance type with fewer GPUs than the request, where two
+      # daemons would pack onto one node and each fork MPS servers for the same
+      # devices. Since a release is now installed per run (with `helm install`
+      # driven by the agent), this rule is also what makes one run's capture exclude
+      # another's: the node is the unit being leased, and this is the lease.
+      #
+      # Matched on the chart name ONLY, deliberately without
+      # app.kubernetes.io/instance, so it excludes OTHER RELEASES' daemons and not
+      # merely other replicas of this one.
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: {{ include "mps-daemon.name" . }}
+      {{- end }}
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      volumes:
+      - name: mps-pipe
+        hostPath:
+          path: {{ .Values.mps.pipeHostPath }}
+          type: DirectoryOrCreate
+      - name: mps-log
+        emptyDir: {}
+      # Shared scratch: the daemon writes the GPU index->UUID mapping here for
+      # the kubectl sidecar to publish as a ConfigMap.
+      - name: shared
+        emptyDir: {}
+      containers:
+      # ---------------------------------------------------------------------
+      # MPS control daemon. Sees ALL GPUs (finding 7); per-tenant device
+      # selection happens client-side via CUDA_VISIBLE_DEVICES.
+      # ---------------------------------------------------------------------
+      - name: daemon
+        image: {{ .Values.image }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        securityContext:
+          privileged: true
+        env:
+        # Kept at "all" even though the device plugin now allocates GPUs to this pod
+        # and would set this variable itself. Two reasons: every early validation result was
+        # measured with "all" (finding 7), and the plugin's list is ordered by ITS
+        # allocation, not by host ordinal -- and this container is exactly where the
+        # index->UUID mapping that every tenant depends on gets read from
+        # `nvidia-smi -L`. Changing visibility here would silently renumber devices.
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: "all"
+        - name: NVIDIA_DRIVER_CAPABILITIES
+          value: "compute,utility"
+        - name: CUDA_MPS_PIPE_DIRECTORY
+          value: {{ .Values.mps.pipeMountPath | quote }}
+        - name: CUDA_MPS_LOG_DIRECTORY
+          value: {{ .Values.mps.logDir | quote }}
+        command: ["bash", "-c"]
+        args:
+        - |
+          set -euo pipefail
+          mkdir -p "$CUDA_MPS_PIPE_DIRECTORY" "$CUDA_MPS_LOG_DIRECTORY"
+          # Start the control daemon detached, then block. A pod that exits is
+          # restarted, and a restart orphans every attached tenant (impl §3), so we
+          # must not let this container terminate on its own.
+          nvidia-cuda-mps-control -d
+          sleep 2
+          # Publish the GPU index -> UUID mapping for the sidecar. `nvidia-smi -L`
+          # lines look like: "GPU 0: NVIDIA L40S (UUID: GPU-01e5...)".
+          # Keys are emitted as "gpu<index>", not the bare index: a ConfigMap key
+          # must match [-._a-zA-Z][-._a-zA-Z0-9]* and so may not start with a
+          # digit. A bare ordinal is rejected by `kubectl create configmap`.
+          nvidia-smi -L | sed -E 's/^GPU ([0-9]+): .*\(UUID: (GPU-[0-9a-f-]+)\)/gpu\1=\2/' \
+            > /shared/gpu-uuids.env
+          echo "published $(wc -l < /shared/gpu-uuids.env) GPU UUID mappings:"
+          cat /shared/gpu-uuids.env
+          touch /shared/ready
+          # Block forever so the daemon (a background process of this container)
+          # stays alive for the pod's lifetime.
+          sleep infinity
+        lifecycle:
+          preStop:
+            exec:
+              # Give attached clients a chance to disconnect on planned shutdown.
+              # Does NOT prevent the shared-fault-domain problem (design §10).
+              command: ["bash", "-c", "echo quit | CUDA_MPS_PIPE_DIRECTORY={{ .Values.mps.pipeMountPath }} nvidia-cuda-mps-control || true"]
+        livenessProbe:
+          exec:
+            # Verify the control SOCKET responds, not merely that the process
+            # exists (impl §3).
+            command:
+            - bash
+            - -c
+            - "echo get_server_list | CUDA_MPS_PIPE_DIRECTORY={{ .Values.mps.pipeMountPath }} nvidia-cuda-mps-control"
+          periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+        readinessProbe:
+          exec:
+            command: ["bash", "-c", "test -f /shared/ready"]
+          periodSeconds: 5
+        volumeMounts:
+        - name: mps-pipe
+          mountPath: {{ .Values.mps.pipeMountPath }}
+        - name: mps-log
+          mountPath: {{ .Values.mps.logDir }}
+        - name: shared
+          mountPath: /shared
+        {{- if .Values.gpuRequest }}
+        # RESERVATION, NOT CONSUMPTION. The daemon needs no GPU allocation to work --
+        # it is privileged with NVIDIA_VISIBLE_DEVICES=all and the device plugin is
+        # bypassed by design (finding 1). This request exists so that k8s and Karpenter
+        # know the node is taken: it is what makes the node get created, keeps it from
+        # being consolidated away, and stops any other GPU workload landing on the
+        # measurement node. Tenants set nodeName and request no GPUs, so they are
+        # admitted by the kubelet regardless of this.
+        resources:
+          {{- $gpu := dict "nvidia.com/gpu" .Values.gpuRequest }}
+          {{- toYaml (merge (dict "limits" $gpu "requests" $gpu) (.Values.resources | default dict)) | nindent 10 }}
+        {{- else }}
+        {{- with .Values.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- end }}
+      {{- if .Values.uuidConfigMap.enabled }}
+      # ---------------------------------------------------------------------
+      # Sidecar: publish the per-node GPU index->UUID ConfigMap once the daemon
+      # has written the mapping, then idle. Runs with kubectl; no GPU access.
+      # ---------------------------------------------------------------------
+      - name: uuid-publisher
+        image: {{ .Values.kubectlImage }}
+        imagePullPolicy: {{ .Values.kubectlImagePullPolicy }}
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        # For the ownerReference below. A ConfigMap describing this node's GPUs is
+        # valid exactly as long as this pod is on this node, so the pod -- not the
+        # Deployment, and not the Helm release -- is the right owner.
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_UID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.uid
+        - name: CM_BASE
+          value: {{ include "mps-daemon.uuidConfigMapBase" . | quote }}
+        command: ["bash", "-c"]
+        args:
+        - |
+          set -euo pipefail
+          # Wait for the daemon to publish the mapping.
+          while [ ! -f /shared/ready ]; do sleep 1; done
+          # Per-node ConfigMap name; node hostnames contain dots which are not
+          # valid in resource names, so replace them with dashes.
+          CM_NAME="${CM_BASE}-$(echo "$NODE_NAME" | tr '.' '-')"
+          kubectl create configmap "$CM_NAME" \
+            --namespace "$NAMESPACE" \
+            --from-env-file=/shared/gpu-uuids.env \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl label configmap "$CM_NAME" --namespace "$NAMESPACE" --overwrite \
+            app.kubernetes.io/managed-by=mps-daemon \
+            app.kubernetes.io/instance={{ .Release.Name }} \
+            mps-daemon/node="$(echo "$NODE_NAME" | tr '.' '-')"
+          # Make this pod the ConfigMap's owner, so the mapping cannot outlive the pod
+          # that measured it.
+          #
+          # NOT COSMETIC. This ConfigMap is created here at runtime, by kubectl, so it
+          # is not in the Helm release manifest and `helm uninstall` does NOT remove it
+          # -- observed 2026-09-04, a ConfigMap for a node this release no longer held
+          # survived the uninstall by design. On this cluster it was harmless because
+          # the replacement holder kept the same node and therefore the same UUIDs. On
+          # a replaced node it is finding 9 with extra steps: the next run
+          # reads a UUID set for somebody else's GPUs, every tenant is rendered with a
+          # stale UUID, and a stale UUID does not fail -- it silently produces an
+          # engine with no memory bound.
+          #
+          # Owner is the Pod, via the downward API, not the Deployment: a pod
+          # replacement may mean a different node, and the new pod rewrites the map on
+          # startup anyway. controller=false and blockOwnerDeletion=false so nothing
+          # here interferes with Helm's or the Deployment's own deletion ordering.
+          #
+          # A merge patch replaces metadata.ownerReferences wholesale, which is what is
+          # wanted -- an inherited reference to a dead pod would be worse than none.
+          kubectl patch configmap "$CM_NAME" --namespace "$NAMESPACE" --type=merge -p \
+            "{\"metadata\":{\"ownerReferences\":[{\"apiVersion\":\"v1\",\"kind\":\"Pod\",\"name\":\"${POD_NAME}\",\"uid\":\"${POD_UID}\",\"controller\":false,\"blockOwnerDeletion\":false}]}}"
+          echo "published ConfigMap $CM_NAME owned by pod $POD_NAME"
+          sleep infinity
+        volumeMounts:
+        - name: shared
+          mountPath: /shared
+      {{- end }}

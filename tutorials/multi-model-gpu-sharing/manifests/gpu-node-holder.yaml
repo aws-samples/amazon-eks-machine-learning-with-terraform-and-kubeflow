@@ -1,0 +1,137 @@
+# GPU node holder — keeps one g6e.48xlarge alive while the MPS stack is torn down.
+#
+# WHY THIS EXISTS
+#
+# Since 2026-09-03 the mps-daemon chart requests every GPU on its node
+# (charts/machine-learning/model-serving/mps-daemon/values.yaml, `gpuRequest`), so the
+# chart that needs the node is the chart that creates and holds it. That is the right
+# arrangement, but it means the node lives exactly as long as the chart does: uninstall
+# mps-daemon and Karpenter reclaims the node ~600s later (NodePool `cuda`,
+# consolidationPolicy WhenEmpty, consolidateAfter 600s).
+#
+# Re-provisioning is not free and not neutral. A replacement node has a different name
+# AND different GPU UUIDs, which makes `placement.node` and `placement.gpu_uuids` stale
+# in every vllm-openai values file — and a stale UUID fails SILENTLY as an unbounded
+# engine (finding 9). This pod is how you keep the same node across a teardown.
+#
+# It replaces `test-gpu` in the cluster repo
+# (amazon-eks-machine-learning-with-terraform-and-kubeflow/eks-cluster/tests/test-gpu.yaml),
+# which did the same job by convention, protected only by a standing "never delete
+# test-gpu" instruction. This copy is versioned alongside the charts that depend on it,
+# and it differs in one deliberate way: a NEGATIVE priority class, so that installing
+# mps-daemon PREEMPTS it rather than sitting Pending behind it.
+#
+# DO NOT run this and `test-gpu` at the same time. Both request all 8 GPUs, so the second
+# one cannot schedule — and a Pending pod in a Karpenter cluster is a purchase order, not
+# a stall. You will get a second g6e.48xlarge.
+#
+# ---------------------------------------------------------------------------------
+# LIFECYCLE — the whole point is that these two steps are asymmetric
+# ---------------------------------------------------------------------------------
+#
+#   Bring the stack UP:
+#     helm install mps-daemon charts/machine-learning/model-serving/mps-daemon -n <ns>
+#
+#   The scheduler preempts this pod automatically. Nothing to do by hand. Because this is
+#   a bare Pod with no ownerReferences, preemption DELETES IT PERMANENTLY — it does not
+#   come back on its own, and that is intended: while mps-daemon holds the GPUs, a
+#   recreated holder would sit Pending and buy a second node.
+#
+#   Bring the stack DOWN:
+#     helm uninstall mps-daemon -n <ns>
+#     kubectl apply -f manifests/gpu-node-holder.yaml   # <-- MANUAL, do it now
+#
+#   The re-apply is a required teardown step, not a cleanup nicety, and it is time-bounded:
+#   you have ~600s from the moment the last pod leaves the node before Karpenter reclaims
+#   it. Miss the window and you have not lost data, but you have lost the node identity —
+#   re-render every tenant's `placement` block from the new UUID ConfigMap before serving.
+#
+#   There is deliberately no automatic fallback. A crash of the mps-daemon pod does NOT
+#   release the node (kubelet restarts the container, or the Deployment rebinds in seconds,
+#   both far inside 600s), so an auto-recreated holder would have nothing to protect
+#   against and everything to disrupt.
+# ---------------------------------------------------------------------------------
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: gpu-node-holder
+value: -1000
+globalDefault: false
+# Never preempt anything to make room for the holder. Without this, a re-applied holder
+# could evict pods that happen to sit below it — and nothing in this cluster should ever
+# be displaced to seat a placeholder. It does not stop the holder from BEING preempted,
+# which is the behaviour we want.
+preemptionPolicy: Never
+description: >-
+  Placeholder workloads that hold a GPU node against Karpenter consolidation. Negative
+  priority: anything else that wants the GPUs preempts these on sight.
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-node-holder
+  # PINNED, not inherited from the kubectl context — and this is not fussiness. Applied
+  # without a namespace this lands in `default`, where the pv-fsx PVC does not exist; the
+  # pod then sits Pending on an unbindable volume, and a Pending 8-GPU pod under Karpenter
+  # is a purchase order for a second g6e.48xlarge. The one file in this repo most likely to
+  # be applied in a hurry, against a 600s deadline, must not depend on ambient context.
+  # (Cost of pinning: `kubectl apply -n other-ns` now errors instead of silently
+  # misplacing the pod. That is the trade being bought.)
+  namespace: kubeflow-user-example-com
+  labels:
+    app.kubernetes.io/name: gpu-node-holder
+    app.kubernetes.io/component: node-holder
+  annotations:
+    # Karpenter must not consolidate the node out from under a measurement, and must not
+    # decide this pod is "just a placeholder" and move it (impl §7).
+    karpenter.sh/do-not-disrupt: "true"
+    sidecar.istio.io/inject: "false"
+spec:
+  # Below every other pod in the cluster, so `helm install mps-daemon` displaces it.
+  # NOTE: priorityClassName is IMMUTABLE on a Pod — the API server rejects an edit with
+  # "pod updates may not change fields other than spec.containers[*].image ...". There is
+  # no way to patch this onto a running pod; it has to be delete-and-recreate. That is why
+  # `test-gpu` could not simply be relabelled.
+  priorityClassName: gpu-node-holder
+  # Deliberately NOT pinned with nodeName: the pod must be schedulable onto a node
+  # Karpenter has yet to create.
+  nodeSelector:
+    karpenter.sh/nodepool: cuda
+    node.kubernetes.io/instance-type: "g6e.48xlarge"
+  tolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+  containers:
+  - name: holder
+    # The measurement image, not the 25.08 Triton image `test-gpu` used. Two reasons:
+    # holding a fresh node with the image the next `helm install` needs means the pull is
+    # already warm when mps-daemon lands, and it gives the same shell for reaching /fsx,
+    # which is only visible from inside a cluster pod. Keep this in step with
+    # mps-daemon/values.yaml `image` — the holder is not part of the validity key, but a
+    # divergent tag here silently costs you the warm-pull benefit.
+    image: nvcr.io/nvidia/vllm:26.07-py3
+    imagePullPolicy: IfNotPresent
+    # `trap : TERM INT` so a preemption or a manual delete terminates promptly instead of
+    # burning the 30s grace period.
+    command: ["/bin/bash"]
+    args: ["-c", "trap : TERM INT; sleep infinity & wait"]
+    securityContext:
+      # Inherited from test-gpu, which used it to poke at the node. The holder does not
+      # need it to hold GPUs; it is kept only so this stays a usable debug shell.
+      privileged: true
+    volumeMounts:
+    - name: fsx
+      mountPath: /fsx
+    resources:
+      # The reservation. All 8 GPUs, matching mps-daemon's request exactly, so the two
+      # can never be resident on the same node simultaneously — which is what makes the
+      # handover a clean preemption rather than a partial double-booking.
+      requests:
+        "nvidia.com/gpu": 8
+      limits:
+        "nvidia.com/gpu": 8
+  volumes:
+  - name: fsx
+    persistentVolumeClaim:
+      claimName: pv-fsx

@@ -1,0 +1,150 @@
+# dynamo-vllm values
+#
+# THIS SCHEMA IS THE SOLVER'S OUTPUT SCHEMA, and it is the SAME schema the
+# vllm-openai and vllm-triton-inference-server charts take, with one block
+# swapped (`dynamo_vllm:`) and two added (`compat:`, `frontend:`). Everything
+# else is Kubernetes, MPS and FSx, which no serving stack gets a say in.
+#
+# The MPS requirements are the siblings', carried over unchanged, and they apply
+# to the WORKER pod -- the frontend never creates a CUDA context:
+#   - the pinned-memory limit MUST be keyed by GPU UUID, never ordinal. An
+#     ordinal key references nothing and fails SILENTLY (§10.1, finding 9).
+#   - NVIDIA_VISIBLE_DEVICES=all with isolation via CUDA_VISIBLE_DEVICES
+#     (design §1.9).
+#   - hostPID / hostIPC / privileged, and the daemon's pipe directory mounted at
+#     the same path the daemon uses (finding 6).
+#   - no nvidia.com/gpu resource request — the device plugin is bypassed
+#     (finding 1).
+#
+# PREREQUISITE: the Dynamo operator (the blueprint's dynamo-platform chart,
+# `dynamo_enabled=true`). Without it the DynamoGraphDeployment kind does not
+# exist and the install fails; with the CRDs but no operator it installs and
+# no pod ever appears. The agent checks both before it leases a node.
+
+name: qwen3-0-6b-a          # release-unique tenant name; must be RFC-1123
+
+# Which serving stack these values describe. NO TEMPLATE IN THIS CHART READS IT;
+# `agent/deploy.py` does, to pick the chart per tenant. See the sibling charts.
+engine: dynamo-vllm
+
+# Both components run this image. Pinned to the operator's release.
+#
+# Measured in-image: vLLM 0.28.0, CUDA 13.0.2, python 3.12. NO forward-
+# compatibility driver is bundled and there is no /opt/nvidia/nvidia_entrypoint.sh,
+# so left to itself this image loads the HOST driver (580.178.04) -- which under
+# this node's MPS daemon (on compat 610.43.02) hangs forever at attach. See
+# `compat:` below. The image is part of the VALIDITY KEY.
+image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.5.0
+imagePullPolicy: IfNotPresent
+
+model:
+  path: /fsx/pretrained-models/Qwen/Qwen3-0.6B
+  # The model id clients send, the name the frontend routes by, and the name
+  # the frontend's readiness probe waits to see listed.
+  served_name: qwen3-0-6b
+  revision: ""              # enters the validity key
+
+placement:
+  # NO DEFAULTS, for the siblings' reason: a placement names one physical
+  # machine and the individual GPUs in it (impl §7). `dynamo-vllm.validate`
+  # fails the render if any of the three is missing. Both pods are pinned to
+  # `node`.
+  node:
+  gpu_indices: []
+  gpu_uuids: []             # ORDER MUST MATCH gpu_indices
+
+mps:
+  pipeHostPath: /var/run/nvidia-mps   # must equal the daemon's pipeHostPath
+  pipeMountPath: /mps
+  memory_limit_gib: 8
+  active_thread_percentage: null       # unset by default; see design §1.4
+
+# This stack's own block. The same fields and spellings as the vllm-openai
+# chart's `vllm:` block, because `dynamo.vllm` parses its command line with
+# vLLM's own engine-argument parser -- so the budget arithmetic, and every
+# correction to it recorded in the vllm-openai chart's values.yaml, carry over:
+#   gpu_memory_utilization =
+#       ((memory_limit_gib - mps_reserve_gib) * headroom) / physical_total_gib
+#
+# WHAT IS NOT YET MEASURED HERE: the reserve. This image's engine build is newer
+# and the Dynamo runtime adds its own resident memory (NIXL's registration, the
+# runtime's CUDA context work) inside the same envelope. The default reserve is
+# the sibling image's figure, so treat it as a starting point and take the
+# `measured_reserve_gib` a solo profile round reports on THIS image as the real
+# one.
+dynamo_vllm:
+  tensor_parallel_size: 1
+  gpu_memory_utilization: 0.150
+  max_num_seqs: 64
+  max_num_batched_tokens: 2048
+  max_model_len: 4096
+  dtype: bfloat16
+  # vLLM or dynamo.vllm flags, passed through verbatim. The disaggregation flags
+  # (--disaggregation-mode, --is-prefill-worker, --is-decode-worker) and the two
+  # the chart owns (--model, --served-model-name) are refused at render time.
+  extra_args: []
+
+# Where the MPS daemon's libcuda comes from. The image MUST be the mps-daemon
+# chart's image: the point is to load the driver the daemon loaded, and the only
+# way to know which one that is, is to ask that image's entrypoint (see
+# templates/configmap-compat.yaml). Move this with the daemon, never alone.
+compat:
+  image: nvcr.io/nvidia/vllm:26.07-py3
+  mountPath: /compat
+
+frontend:
+  # CPU and memory only. The frontend tokenizes and routes; it is not on a GPU.
+  resources:
+    requests:
+      cpu: "1"
+      memory: 4Gi
+    limits:
+      cpu: "2"
+      memory: 8Gi
+
+verification:
+  enabled: true
+  expected_free_gib: null   # null -> defaults to mps.memory_limit_gib
+  tolerance_gib: 0.5
+
+service:
+  # The frontend's HTTP port, and the Service's.
+  port: 8000
+
+# The worker's /dev/shm, for NCCL in a TP group. The operator mounts it at this
+# size (`sharedMemorySize`), which is why the chart does not mount one itself.
+shmSizeGi: 16
+
+storage:
+  fsxClaimName: pv-fsx
+  fsxMountPath: /fsx
+
+readinessProbe:
+  # The FRONTEND's probe, and it passes only once the worker has registered the
+  # model. So this is the tenant's whole start-up: image pull, weight load from
+  # FSx, graph capture, registration. Same 30-minute ceiling as the siblings.
+  periodSeconds: 10
+  failureThreshold: 180
+  initialDelaySeconds: 30
+
+# The worker's resources. Empty, as on the siblings: no nvidia.com/gpu request.
+resources: {}
+
+# Extra environment for the WORKER's server container only, for diagnostics.
+# Anything set here is outside the validity key. See the sibling charts.
+extraEnv: []
+
+nodeSelector: {}
+
+podAnnotations:
+  # On both pods. The same two injectors the sibling charts turn off, for the
+  # same reasons: an istio sidecar in the request path, and OpenTelemetry
+  # auto-instrumentation inside a Python server process.
+  sidecar.istio.io/inject: "false"
+  instrumentation.opentelemetry.io/inject-python: "false"
+  instrumentation.opentelemetry.io/inject-java: "false"
+  instrumentation.opentelemetry.io/inject-nodejs: "false"
+  instrumentation.opentelemetry.io/inject-dotnet: "false"
+
+disruption:
+  doNotDisrupt: true
