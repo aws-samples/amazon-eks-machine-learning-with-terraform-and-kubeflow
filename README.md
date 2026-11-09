@@ -604,6 +604,22 @@ terraform destroy -var="profile=default" -var="region=us-west-2" \
 ./eks-cluster/terraform/aws-eks-cluster-and-nodegroup/terraform_destroy_retry.sh
 ```
 
+## References
+
+### YAML Recipes
+
+Common fields in Helm values files:
+
+- `image`: Docker container image
+- `resources`: Infrastructure requirements (CPU, memory, GPUs)
+- `git`: Code repository to clone (available in `$GIT_CLONE_DIR`)
+- `inline_script`: Arbitrary script definitions
+- `pre_script`: Executed after git clone, before job launch
+- `train`/`process`: Launch commands and arguments
+- `post_script`: Optional post-execution script
+- `pvc`: Persistent volume mounts (EFS at `/efs`, FSx at `/fsx`)
+- `ebs`: Optional EBS volume configuration
+
 ## Resources
 
 - **Source Repository**: https://github.com/aws-samples/amazon-eks-machine-learning-with-terraform-and-kubeflow

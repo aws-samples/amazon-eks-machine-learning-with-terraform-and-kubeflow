@@ -19,7 +19,7 @@ To download COCO 2017 dataset to your build environment instance, and upload it 
     ./eks-cluster/utils/prepare-s3-bucket.sh S3_BUCKET
 
 **Note:** 
-In the script above, by default, data is uploaded under a top-level S3 folder named `ml-platform`. This folder is used in the `import_path` terraform variable in the section [Use Terraform to create infrastructure](#use-terraform-to-create-infrastructure). It is **not recommended** that you change this top-level folder name. if you must change it, do a project wide search for `ml-platform` and replace it with your folder name in the various YAML files.
+In the script above, by default, data is uploaded under a top-level S3 folder named `ml-platform`. This folder is used in the `import_path` terraform variable in the section [Initialize and Apply Terraform](../../../README.md#5-initialize-and-apply-terraform). It is **not recommended** that you change this top-level folder name. if you must change it, do a project wide search for `ml-platform` and replace it with your folder name in the various YAML files.
 
 ### Install Helm charts for model training
 

@@ -57,7 +57,6 @@
 
 | Model      | Accelerator | Notes |
 | ----------- | ----------- | -------- |
-| [Llama 2 7B PEFT LoRA](./nemo-megatron/llama2-7b-peft/README.md)  | Nvidia GPU     | Llama 2 7B PEFT LoRA on Pubmedqa dataset |
 | [Llama 3.1 8B PEFT LoRA](./nemo-megatron/llama31-8b-peft-dolphin/README.md) | Nvidia GPU       | Llama 3.1 8B PEFT LoRA on Dolphin dataset |
 | [Mistral 7B v0.1 PEFT LoRA](./nemo-megatron/mistral-7b-v01-peft/README.md)   | Nvidia GPU     | Mistral 7B v0.1 PEFT LoRA on Pubmedqa dataset |
 | [Mistral 7B v0.1  PEFT LoRA](./nemo-megatron/mistral-7b-v01-peft-dolphin/README.md) | Nvidia GPU       | Mistral 7B v0.1 PEFT LoRA  PEFT LoRA on Dolphin dataset |
