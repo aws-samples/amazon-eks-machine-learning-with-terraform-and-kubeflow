@@ -25,4 +25,4 @@ transformers==4.46.3
 # Synthetic image payloads (`workload.ImagePool`). Pillow renders and PNG-encodes; the
 # pixel count is the only property of an image that costs anything on the GPU, so no
 # corpus is shipped and nothing is read from disk.
-Pillow==11.0.0
+Pillow==13.0.0
