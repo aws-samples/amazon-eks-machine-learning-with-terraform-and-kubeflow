@@ -209,6 +209,13 @@ A leased GPU node is billed until it is released. Step 10 releases it.
 
 ### 1. Prepare the cluster
 
+Update the repository first, so that Terraform has the current settings:
+
+```bash
+cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
+git pull
+```
+
 Enable the KAI scheduler, and turn off the CloudWatch add-on's GPU metrics exporter:
 
 ```bash
@@ -240,9 +247,7 @@ kubectl wait --for=condition=ready pod/attach-pvc -n kubeflow-user-example-com -
 ### 2. Install the dependencies
 
 ```bash
-cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow
-git pull
-cd tutorials/multi-model-gpu-sharing
+cd ~/amazon-eks-machine-learning-with-terraform-and-kubeflow/tutorials/multi-model-gpu-sharing
 pip install ortools pyyaml boto3 claude-agent-sdk
 PYTHONPATH=src python3 -m colocation.tests.selftest
 ```
