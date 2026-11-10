@@ -20,7 +20,7 @@ prometheus-client==0.21.0
 # so the driver never needs a copy of any model family's image preprocessor. That is
 # what keeps this a CPU container with four dependencies instead of a second inference
 # stack that has to agree with the first one.
-transformers==4.46.3
+transformers==5.10.1
 
 # Synthetic image payloads (`workload.ImagePool`). Pillow renders and PNG-encodes; the
 # pixel count is the only property of an image that costs anything on the GPU, so no
